@@ -1,0 +1,26 @@
+[Unit]
+Description=Kiosk-Browser (cog/WPE WebKit) direkt auf dem Bildschirm
+# Startet parallel zum WLAN-Aufbau (kiosk-setup): WebKit von der Karte zu laden dauert mehrere Sekunden,
+# die Startseite wartet ohnehin selbst auf den Server
+After=kiosk-prepare.service kiosk-startpage.service systemd-udevd.service
+Wants=kiosk-prepare.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=kiosk
+SupplementaryGroups=video render input
+RuntimeDirectory=kiosk-browser
+Environment=XDG_RUNTIME_DIR=/run/kiosk-browser HOME=/home/kiosk
+# Auf den Grafiktreiber warten (vc4 wird als Modul geladen), höchstens 10 s
+ExecStartPre=/bin/sh -c 'for i in $(seq 100); do ls /dev/dri/card* >/dev/null 2>&1 && exit 0; sleep 0.1; done; exit 0'
+ExecStart=/usr/local/bin/kiosk-browser
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=2
+TimeoutStopSec=5
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

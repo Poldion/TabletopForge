@@ -1,0 +1,70 @@
+#!/bin/sh
+# Diagnose-Protokoll auf die SD-Karte schreiben (nur wenn kiosk-debug.txt auf der Boot-Partition liegt).
+# Das System läuft im RAM, Logs wären nach einem Neustart verloren – so kann man die Karte am PC
+# auslesen und kiosk-log.txt weitergeben. Geschrieben wird wie immer kurz rw → ro.
+BOOT=/boot/firmware
+[ -d "$BOOT" ] || BOOT=/boot
+[ -f "$BOOT/kiosk-debug.txt" ] || exit 0
+
+TMP=$(mktemp)
+{
+  echo "===== Kiosk-Diagnose $(date '+%Y-%m-%d %H:%M:%S') ====="
+  echo "Version: $(cat /opt/kiosk/VERSION 2>/dev/null)  Uptime: $(uptime -p 2>/dev/null)"
+  echo "Modell: $(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"
+  echo "Ersteinrichtung erledigt: $([ -f /etc/kiosk-firstboot-done ] && echo ja || echo nein)"
+  echo "Kernel: $(uname -r)"
+  echo "cmdline: $(cat /proc/cmdline)"
+  echo
+  echo "--- Einhängepunkte"
+  mount | grep -E " on / | root-ro | $BOOT | /tmp " || true
+  echo
+  echo "--- Startzeit"
+  systemd-analyze 2>&1
+  systemd-analyze blame --no-pager 2>&1 | head -25
+  systemd-analyze critical-chain --no-pager graphical.target 2>&1 | head -30
+  echo
+  echo "--- SD-Karte"
+  cat /sys/block/mmcblk0/device/name /sys/block/mmcblk0/device/date 2>/dev/null | tr '\n' ' '; echo
+  echo
+  echo "--- Speicher / Stromversorgung"
+  free -m
+  command -v vcgencmd >/dev/null && vcgencmd get_throttled && vcgencmd measure_temp && vcgencmd get_mem gpu
+  grep -i cma /proc/meminfo
+  echo
+  echo "--- Netzwerk"
+  nmcli -t dev 2>&1
+  nmcli -t connection show --active 2>&1
+  ip -4 addr 2>&1 | grep inet
+  echo
+  echo "--- Dienste"
+  systemctl --no-pager --failed 2>&1
+  for s in kiosk-firstboot kiosk-setup kiosk-agent kiosk-startpage kiosk-browser; do
+    echo "$s: $(systemctl is-active $s 2>&1) / $(systemctl is-enabled $s 2>&1)"
+  done
+  echo
+  echo "--- Prozesse (Grafik)"
+  ps -eo pid,etime,rss,args 2>/dev/null | grep -E "cog|WPE|WebKit|cage|chrom" | grep -v grep | cut -c1-220
+  ls -la /run/kiosk 2>&1
+  echo "browser.env: $(tr '\n' ' ' < /run/kiosk/browser.env 2>/dev/null)"
+  echo "SoC: $(tr '\0' ' ' < /proc/device-tree/compatible 2>/dev/null)"
+  ls -la /dev/dri 2>&1
+  echo "--- Bildschirm-Anschlüsse"
+  for c in /sys/class/drm/card*-*; do
+    [ -e "$c/status" ] && echo "$(basename "$c"): $(cat "$c/status"), $(cat "$c/enabled" 2>/dev/null), Modi: $(head -3 "$c/modes" 2>/dev/null | tr '\n' ' ')"
+  done
+  echo
+  echo "--- Grafik-Treiber (dmesg)"
+  dmesg 2>/dev/null | grep -iE "drm|vc4|hdmi|v3d|cma|oom|under-voltage" | tail -40
+  echo
+  echo "--- Journal Kiosk-Dienste"
+  journalctl -b --no-pager -o short-monotonic -u kiosk-firstboot -u kiosk-setup -u kiosk-agent -u kiosk-browser 2>&1 | tail -400
+  echo
+  echo "--- Warnungen/Fehler im System"
+  journalctl -b --no-pager -o short-monotonic -p warning 2>&1 | tail -150
+} > "$TMP" 2>&1
+
+mount -o remount,rw "$BOOT" 2>/dev/null
+cp "$TMP" "$BOOT/kiosk-log.txt.tmp" && mv "$BOOT/kiosk-log.txt.tmp" "$BOOT/kiosk-log.txt"
+sync
+mount -o remount,ro "$BOOT" 2>/dev/null
+rm -f "$TMP"

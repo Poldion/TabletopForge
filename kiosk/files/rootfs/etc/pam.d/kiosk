@@ -1,0 +1,5 @@
+# PAM-Sitzung für den Kiosk-Browser (cage braucht eine logind-Sitzung mit Zugriff auf Grafik und Eingabe)
+auth     required pam_unix.so nullok
+account  required pam_unix.so
+session  required pam_unix.so
+session  required pam_systemd.so

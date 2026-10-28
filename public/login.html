@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anmelden – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      .auth-wrap {
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      .auth-card {
+        width: min(420px, 100%);
+      }
+      .auth-card h1 {
+        margin: 0 0 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 22px;
+      }
+      .auth-card form {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .auth-card label {
+        display: grid;
+        gap: 4px;
+      }
+      .auth-card button[type='submit'] {
+        min-height: 46px;
+        font-size: 16px;
+        margin-top: 4px;
+      }
+      .auth-error {
+        color: var(--danger);
+        min-height: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="auth-wrap">
+      <div class="card auth-card" id="card">
+        <h1>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7" /><polygon points="12 7 16.5 15 7.5 15" /><line x1="12" y1="2" x2="12" y2="7" /><line x1="3" y1="17" x2="7.5" y2="15" /><line x1="21" y1="17" x2="16.5" y2="15" /><line x1="3" y1="7" x2="7.5" y2="15" /><line x1="21" y1="7" x2="16.5" y2="15" /></svg>
+          Tabletop Forge
+        </h1>
+        <p class="muted small" id="intro" data-t>Lädt …</p>
+        <div id="form"></div>
+      </div>
+    </main>
+    <script type="module" src="/js/login.js"></script>
+  </body>
+</html>

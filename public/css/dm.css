@@ -1,0 +1,1498 @@
+/* App-Oberfläche einer Kampagne: Kopfzeile, Seitennavigation, Bereiche */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.topbar .session-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar .session-pick select {
+  width: auto;
+  max-width: 260px;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  max-width: 260px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.status-chip:hover {
+  border-color: var(--accent);
+}
+
+#app {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+}
+
+/* Modus-Umschalter in der Kopfzeile */
+.mode-switch {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.mode-switch > button {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  min-height: 36px;
+  padding: 0 14px;
+  gap: 6px;
+}
+.mode-switch > button + button {
+  border-left: 1px solid var(--line);
+}
+.mode-switch > button.active {
+  background: var(--accent);
+  color: #1b160c;
+}
+/* Spielen: keine Seitenleiste – die Karte bekommt den Platz */
+body.mode-play #sidenav {
+  display: none;
+}
+body.mode-play #app {
+  grid-template-columns: 1fr;
+}
+
+/* Seitennavigation */
+#sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 6px;
+  background: var(--bg2);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  width: 96px;
+}
+#sidenav button {
+  flex-direction: column;
+  gap: 2px;
+  min-height: 62px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: normal;
+  line-height: 1.15;
+}
+#sidenav button .nav-icon {
+  font-size: 22px;
+}
+#sidenav button:hover {
+  color: var(--text);
+  border-color: var(--line);
+}
+#sidenav button.active {
+  color: var(--accent);
+  background: var(--panel2);
+  border-color: var(--accent);
+}
+#sidenav .nav-spacer {
+  flex: 1;
+}
+/* Überschriften der Bereiche (Abenteuer / Kampagne) */
+#sidenav .nav-section {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-align: center;
+  margin: 6px 0 2px;
+  opacity: 0.8;
+}
+
+/* Arbeitsbereich: Kontextleiste (Abenteuer bzw. Kampagne) über dem Inhalt */
+#workspace {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#workspace > #main {
+  flex: 1;
+}
+/* Pfadleiste in der Kopfzeile: Kampagne › Abenteuer › Session */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.crumb {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-family: Georgia, serif;
+  font-weight: bold;
+  font-size: 15px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+.crumb:hover {
+  border-color: var(--line);
+}
+.crumb-sep {
+  color: var(--muted);
+  font-size: 18px;
+}
+.crumb-select {
+  width: auto;
+  max-width: 240px;
+  font-family: Georgia, serif;
+  font-weight: bold;
+  font-size: 15px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+.crumb.here,
+.crumb-select.here {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Navigation je Ebene */
+#sidenav .nav-items {
+  display: contents;
+}
+#sidenav .nav-up {
+  min-height: 44px;
+  color: var(--text);
+  border: 1px dashed var(--line);
+}
+#sidenav .nav-section.lvl-adventure {
+  color: var(--accent);
+}
+#sidenav .nav-section.lvl-session {
+  color: var(--ok);
+}
+#sidenav[data-level='adventure'] {
+  box-shadow: inset -3px 0 0 var(--accent);
+}
+#sidenav[data-level='session'] {
+  box-shadow: inset -3px 0 0 var(--ok);
+}
+
+/* Die aktive Session ist Sache des Spielens – in der Vorbereitung wählt man das Abenteuer */
+body:not(.mode-play) .topbar .session-pick {
+  display: none;
+}
+
+#main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+#main > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.scroll {
+  overflow-y: auto;
+  padding: 16px 20px;
+  min-height: 0;
+}
+
+/* Spielen: Karte + Panels */
+.play {
+  display: grid;
+  grid-template-columns: 1fr var(--panel-w, 380px);
+}
+.play.layout-map {
+  grid-template-columns: 1fr;
+}
+.play.layout-map .panel-col {
+  display: none;
+}
+.play.layout-panels {
+  grid-template-columns: 1fr 1fr;
+}
+.play.layout-panels .play-main {
+  display: none;
+}
+.play.layout-panel {
+  grid-template-columns: 1fr;
+}
+.play.layout-panel .panel-col {
+  border-left: none;
+}
+.play.layout-panel .panel-body {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+.play-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Kartenleiste */
+.mapstrip {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  align-items: center;
+}
+.mapstrip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 220px;
+  font-size: 13px;
+  color: var(--text);
+}
+.mapstrip-item img {
+  width: 54px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: #000;
+}
+.mapstrip-item .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mapstrip-item .live {
+  font-size: 11px;
+  color: var(--ok);
+}
+.mapstrip-item.current {
+  border-color: var(--accent);
+  background: var(--panel2);
+}
+.mapstrip .strip-label {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.panel-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg2);
+}
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px 40px;
+  min-height: 0;
+}
+.panel-col .tabs {
+  overflow: hidden;
+}
+.panel-col .tabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 2px;
+  flex-direction: column;
+  gap: 0;
+  min-height: 46px;
+}
+.panel-col .tabs .tab-icon {
+  font-size: 17px;
+  line-height: 1.1;
+}
+.panel-col .tabs .tab-label {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Kartenfläche */
+.map-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #0d0c0a;
+}
+.map-toolbar {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(20, 18, 14, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  z-index: 5;
+  width: 132px;
+}
+/* Kompakt: nur Symbole (Name beim Darüberfahren) */
+.map-toolbar.compact {
+  width: 48px;
+}
+.map-toolbar.compact .tool-group {
+  grid-template-columns: 1fr;
+}
+.map-toolbar.compact .tool-group-title,
+.map-toolbar.compact .tool-label {
+  display: none;
+}
+.map-toolbar .toolbar-toggle {
+  min-height: 26px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.map-options.beside-compact {
+  left: 64px;
+}
+/* Zwei Werkzeuge pro Zeile, damit alles ohne Scrollen passt */
+.tool-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+.tool-group + .tool-group {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+.tool-group-title {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-align: center;
+}
+.map-toolbar .tool {
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  min-height: 42px;
+  padding: 2px;
+  border-color: transparent;
+  background: transparent;
+}
+.map-toolbar .tool:hover {
+  border-color: var(--line);
+}
+.map-toolbar .tool.active {
+  background: var(--accent);
+  color: #1b160c;
+}
+.tool-icon {
+  font-size: 18px;
+  line-height: 1.1;
+}
+.tool-label {
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.map-options {
+  position: absolute;
+  left: 150px;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+  z-index: 4;
+}
+.map-options > * {
+  pointer-events: auto;
+}
+.map-options > input,
+.map-options > select,
+.map-options > button,
+.map-options > span,
+.map-options > label,
+.map-options > .row {
+  background: rgba(20, 18, 14, 0.88);
+}
+/* Aktive Schalter in der Optionsleiste (z.B. „Mehrfach“, „Ganze Karte“) – sonst dunkel auf dunkel */
+.map-options > button.active {
+  background: var(--accent);
+  color: #1b160c;
+}
+.map-options > span,
+.map-options > label {
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.map-options input,
+.map-options select {
+  min-height: 34px;
+  padding: 4px 8px;
+}
+.map-options .row {
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.map-inspector {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: min(330px, calc(100% - 100px));
+  background: rgba(30, 27, 22, 0.96);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px;
+  z-index: 6;
+  max-height: 65%;
+  overflow-y: auto;
+}
+.map-inspector input,
+.map-inspector select {
+  min-height: 34px;
+  padding: 4px 8px;
+  margin-top: 4px;
+}
+.map-inspector input[type='checkbox'] {
+  margin: 0;
+}
+
+/* Bildschirm-Leiste unter der Karte */
+.map-quick {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--bg2);
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.map-quick .quick-label {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 2px 0 6px;
+}
+.map-quick .quick-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.map-quick .quick-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ok);
+}
+.map-quick .quick-state.other {
+  color: var(--muted);
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.map-quick button.icon-only {
+  min-height: 26px;
+  padding: 0 6px;
+}
+.quick-menu {
+  position: relative;
+  display: inline-flex;
+}
+.quick-menu-panel {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.quick-menu.open .quick-menu-panel {
+  display: flex;
+}
+.map-hint {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(20, 18, 14, 0.9);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: help;
+}
+.map-quick .quick-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+  margin: 0 4px;
+}
+
+/* Karten-Panel: einklappbare Abschnitte */
+.map-section {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.map-section > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-family: Georgia, serif;
+  color: var(--accent);
+  list-style: none;
+  user-select: none;
+}
+.map-section > summary::-webkit-details-marker {
+  display: none;
+}
+.map-section > summary::before {
+  content: '▸ ';
+  color: var(--muted);
+}
+.map-section[open] > summary::before {
+  content: '▾ ';
+}
+.map-section-body {
+  padding: 0 12px 12px;
+}
+.md-editable {
+  cursor: text;
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed transparent;
+}
+.md-editable:hover {
+  border-color: var(--line);
+  background: var(--bg2);
+}
+.lore-card {
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.thumb .thumb-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  opacity: 0.8;
+}
+
+/* Kampf-Manager */
+.cm-list {
+  margin-top: 10px;
+}
+.cm-row {
+  display: grid;
+  grid-template-columns: 30px 1fr 90px auto 78px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--panel2);
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.cm-row:hover {
+  border-color: var(--line);
+}
+.cm-row.active {
+  border-color: #ffd54a;
+  box-shadow: 0 0 0 1px #ffd54a inset;
+}
+/* Auf der Karte ausgewählt: blau – der aktive Zug bleibt gold */
+.cm-row.picked {
+  background: #1d2f45;
+  border-color: #64b5f6;
+}
+.cm-row.picked.active {
+  border-color: #ffd54a;
+  box-shadow: 0 0 0 1px #ffd54a inset, 0 0 0 2px #64b5f6;
+}
+.cm-row.open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-bottom: 0;
+}
+.cm-row.dead {
+  opacity: 0.45;
+}
+.cm-row.dead .cm-name {
+  text-decoration: line-through;
+}
+.cm-ini {
+  font-weight: bold;
+  text-align: center;
+  color: var(--accent);
+}
+.cm-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-row.enemy .cm-name {
+  color: #ff8a80;
+}
+.cm-row.pc .cm-name {
+  color: #a5d6a7;
+}
+.cm-kind {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cm-hp {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  text-align: right;
+}
+.cm-hp.big {
+  font-size: 15px;
+  margin: 6px 0;
+}
+.cm-hpbar {
+  position: relative;
+  height: 6px;
+  background: #0008;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.cm-hp.big .cm-hpbar {
+  height: 10px;
+}
+.cm-hpbar > div {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+.cm-hpbar > .temp {
+  background: #7ec8ff;
+  top: auto;
+  height: 40%;
+  opacity: 0.9;
+}
+.cm-temp {
+  color: #7ec8ff;
+}
+input.cm-quick {
+  min-height: 34px;
+  width: 78px;
+  padding: 2px 6px;
+  text-align: center;
+  font-size: 14px;
+}
+.cm-chips {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 20px;
+}
+.cm-chip {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 1px #000;
+}
+.cm-chip.conc {
+  background: #2196f3;
+}
+.cm-chip.used {
+  background: #555;
+}
+.cm-editor {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+}
+.cm-editor select,
+.cm-editor input {
+  min-height: 32px;
+  padding: 3px 6px;
+}
+.cm-editor .section-title {
+  margin-top: 8px;
+}
+.cm-death {
+  margin-top: 8px;
+  padding: 6px;
+  border-radius: 6px;
+  background: #3a1d1d;
+}
+.cm-prompt {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #3b3015;
+  border: 1px solid #e0a030;
+}
+.cm-roll {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1d2a3a;
+  border: 1px solid #4f7db3;
+}
+.cm-roll select {
+  min-height: 32px;
+  padding: 3px 6px;
+  max-width: 140px;
+}
+.cm-active {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ffd54a;
+  background: var(--panel);
+}
+.cm-ac {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.cm-hints {
+  margin: 4px 0;
+  padding-left: 18px;
+  color: #ffcc80;
+  font-size: 13px;
+}
+.cm-cond {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 4px 0;
+  font-size: 13px;
+}
+.cm-res,
+.cm-saves {
+  margin-top: 6px;
+  gap: 4px;
+}
+.cm-actions {
+  margin-top: 6px;
+}
+.cm-action {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.cm-action.used {
+  opacity: 0.5;
+}
+/* Aktionen mit echten Würfeln: Felder für den W20 und den Schaden */
+.cm-action.table {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px 0;
+}
+.cm-action.table > .row {
+  gap: 6px;
+}
+.cm-roll-row {
+  flex-wrap: nowrap;
+}
+input.cm-roll-in {
+  width: 62px;
+  min-height: 34px;
+  padding: 2px 6px;
+  text-align: center;
+  font-size: 15px;
+}
+input.cm-roll-in.wide {
+  width: 92px;
+}
+.cm-verdict {
+  min-width: 64px;
+  font-weight: 600;
+}
+.cm-target {
+  margin-top: 8px;
+  gap: 6px;
+}
+.cm-target select {
+  flex: 1;
+}
+/* Initiative eintragen */
+.cm-setup {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0;
+}
+.cm-setup-row {
+  display: grid;
+  grid-template-columns: 1fr 36px 72px 36px;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.cm-setup-row.missing {
+  border-color: #e0a030;
+}
+.cm-setup-row.pc .cm-name {
+  color: var(--ok);
+}
+.cm-setup-row.enemy .cm-name {
+  color: var(--danger);
+}
+input.cm-ini-in {
+  min-height: 38px;
+  font-size: 18px;
+  text-align: center;
+  padding: 2px 4px;
+}
+.cm-turnbar button {
+  min-height: 44px;
+}
+/* Segment-Umschalter (zwei, drei Knöpfe als Gruppe) */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg > button {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.seg > button.active {
+  background: var(--panel2);
+  color: var(--accent);
+}
+.cm-add {
+  display: grid;
+  grid-template-columns: 1fr 56px 56px 56px auto;
+  gap: 6px;
+}
+.cm-log {
+  max-height: 260px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Verwaltungsbereiche (Karten, Sessions, Handouts, Lore) */
+.split {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  width: 100%;
+  min-height: 0;
+}
+.split > aside {
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--bg2);
+}
+.split > section {
+  overflow-y: auto;
+  padding: 16px 20px;
+  min-height: 0;
+}
+.tree .adventure {
+  margin-bottom: 12px;
+}
+.tree .adventure > .list-item {
+  background: transparent;
+  font-family: Georgia, serif;
+  color: var(--accent);
+  padding-left: 0;
+}
+.tree .session {
+  margin-left: 12px;
+}
+.preview-wrap {
+  position: relative;
+  height: 55vh;
+  min-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.preview-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.preview-tools {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+.preview-tools > * {
+  pointer-events: auto;
+}
+.md-preview {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  min-height: 120px;
+}
+
+/* Bildschirme */
+.screens {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+.screens h3.row {
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .play {
+    --panel-w: 330px;
+  }
+  .hide-narrow {
+    display: none;
+  }
+}
+@media (max-width: 800px) {
+  #sidenav {
+    width: 64px;
+  }
+  #sidenav button .nav-label {
+    font-size: 10px;
+  }
+  .split {
+    grid-template-columns: 1fr;
+  }
+  .split > aside {
+    max-height: 35vh;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  /* Schmal/hochkant: Karte oben, Panel unten – nicht in der Ein-Panel-Ansicht (dort gibt es keine Karte) */
+  .play:not(.layout-map):not(.layout-panels):not(.layout-panel) {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 45%;
+  }
+  .play:not(.layout-map):not(.layout-panels):not(.layout-panel) .panel-col {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* Kiosk-Geräte */
+.kiosk-card {
+  margin-bottom: 10px;
+}
+.kiosk-settings {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.kiosk-wifi {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+}
+
+/* Encounter-Planer */
+.enc-diff {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+.enc-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: bold;
+  color: #111;
+}
+.enc-scale {
+  position: relative;
+  height: 22px;
+  margin: 12px 0 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #78909c55;
+}
+.enc-scale > div:not(.enc-marker) {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  opacity: 0.85;
+  font-size: 11px;
+  color: #111;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.enc-scale > div > span {
+  padding-left: 4px;
+  line-height: 22px;
+}
+.enc-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 4px;
+  margin-left: -2px;
+  background: #fff;
+  box-shadow: 0 0 4px #000;
+}
+.enc-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.enc-table th,
+.enc-table td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.enc-table th {
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 12px;
+}
+
+/* Porträt-Auswahl (NSC-Generator) */
+.npc-faces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.npc-face {
+  padding: 3px;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  min-height: 0;
+  border: 2px solid transparent;
+  background: transparent;
+  overflow: hidden;
+}
+.npc-face img,
+.npc-face > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.npc-face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.npc-face.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.npc-face.none {
+  font-size: 12px;
+  color: var(--muted);
+  border: 2px dashed var(--line);
+}
+.npc-face.none.active {
+  border-style: solid;
+}
+
+/* Handschriftliche Notizen im Vollbild: Blatt so groß wie möglich (Seitenverhältnis bleibt) */
+.sketch-full {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  background: var(--bg);
+}
+.sketch-full > canvas {
+  width: min(100%, calc((100dvh - 70px) * 10 / 7)) !important;
+  margin: auto;
+}
+
+/* --- Handy (schmal): Navigation unten, kompakte Kopfzeile, Liste ODER Details --------------------------- */
+.mobile-back {
+  display: none;
+}
+@media (max-width: 800px) {
+  .topbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 6px 8px;
+    min-height: 48px;
+  }
+  .topbar .session-pick {
+    min-width: 0;
+    flex: 1;
+  }
+  .topbar .session-pick select {
+    max-width: none;
+    width: 100%;
+    min-width: 0;
+  }
+  .topbar .spacer {
+    display: none;
+  }
+  /* Status nur als Punkt + Symbol – der Text steht unter „Bildschirme“ */
+  .status-chip {
+    padding: 0 8px;
+    min-height: 34px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .status-chip .chip-label {
+    display: none;
+  }
+  body.has-detail .mobile-back {
+    display: inline-flex;
+    flex-shrink: 0;
+    min-height: 34px;
+    padding: 0 10px 0 6px;
+  }
+  body.has-detail .topbar .brand,
+  body.has-detail .topbar .session-pick {
+    display: none;
+  }
+  .mode-switch > button {
+    padding: 0 10px;
+    min-height: 34px;
+  }
+  .mode-switch .mode-label {
+    display: none;
+  }
+  body.mode-play #app {
+    grid-template-rows: 1fr;
+  }
+  body.has-detail .mobile-back {
+    margin-right: auto;
+  }
+
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  #workspace {
+    grid-row: 1;
+  }
+  .crumb {
+    max-width: 120px;
+  }
+  .crumb-text {
+    display: none;
+  }
+  .crumb-select {
+    max-width: 130px;
+    font-size: 13px;
+  }
+  #sidenav[data-level] {
+    box-shadow: none;
+  }
+  #sidenav {
+    grid-row: 2;
+    flex-direction: row;
+    width: auto;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    gap: 2px;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  #sidenav .nav-section {
+    display: none;
+  }
+  /* Trennstrich zwischen Abenteuer- und Kampagnen-Seiten */
+  #sidenav .nav-spacer {
+    flex: 0 0 2px;
+    align-self: stretch;
+    margin: 6px 3px;
+    background: var(--line);
+  }
+  #sidenav button {
+    flex: 1 1 0;
+    min-width: 40px;
+    min-height: 50px;
+    padding: 4px 1px;
+    overflow: hidden;
+  }
+  #sidenav button .nav-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #sidenav button .nav-icon {
+    font-size: 20px;
+  }
+  #sidenav button .nav-label {
+    font-size: 10px;
+  }
+
+  /* Listen-/Detail-Seiten: eine Spalte, je nach Auswahl Liste oder Details */
+  .split,
+  .split[style] {
+    grid-template-columns: 1fr !important;
+  }
+  .split > aside,
+  .split > .master,
+  .split > .detail {
+    max-height: none;
+    border: none !important;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  body.has-detail .split > .master {
+    display: none;
+  }
+  body:not(.has-detail) .split > .detail {
+    display: none;
+  }
+  .split > section,
+  .scroll {
+    padding: 12px;
+  }
+  /* Kartenwerkzeuge: schmale Leiste nur mit Symbolen, Hinweistexte weg – die Karte bleibt sichtbar */
+  .map-toolbar {
+    width: 48px;
+    left: 4px;
+    top: 4px;
+  }
+  .tool-group {
+    grid-template-columns: 1fr;
+  }
+  .tool-group-title,
+  .tool-label,
+  .map-hint {
+    display: none;
+  }
+  .map-toolbar .tool {
+    min-height: 40px;
+  }
+  .map-options {
+    left: 60px;
+    top: 4px;
+    right: 4px;
+  }
+  /* Größere Bedienflächen für Finger */
+  .list-item {
+    min-height: 48px;
+  }
+  button,
+  .btn {
+    min-height: 40px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px; /* verhindert das automatische Hineinzoomen auf dem iPhone */
+  }
+}
+
+/* Spielen nach Drehbuch: Szenenleiste über der Karte */
+.scenebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: linear-gradient(90deg, rgba(201, 162, 74, 0.16), rgba(201, 162, 74, 0.04));
+  border-bottom: 1px solid var(--accent);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+}
+.scenebar-list {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+.scenebar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 2px 10px 2px 4px;
+  border-radius: 18px;
+  white-space: nowrap;
+  max-width: 220px;
+  background: var(--panel);
+}
+.scenebar-item .n {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+.scenebar-item .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scenebar-item.current {
+  border-color: var(--accent);
+  background: var(--panel2);
+  color: var(--accent);
+}
+.scenebar-item.current .n {
+  background: var(--accent);
+  color: #1b160c;
+}
+.scenebar-item.done {
+  opacity: 0.55;
+}
+.scenebar-item.improvised .n {
+  border-style: dashed;
+}
+/* Menüs der Szenenleiste öffnen nach unten (die Leiste steht oben) */
+.scenebar .quick-menu-panel {
+  bottom: auto;
+  top: calc(100% + 6px);
+  left: auto;
+  right: 0;
+}
+
+/* Panel „Ablauf“ */
+.scene-panel {
+  display: grid;
+  gap: 4px;
+}
+.scene-readaloud {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--panel2);
+  border-radius: 6px;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.scene-dmnotes {
+  margin-top: 6px;
+}
+.scene-enc {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+}
+.scene-panel textarea {
+  width: 100%;
+}
+
+/* Schnellsuche */
+.quickfind input[type='search'] {
+  width: 100%;
+  font-size: 16px;
+}
+.quickfind-list {
+  display: grid;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.quickfind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}

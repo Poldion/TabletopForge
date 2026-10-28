@@ -1,0 +1,9 @@
+#!/bin/sh
+# Wartung beenden: alles wieder schreibgeschützt einhängen.
+BOOT=/boot/firmware
+[ -d "$BOOT" ] || BOOT=/boot
+sync
+mount -o remount,ro "$BOOT" && echo "Boot-Partition wieder schreibgeschützt"
+if mountpoint -q /media/root-ro && [ "$(stat -f -c %T /media/root-ro)" != "squashfs" ]; then
+  mount -o remount,ro /media/root-ro && echo "Root-Dateisystem wieder schreibgeschützt"
+fi

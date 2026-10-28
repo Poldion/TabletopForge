@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kampagnen – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      .campaigns {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .campaign h2 {
+        margin-top: 0;
+      }
+      .campaign .links {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7"/><polygon points="12 7 16.5 15 7.5 15"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="3" y1="17" x2="7.5" y2="15"/><line x1="21" y1="17" x2="16.5" y2="15"/><line x1="3" y1="7" x2="7.5" y2="15"/><line x1="21" y1="7" x2="16.5" y2="15"/></svg> Tabletop Forge</a>
+      <span class="spacer"></span>
+      <span id="version" class="small muted"></span>
+      <span id="account"></span>
+      <a class="btn" href="/settings.html"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg> TV-Kalibrierung</a>
+    </header>
+    <main class="page">
+      <form id="create" class="row card">
+        <input id="name" class="grow" placeholder="Name der neuen Kampagne" data-t-placeholder required maxlength="120" style="flex: 1; width: auto" />
+        <button class="primary" type="submit" data-t>Kampagne anlegen</button>
+      </form>
+      <div id="list" class="campaigns"></div>
+    </main>
+    <script type="module" src="/js/index.js"></script>
+  </body>
+</html>

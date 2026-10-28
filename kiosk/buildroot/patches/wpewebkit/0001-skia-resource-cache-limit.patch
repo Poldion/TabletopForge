@@ -1,0 +1,20 @@
+Skia: Obergrenze des GPU-Textur-Caches per Umgebungsvariable
+
+Skia behält standardmäßig bis zu 256 MB Texturen im Cache. Auf Geräten mit
+wenig Grafikspeicher (Raspberry Pi Zero 2 W: 256 MB CMA insgesamt) läuft der
+Speicher damit voll. WEBKIT_SKIA_RESOURCE_CACHE_LIMIT_MB setzt eine kleinere
+Grenze.
+
+--- a/Source/WebCore/platform/graphics/skia/PlatformDisplaySkia.cpp
++++ b/Source/WebCore/platform/graphics/skia/PlatformDisplaySkia.cpp
+@@ -150,5 +150,10 @@
+         // FIXME: add GrContextOptions, shader cache, etc.
+         if (auto grContext = GrDirectContexts::MakeGL(skiaGLInterface())) {
++            if (const char* limit = getenv("WEBKIT_SKIA_RESOURCE_CACHE_LIMIT_MB")) {
++                long megabytes = strtol(limit, nullptr, 10);
++                if (megabytes > 0)
++                    grContext->setResourceCacheLimit(static_cast<size_t>(megabytes) * 1024 * 1024);
++            }
+             m_skiaGLContext = WTFMove(glContext);
+             m_skiaGrContext = WTFMove(grContext);
+             m_sampleCount = initializeMSAASampleCount(m_skiaGrContext.get());

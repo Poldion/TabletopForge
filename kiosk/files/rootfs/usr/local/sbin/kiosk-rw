@@ -1,0 +1,14 @@
+#!/bin/sh
+# Wartung: Boot-Partition und das darunterliegende Root-Dateisystem vorübergehend beschreibbar machen.
+# Änderungen am Root-Dateisystem müssen unter /media/root-ro erfolgen (oder mit „overlayroot-chroot“).
+# Danach unbedingt „kiosk-ro“ ausführen.
+set -e
+BOOT=/boot/firmware
+[ -d "$BOOT" ] || BOOT=/boot
+mount -o remount,rw "$BOOT"
+# SquashFS (Buildroot-Variante) ist grundsätzlich nur lesbar – dort Änderungen nur per Update
+if mountpoint -q /media/root-ro && [ "$(stat -f -c %T /media/root-ro)" != "squashfs" ]; then
+  mount -o remount,rw /media/root-ro
+  echo "Root-Dateisystem beschreibbar unter /media/root-ro (z.B. sudo overlayroot-chroot)"
+fi
+echo "Boot-Partition $BOOT ist beschreibbar. Zurück mit: sudo kiosk-ro"

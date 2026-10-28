@@ -1,0 +1,11 @@
+[Unit]
+Description=Kiosk: neues System nach einem Update nur zur Probe – ohne Bestätigung zurück zum alten
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/kiosk-trial-guard
+
+[Install]
+WantedBy=multi-user.target

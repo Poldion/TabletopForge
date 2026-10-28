@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Spieltisch – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <canvas id="canvas" class="display-canvas"></canvas>
+    <!-- Ladebildschirm: sofort sichtbar, bis die Karte bereit ist (Inhalt ergänzt table.js) -->
+    <div id="loading" class="loading-screen">
+      <svg class="boot-icon" viewBox="0 0 100 100" aria-hidden="true">
+        <polygon points="50,4 90,27 90,73 50,96 10,73 10,27" />
+        <polygon points="50,24 74,64 26,64" />
+        <path d="M50,4 50,24 M90,27 74,64 M10,27 26,64 M90,73 74,64 M10,73 26,64 M50,96 50,64 M50,24 90,27 M50,24 10,27 M26,64 50,96 74,64" />
+      </svg>
+      <div class="quad s-bottom">
+        <div class="boot-title" data-t>Tabletop Forge</div>
+        <div class="boot-sub loading-title" data-t>Der Tisch wird vorbereitet …</div>
+        <div class="boot-fact loading-fact"></div>
+      </div>
+      <div class="quad s-top" aria-hidden="true">
+        <div class="boot-title" data-t>Tabletop Forge</div>
+        <div class="boot-sub loading-title" data-t>Der Tisch wird vorbereitet …</div>
+        <div class="boot-fact loading-fact"></div>
+      </div>
+      <div class="quad s-right" aria-hidden="true">
+        <div class="boot-title" data-t>Tabletop Forge</div>
+        <div class="boot-sub loading-title" data-t>Der Tisch wird vorbereitet …</div>
+        <div class="boot-fact loading-fact"></div>
+      </div>
+      <div class="quad s-left" aria-hidden="true">
+        <div class="boot-title" data-t>Tabletop Forge</div>
+        <div class="boot-sub loading-title" data-t>Der Tisch wird vorbereitet …</div>
+        <div class="boot-fact loading-fact"></div>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/js/table.js"></script>
+  </body>
+</html>

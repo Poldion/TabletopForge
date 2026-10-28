@@ -1,0 +1,35 @@
+#!/bin/sh
+# Einmalig beim ersten Start: schreibgeschützten Betrieb einrichten und neu starten.
+#  - Swap-Datei abschalten (würde sonst ins RAM-Overlay schreiben), stattdessen zram
+#  - Overlay-Dateisystem für / aktivieren (Änderungen nur im RAM)
+#  - Boot-Partition schreibgeschützt einhängen
+set -e
+BOOT=/boot/firmware
+[ -d "$BOOT" ] || BOOT=/boot
+
+echo "[kiosk] Ersteinrichtung: schreibgeschützten Betrieb aktivieren"
+
+# Sicherstellen, dass / beschreibbar ist (normalerweise erledigt das systemd-remount-fs)
+grep -qE '^[^ ]+ / [^ ]+ [^ ]*\brw\b' /proc/mounts || mount -o remount,rw /
+
+# SSH-Hostschlüssel einmalig pro Gerät erzeugen (bleiben trotz Overlay erhalten)
+ssh-keygen -A 2>/dev/null || true
+
+systemctl disable --now dphys-swapfile.service 2>/dev/null || true
+systemctl disable --now rpi-swap.service 2>/dev/null || true
+systemctl enable zramswap.service 2>/dev/null || true
+
+# Boot-Partition in /etc/fstab schreibgeschützt einhängen
+if ! grep -qE "[[:space:]]$BOOT[[:space:]].*[[:space:],]ro[,[:space:]]" /etc/fstab; then
+  sed -i -E "s#^([^[:space:]]+[[:space:]]+$BOOT[[:space:]]+vfat[[:space:]]+)([^[:space:]]+)#\1\2,ro#" /etc/fstab
+fi
+
+# Overlay für das Root-Dateisystem (schreibt cmdline.txt und initramfs auf die Boot-Partition)
+mount -o remount,rw "$BOOT" || true
+raspi-config nonint do_overlayfs 0
+sync
+
+touch /etc/kiosk-firstboot-done
+sync
+echo "[kiosk] Fertig – Neustart in den schreibgeschützten Betrieb"
+systemctl reboot

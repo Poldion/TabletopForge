@@ -1,0 +1,6 @@
+[Unit]
+Description=Kiosk: Diagnose-Protokoll auf die SD-Karte schreiben (nur mit kiosk-debug.txt)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kiosk-diag

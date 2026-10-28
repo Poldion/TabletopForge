@@ -1,0 +1,12 @@
+[Unit]
+Description=Kiosk: Ersteinrichtung (schreibgeschützten Betrieb aktivieren)
+After=multi-user.target
+ConditionPathExists=!/etc/kiosk-firstboot-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kiosk-firstboot
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

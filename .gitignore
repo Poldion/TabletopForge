@@ -1,0 +1,13 @@
+node_modules/
+data/
+*.log
+.env
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+
+# Interne Notizen – nicht im öffentlichen Repository
+VERBESSERUNGEN*.md

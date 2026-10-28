@@ -1,0 +1,12 @@
+#!/bin/sh
+# Nach einem Update startet der Pi einmalig zur Probe ins neue System (tryboot). Bestätigt der Kiosk-Agent
+# es nicht innerhalb von 10 Minuten (/run/kiosk/update-confirmed – erst nach Kontakt zum Server), startet
+# der Pi neu und landet damit automatisch wieder im vorherigen System.
+FLAG=/proc/device-tree/chosen/bootloader/tryboot
+[ -f "$FLAG" ] && [ "$(od -An -tx1 "$FLAG" | tr -d ' \n')" = "00000001" ] || exit 0
+echo "Probestart nach Update – warte auf Bestätigung"
+sleep 600
+if [ ! -f /run/kiosk/update-confirmed ]; then
+  echo "Update nicht bestätigt – zurück zum vorherigen System"
+  systemctl reboot
+fi

@@ -1,0 +1,13 @@
+[Unit]
+Description=Kiosk: Browser-Einstellungen und Startseite vorbereiten (ohne Netzwerk)
+# Der Browser braucht nur das hier – so kann er parallel zum WLAN-Aufbau starten
+After=local-fs.target
+Before=kiosk-browser.service kiosk-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/kiosk/agent.py prepare
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

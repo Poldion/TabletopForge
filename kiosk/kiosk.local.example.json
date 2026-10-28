@@ -1,0 +1,22 @@
+{
+  "serverUrl": "http://192.168.1.10:3000",
+  "hostname": "spieltisch",
+  "country": "DE",
+  "wifi": [
+    {
+      "ssid": "MEIN-WLAN",
+      "psk": "MEIN-WLAN-PASSWORT"
+    }
+  ],
+  "monitor": {
+    "resW": 1920,
+    "resH": 1080,
+    "aspectW": 16,
+    "aspectH": 9,
+    "sizeMode": "diagonal",
+    "diagonalIn": 55,
+    "fineTune": 1,
+    "rotation": 0,
+    "output": "auto"
+  }
+}

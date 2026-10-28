@@ -1,0 +1,113 @@
+#!/bin/sh
+# Startet den Kiosk-Browser im Vollbild.
+#  - cog (WPE WebKit, Standard): schlank, für Embedded-Geräte gebaut, zeichnet direkt per DRM/KMS
+#    auf den Bildschirm – kein Compositor nötig, deutlich weniger Speicher als Chromium.
+#  - chromium (Alternative): läuft unter dem Wayland-Kiosk-Compositor „cage“.
+# Profile und Caches liegen in /tmp (RAM), das Root-Dateisystem ist ohnehin schreibgeschützt.
+set -e
+
+START=/run/kiosk/start.html
+[ -f "$START" ] || START=/opt/kiosk/start.html
+START_URL="file://$START"
+# Startseite bevorzugt über den lokalen HTTP-Dienst (kiosk-startpage): WPE WebKit führt in
+# file://-Seiten keine Skripte/Timer zuverlässig aus. Höchstens 5 s auf den Dienst warten.
+for i in $(seq 50); do
+  if [ -f /run/kiosk/http.ready ]; then START_URL="http://127.0.0.1:8088/start.html"; break; fi
+  sleep 0.1
+done
+
+# Einstellungen vom Kiosk-Agenten (aus kiosk.json → "browser"):
+#   KIOSK_ENGINE=cog|chromium, KIOSK_GPU=on|off, KIOSK_EXTRA_FLAGS="--…"
+KIOSK_ENGINE=cog
+KIOSK_GPU=off
+KIOSK_EXTRA_FLAGS=""
+[ -f /run/kiosk/browser.env ] && . /run/kiosk/browser.env
+command -v cog >/dev/null || KIOSK_ENGINE=chromium
+# Chromium gewählt, aber nicht installiert (Buildroot-Variante): cog nehmen statt schwarzem Bildschirm
+if [ "$KIOSK_ENGINE" = "chromium" ] && ! command -v chromium >/dev/null && ! command -v chromium-browser >/dev/null; then
+  echo "[kiosk-browser] Chromium ist auf diesem Gerät nicht installiert – nehme cog"
+  KIOSK_ENGINE=cog
+fi
+
+echo "[kiosk-browser] Engine: $KIOSK_ENGINE, GPU: $KIOSK_GPU${KIOSK_EXTRA_FLAGS:+, Zusatz: $KIOSK_EXTRA_FLAGS}, Start: $START_URL"
+
+if [ "$KIOSK_ENGINE" = "cog" ]; then
+  # Fehlersuche: mit kiosk-debug.txt auf der Boot-Partition ausführliche Meldungen von cog, EGL und Mesa
+  if [ -f /boot/firmware/kiosk-debug.txt ] || [ -f /boot/kiosk-debug.txt ]; then
+    export G_MESSAGES_DEBUG=all EGL_LOG_LEVEL=debug MESA_DEBUG=1 LIBGL_DEBUG=verbose
+  fi
+  # WebKits Sandbox braucht Benutzer-Namespaces; fehlen sie, startet der Web-Prozess sonst gar nicht.
+  # Auf dem Kiosk läuft ausschließlich die eigene Anwendung, daher ist der Verzicht hier vertretbar.
+  if ! unshare --user true 2>/dev/null; then
+    echo "[kiosk-browser] Keine Benutzer-Namespaces – WebKit-Sandbox deaktiviert"
+    export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+  fi
+  # Texturen-Cache von WebKit (Skia) begrenzen – Standard sind 256 MB, so viel Grafikspeicher hat der
+  # ganze Pi Zero 2 W. Ohne Grenze läuft er bei Kartenwechseln voll und das System lagert aus.
+  # (Wirkt mit dem WebKit-Patch aus buildroot/patches/wpewebkit.)
+  export WEBKIT_SKIA_RESOURCE_CACHE_LIMIT_MB="${KIOSK_GPU_CACHE_MB:-64}"
+  # Bildschirmmodus begrenzen (z.B. 1280x720@60 auf dem Pi Zero 2 W – in 1080p ist der Grafikchip zu langsam)
+  [ -n "${KIOSK_MODE:-}" ] && export COG_PLATFORM_DRM_MODE_MAX="$KIOSK_MODE"
+  CANVAS_ACCEL=false
+  [ "$KIOSK_GPU" = "on" ] && CANVAS_ACCEL=true
+  # shellcheck disable=SC2086 # Zusatz-Flags sollen in einzelne Argumente zerfallen
+  # renderer=gles: Bild per OpenGL ES auf den Bildschirm bringen. „modeset“ (ohne Kopie, ~15 % schneller)
+  # stürzt beim Seitenwechsel (neuer Web-Prozess) ab – daher nicht verwenden.
+  exec cog --platform=drm \
+    --platform-params="renderer=${KIOSK_COG_RENDERER:-gles}" \
+    --bg-color='#0b0a08' \
+    --webprocess-failure=restart \
+    --web-mem-limit=220 \
+    --enable-write-console-messages-to-stdout=true \
+    --allow-file-access-from-file-urls=true \
+    --allow-universal-access-from-file-urls=true \
+    --enable-2d-canvas-acceleration=$CANVAS_ACCEL \
+    --enable-webgl=false \
+    --enable-webaudio=false \
+    --enable-webrtc=false \
+    --enable-media-stream=false \
+    --enable-page-cache=false \
+    --enable-dns-prefetching=false \
+    $KIOSK_EXTRA_FLAGS \
+    "$START_URL"
+fi
+
+# --- Chromium unter cage -----------------------------------------------------------
+PROFILE=/tmp/kiosk-chromium
+rm -rf "$PROFILE"
+# Optionen des Raspberry-Pi-OS-Startskripts müssen ganz vorne stehen:
+#  --no-memcheck     sonst fragt es auf Geräten mit ≤ 512 MB RAM (Pi Zero 2 W) per Dialog nach und bricht ab
+#  --no-gl-override  ohne Grafikbeschleunigung kein erzwungenes ANGLE/GLES
+WRAPPER_OPTS="--no-memcheck"
+GPU_FLAGS=""
+if [ "$KIOSK_GPU" = "off" ]; then
+  # Der VideoCore IV (Pi Zero 2 W, Pi 3) kann nur OpenGL ES 2.0 – aktuelles Chromium zeichnet damit
+  # unter Wayland oft nur eine weiße Fläche. Software-Darstellung ist dort zuverlässig.
+  WRAPPER_OPTS="$WRAPPER_OPTS --no-gl-override"
+  GPU_FLAGS="--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization"
+fi
+BROWSER=$(command -v chromium || command -v chromium-browser)
+# shellcheck disable=SC2086
+exec cage -d -- "$BROWSER" $WRAPPER_OPTS \
+  --kiosk \
+  --ozone-platform=wayland \
+  --user-data-dir="$PROFILE" \
+  --disk-cache-dir=/tmp/kiosk-cache \
+  --disk-cache-size=67108864 \
+  --noerrdialogs \
+  --disable-infobars \
+  --no-first-run \
+  --disable-session-crashed-bubble \
+  --disable-features=Translate,MediaRouter,HardwareMediaKeyHandling,Vulkan,OptimizationGuideModelDownloading,OptimizationHintsFetching,OnDeviceModelService \
+  --check-for-update-interval=31536000 \
+  --password-store=basic \
+  --autoplay-policy=no-user-gesture-required \
+  --force-device-scale-factor=1 \
+  --overscroll-history-navigation=0 \
+  --renderer-process-limit=2 \
+  --js-flags=--max-old-space-size=192 \
+  --allow-file-access-from-files \
+  --enable-logging=stderr \
+  --log-level=1 \
+  $GPU_FLAGS $KIOSK_EXTRA_FLAGS \
+  "$START_URL"

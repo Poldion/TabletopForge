@@ -1,0 +1,40 @@
+{
+  "name": "tabletop-forge",
+  "version": "0.51.1",
+  "description": "Self-hosted campaign manager for 5e tabletop RPGs with a digital game table and player display",
+  "keywords": [
+    "5e",
+    "tabletop",
+    "rpg",
+    "virtual-tabletop",
+    "campaign-manager",
+    "game-master",
+    "self-hosted"
+  ],
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Poldion/TabletopForge.git"
+  },
+  "homepage": "https://github.com/Poldion/TabletopForge#readme",
+  "bugs": {
+    "url": "https://github.com/Poldion/TabletopForge/issues"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "qrcode-generator": "2.0.4",
+    "sharp": "^0.34.5",
+    "socket.io": "^4.8.1"
+  }
+}

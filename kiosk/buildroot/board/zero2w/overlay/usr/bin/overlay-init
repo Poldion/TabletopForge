@@ -1,0 +1,34 @@
+#!/bin/sh
+# Erster Prozess nach dem Kernel (init=/sbin/overlay-init in cmdline.txt):
+# Das Root-Dateisystem auf der SD-Karte bleibt schreibgeschützt, darüber liegt ein Overlay im RAM.
+# Alle Änderungen zur Laufzeit (WLAN-Verbindungen, Hostname, Logs …) gehen beim Ausschalten verloren –
+# der Pi kann jederzeit stromlos gemacht werden. Dauerhafte Einstellungen liegen in kiosk.json
+# auf der Boot-Partition.
+#
+# Wartung: „kiosk.rw“ in cmdline.txt eintragen → Start ohne Overlay, SD-Karte direkt beschreibbar.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+mount -t proc proc /proc 2>/dev/null
+
+if grep -qw kiosk.rw /proc/cmdline; then
+  echo "overlay-init: Wartungsmodus – Root-Dateisystem beschreibbar"
+  umount /proc
+  mount -o remount,rw /
+  exec /sbin/init "$@"
+fi
+
+OVL=/media/overlay
+if mount -t tmpfs -o mode=0755 tmpfs "$OVL" &&
+   mkdir -p "$OVL/upper" "$OVL/work" "$OVL/root" &&
+   mount -t overlay overlay -o "lowerdir=/,upperdir=$OVL/upper,workdir=$OVL/work" "$OVL/root"; then
+  # devtmpfs mitnehmen, Original-Root nach /media/root-ro schieben, dann systemd im Overlay starten
+  mount --move /dev "$OVL/root/dev" 2>/dev/null
+  umount /proc
+  cd "$OVL/root" || exit 1
+  pivot_root . media/root-ro
+  exec chroot . /sbin/init "$@"
+fi
+
+echo "overlay-init: Overlay fehlgeschlagen – starte schreibgeschützt ohne Overlay"
+umount /proc 2>/dev/null
+exec /sbin/init "$@"

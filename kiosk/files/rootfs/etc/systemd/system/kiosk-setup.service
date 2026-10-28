@@ -1,0 +1,13 @@
+[Unit]
+Description=Kiosk: Einstellungen aus kiosk.json anwenden (WLAN, Land, Hostname)
+After=NetworkManager.service local-fs.target
+Wants=NetworkManager.service
+Before=kiosk-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/kiosk/agent.py setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

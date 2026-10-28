@@ -1,0 +1,4 @@
+# Buildroot aktiviert Dienste beim Packen per „systemctl preset-all“ – diese hier bleiben aus:
+# SSH startet der Kiosk-Agent nur, wenn Schlüssel hinterlegt sind; dnsmasq startet der NetworkManager selbst.
+disable sshd.service
+disable dnsmasq.service

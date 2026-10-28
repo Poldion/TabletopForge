@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Benutzer &amp; Geräte – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      .page {
+        max-width: 900px;
+      }
+      .acc-grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .acc-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .acc-item {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+      .acc-item .grow {
+        flex: 1;
+        min-width: 160px;
+      }
+      .acc-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .acc-form input {
+        flex: 1;
+        min-width: 150px;
+        width: auto;
+      }
+      .acc-form select,
+      .acc-item select {
+        width: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7" /><polygon points="12 7 16.5 15 7.5 15" /><line x1="12" y1="2" x2="12" y2="7" /><line x1="3" y1="17" x2="7.5" y2="15" /><line x1="21" y1="17" x2="16.5" y2="15" /><line x1="3" y1="7" x2="7.5" y2="15" /><line x1="21" y1="7" x2="16.5" y2="15" /></svg> Tabletop Forge</a>
+      <span class="spacer"></span>
+      <span id="account"></span>
+    </header>
+    <main class="page">
+      <h1 data-t>Benutzer &amp; Geräte</h1>
+      <div id="content" class="acc-grid"><p class="muted" data-t>Lädt …</p></div>
+    </main>
+    <script type="module" src="/js/users.js"></script>
+  </body>
+</html>

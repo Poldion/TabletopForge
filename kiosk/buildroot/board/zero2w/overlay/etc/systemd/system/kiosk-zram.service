@@ -1,0 +1,13 @@
+[Unit]
+Description=Kiosk: komprimierter Auslagerungsspeicher im RAM (zram)
+DefaultDependencies=no
+Before=swap.target
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'modprobe zram && dev=$(zramctl --find --size 192M) && mkswap "$dev" >/dev/null && swapon -p 100 "$dev"'
+
+[Install]
+WantedBy=swap.target

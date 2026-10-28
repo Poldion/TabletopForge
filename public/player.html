@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Spieler-Display – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      .layer {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+      .layer.on {
+        opacity: 1;
+      }
+      #image img {
+        max-width: 100vw;
+        max-height: calc(100vh - 0px);
+        object-fit: contain;
+      }
+      #image.with-caption img {
+        max-height: calc(100vh - 90px);
+      }
+      .caption {
+        font-family: Georgia, serif;
+        font-size: clamp(20px, 3vw, 44px);
+        color: #ecdcb8;
+        padding: 12px 24px;
+        text-align: center;
+        text-shadow: 0 2px 8px #000;
+      }
+      #blank .title {
+        font-family: Georgia, serif;
+        font-size: clamp(32px, 6vw, 96px);
+        color: #6e5a35;
+        letter-spacing: 0.05em;
+      }
+      .parchment {
+        width: min(1100px, 92vw);
+        max-height: 90vh;
+        overflow: hidden;
+        background: radial-gradient(ellipse at center, #f1e3c2 0%, #e2cb9a 70%, #c9ab72 100%);
+        color: #2b2115;
+        border-radius: 6px;
+        box-shadow: 0 0 60px #000, inset 0 0 80px rgba(110, 70, 20, 0.45);
+        padding: 4vh 5vw;
+        font-family: Georgia, serif;
+        font-size: clamp(18px, 2.1vw, 34px);
+        line-height: 1.5;
+      }
+      .parchment h1 {
+        text-align: center;
+        color: #5a2d12;
+        font-size: 1.6em;
+        margin-top: 0;
+      }
+      .parchment .md h2,
+      .parchment .md h3,
+      .parchment .md h4 {
+        color: #5a2d12;
+      }
+      #mapLayer canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="blank" class="layer on"><div class="title"></div></div>
+    <div id="image" class="layer"><img alt="" /><div class="caption"></div></div>
+    <div id="mapLayer" class="layer"><canvas id="mapCanvas"></canvas></div>
+    <div id="lore" class="layer"><div class="parchment"><h1></h1><div class="md"></div></div></div>
+    <div id="text" class="layer"><div class="parchment"><div class="md"></div></div></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/js/player.js"></script>
+  </body>
+</html>

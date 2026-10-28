@@ -1,0 +1,12 @@
+[Unit]
+Description=Kiosk: Startbild anzeigen, bis der Browser übernimmt
+# So früh wie möglich – blockiert den Start nicht (wartet selbst auf den Bildspeicher)
+DefaultDependencies=no
+ConditionPathExists=/opt/kiosk/splash
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/kiosk/splash.py
+
+[Install]
+WantedBy=sysinit.target

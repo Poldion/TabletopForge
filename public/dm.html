@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/dm.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" title="Alle Kampagnen" data-t-title><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7"/><polygon points="12 7 16.5 15 7.5 15"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="3" y1="17" x2="7.5" y2="15"/><line x1="21" y1="17" x2="16.5" y2="15"/><line x1="3" y1="7" x2="7.5" y2="15"/><line x1="21" y1="7" x2="16.5" y2="15"/></svg></a>
+      <div id="modeSwitch" class="mode-switch" role="tablist" aria-label="Modus"></div>
+      <button id="mobileBack" class="mobile-back" title="Zurück zur Übersicht" data-t-title></button>
+      <strong id="campaignName" class="hide-narrow"></strong>
+      <label class="session-pick inline"><span class="hide-narrow" data-t>Session</span> <select id="sessionSel" title="Aktive Session" data-t-title></select></label>
+      <span class="spacer"></span>
+      <button id="tableChip" class="status-chip" title="Spieltisch – antippen für Bildschirme" data-t-title></button>
+      <button id="playerChip" class="status-chip" title="Spieler-Display – antippen für Bildschirme" data-t-title></button>
+      <span id="serverState" class="status-chip" title="Verbindung zum Server" data-t-title></span>
+    </header>
+    <div id="app">
+      <nav id="sidenav"></nav>
+      <div id="workspace">
+        <main id="main"></main>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/js/dm.js"></script>
+  </body>
+</html>

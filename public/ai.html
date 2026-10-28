@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dienste – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      .page {
+        max-width: 900px;
+      }
+      .ai-grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .ai-grid label.inline {
+        margin-top: 8px;
+      }
+      .ai-grid .row > div {
+        flex: 1;
+        min-width: 220px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7" /><polygon points="12 7 16.5 15 7.5 15" /><line x1="12" y1="2" x2="12" y2="7" /><line x1="3" y1="17" x2="7.5" y2="15" /><line x1="21" y1="17" x2="16.5" y2="15" /><line x1="3" y1="7" x2="7.5" y2="15" /><line x1="21" y1="7" x2="16.5" y2="15" /></svg> Tabletop Forge</a>
+      <span class="spacer"></span>
+      <span id="account"></span>
+    </header>
+    <main class="page">
+      <h1 data-t>Dienste</h1>
+      <div id="content" class="ai-grid"><p class="muted" data-t>Lädt …</p></div>
+    </main>
+    <script type="module" src="/js/ai-admin.js"></script>
+  </body>
+</html>

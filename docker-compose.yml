@@ -1,0 +1,16 @@
+name: tabletop-forge
+
+services:
+  tabletop-forge:
+    image: docker.io/poldion/tabletop-forge:latest
+    container_name: tabletop-forge
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - MAX_UPLOAD_MB=200
+    volumes:
+      - forge-data:/data
+
+volumes:
+  forge-data:

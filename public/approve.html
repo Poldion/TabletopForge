@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anzeige freigeben – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      .auth-wrap {
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      .auth-card {
+        width: min(440px, 100%);
+      }
+      .auth-card h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+      .auth-card form {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .auth-card label {
+        display: grid;
+        gap: 4px;
+      }
+      .auth-card button[type='submit'] {
+        min-height: 48px;
+        font-size: 16px;
+      }
+      .big-code {
+        font-family: ui-monospace, monospace;
+        font-size: 30px;
+        letter-spacing: 0.12em;
+        color: var(--accent);
+      }
+      .auth-error {
+        color: var(--danger);
+        min-height: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="auth-wrap">
+      <div class="card auth-card">
+        <h1 data-t>Anzeige freigeben</h1>
+        <div id="body" class="muted" data-t>Lädt …</div>
+      </div>
+    </main>
+    <script type="module" src="/js/approve.js"></script>
+  </body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TV-Kalibrierung – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7"/><polygon points="12 7 16.5 15 7.5 15"/><line x1="12" y1="2" x2="12" y2="7"/><line x1="3" y1="17" x2="7.5" y2="15"/><line x1="21" y1="17" x2="16.5" y2="15"/><line x1="3" y1="7" x2="7.5" y2="15"/><line x1="21" y1="7" x2="16.5" y2="15"/></svg> Tabletop Forge</a>
+      <span class="muted" data-t>/ TV-Kalibrierung</span>
+      <span class="spacer"></span>
+      <a class="btn" href="/table.html?calibrate=1" target="_blank" data-t>Testmuster auf TV öffnen</a>
+    </header>
+    <main class="page">
+      <form id="form" class="card">
+        <h2 data-t>Hardware des Spieltisches</h2>
+        <p class="muted small" data-t>
+          Diese Werte bestimmen, wie groß ein Rasterfeld physisch auf dem liegenden TV dargestellt wird. Sie gelten für alle Kampagnen.
+        </p>
+
+        <div class="section-title" data-t>Bildschirm</div>
+        <div class="grid2">
+          <div><label data-t>Auflösung Breite (px)</label><input name="resW" type="number" min="320" step="1" /></div>
+          <div><label data-t>Auflösung Höhe (px)</label><input name="resH" type="number" min="240" step="1" /></div>
+        </div>
+        <div class="grid2">
+          <div><label data-t>Bildformat Breite</label><input name="aspectW" type="number" min="1" step="0.01" /></div>
+          <div><label data-t>Bildformat Höhe</label><input name="aspectH" type="number" min="1" step="0.01" /></div>
+        </div>
+
+        <div class="section-title" data-t>Physische Größe</div>
+        <div class="row">
+          <label class="inline"><input type="radio" name="sizeMode" value="diagonal" /> <span data-t>Bildschirmdiagonale</span></label>
+          <label class="inline"><input type="radio" name="sizeMode" value="dimensions" /> <span data-t>Breite &amp; Höhe der Bildfläche</span></label>
+        </div>
+        <div id="diag">
+          <label data-t>Diagonale (Zoll)</label><input name="diagonalIn" type="number" min="5" step="0.1" />
+        </div>
+        <div id="dims" class="grid2">
+          <div><label data-t>Breite der Bildfläche (mm)</label><input name="widthMm" type="number" min="50" step="1" /></div>
+          <div><label data-t>Höhe der Bildfläche (mm)</label><input name="heightMm" type="number" min="50" step="1" /></div>
+        </div>
+
+        <div class="section-title" data-t>Raster</div>
+        <div class="grid3">
+          <div>
+            <label data-t>Feldgröße auf dem Tisch</label>
+            <input value="1 × 1 Zoll (fest)" data-t-value disabled />
+          </div>
+          <div>
+            <label data-t>Feinkorrektur (Faktor)</label>
+            <input name="fineTune" type="number" min="0.5" max="2" step="0.001" />
+          </div>
+          <div>
+            <label data-t>Drehung der Tischanzeige</label>
+            <select name="rotation">
+              <option value="0">0°</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px; background: var(--bg2)">
+          <div id="summary" class="small"></div>
+        </div>
+
+        <div class="row end" style="margin-top: 14px">
+          <button class="primary" type="submit" data-t>Speichern</button>
+        </div>
+      </form>
+
+      <div class="card" style="margin-top: 16px">
+        <h3 data-t>Feinkorrektur durch Nachmessen</h3>
+        <p class="muted small" data-t>
+          Öffne das Testmuster auf dem TV und miss die Länge der 10-Felder-Linie mit einem Lineal. Trage hier den gemessenen Wert ein –
+          der Korrekturfaktor wird automatisch berechnet. Soll: 10 Felder = 25,4 cm.
+        </p>
+        <div class="row">
+          <input id="measured" type="number" step="0.1" min="1" placeholder="Gemessen (cm)" data-t-placeholder style="width: 200px" />
+          <button id="applyMeasure" type="button" data-t>Korrektur übernehmen</button>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="/js/settings.js"></script>
+  </body>
+</html>

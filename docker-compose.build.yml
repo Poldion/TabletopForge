@@ -1,0 +1,5 @@
+# Lokal aus dem Quellcode bauen statt das veröffentlichte Image zu ziehen:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  tabletop-forge:
+    build: .

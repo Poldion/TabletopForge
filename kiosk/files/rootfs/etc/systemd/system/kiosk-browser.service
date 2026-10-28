@@ -1,0 +1,30 @@
+[Unit]
+Description=Kiosk-Browser (cog/WPE WebKit oder Chromium) auf tty1
+After=kiosk-setup.service systemd-user-sessions.service dbus.socket systemd-logind.service
+Wants=dbus.socket systemd-logind.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+ConditionPathExists=/etc/kiosk-firstboot-done
+
+[Service]
+Type=simple
+User=kiosk
+PAMName=kiosk
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+ExecStart=/usr/local/bin/kiosk-browser
+Restart=always
+RestartSec=3
+# Browser zügig beenden (Chromium brauchte sonst über eine Minute)
+TimeoutStopSec=5
+KillMode=mixed
+
+[Install]
+WantedBy=graphical.target

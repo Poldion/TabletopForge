@@ -1,0 +1,14 @@
+[Unit]
+Description=Kiosk-Agent: beim Server melden, Einstellungen und Befehle übernehmen
+# Bewusst nicht auf network-online.target warten: der Agent erkennt fehlendes Netz selbst
+# (sonst bis zu 60 s Verzögerung, gerade im Einrichtungsfall ohne WLAN)
+After=kiosk-setup.service
+Requires=kiosk-setup.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/kiosk/agent.py run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

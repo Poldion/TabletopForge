@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kiosk</title>
+    <style>
+      /* Gleiche Anordnung wie das Startbild aus dem Bildspeicher (kiosk/splash) – nahtloser Übergang:
+         Würfel in der Mitte, der Text viermal, je zu einer Seite des liegenden TVs lesbar. Maße in vh (1080 Zeilen). */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0a08;
+        color: #a79c86;
+        font-family: 'DejaVu Sans', sans-serif;
+        cursor: none;
+        overflow: hidden;
+      }
+      .icon {
+        position: absolute;
+        top: calc(50% - 7.41vh);
+        left: calc(50% - 7.41vh);
+        width: 14.81vh;
+        height: 14.81vh;
+        fill: none;
+        stroke: #c9a24a;
+        stroke-width: 2.2;
+        stroke-linejoin: round;
+      }
+      .quad {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.83vh;
+        text-align: center;
+        font-family: 'DejaVu Serif', Georgia, serif;
+        line-height: normal;
+        transform-origin: 0 0;
+      }
+      .s-bottom,
+      .s-top {
+        width: min(90vh, calc(100vw - 64vh));
+      }
+      .s-right,
+      .s-left {
+        width: 76vh;
+      }
+      .s-bottom { transform: translate(-50%, 20vh); }
+      .s-top { transform: rotate(180deg) translate(-50%, 20vh); }
+      .s-right { transform: rotate(-90deg) translate(-50%, calc(50vw - 30vh)); }
+      .s-left { transform: rotate(90deg) translate(-50%, calc(50vw - 30vh)); }
+      h1 {
+        margin: 0;
+        font-weight: normal;
+        font-size: 5.19vh;
+        color: #c9a24a;
+      }
+      .status {
+        font-size: 2.41vh;
+        font-style: italic;
+        color: #8a7d63;
+      }
+      /* Gerätedaten klein am unteren Rand (zur Fehlersuche) */
+      table {
+        position: absolute;
+        bottom: 3vh;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1.6vh;
+        border-collapse: collapse;
+        opacity: 0.7;
+      }
+      td {
+        padding: 0.2vh 0.8vw;
+        text-align: left;
+      }
+      td:first-child {
+        color: #6b6252;
+      }
+      /* Einrichtungsmodus: Anleitung groß unter dem Titel */
+      .setup {
+        position: absolute;
+        top: 62vh;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(900px, 90vw);
+        box-sizing: border-box;
+        padding: 1.6vh 2.4vh;
+        border: 2px solid #c9a24a;
+        border-radius: 14px;
+        text-align: left;
+        font-size: 2.7vh;
+        color: #ece4d4;
+        line-height: 1.45;
+      }
+      .setup h2 {
+        margin: 0 0 0.6vh;
+        color: #c9a24a;
+        font-family: 'DejaVu Serif', Georgia, serif;
+        font-size: 3.2vh;
+      }
+      .setup p {
+        margin: 0.6vh 0;
+      }
+      .setup b {
+        color: #ffd54a;
+      }
+      /* Mit Anleitung (Einrichtung, liest die Spielleitung) nur ein Textblock, alles nach oben gerückt */
+      body.has-setup .quad:not(.s-bottom) { display: none; }
+      body.has-setup .icon { top: 6vh; }
+      body.has-setup .s-bottom { top: 23vh; transform: translateX(-50%); }
+      body.has-setup .setup { top: 38vh; }
+      body.has-setup table { bottom: 2vh; }
+    </style>
+  </head>
+  <body>
+    <svg class="icon" viewBox="0 0 100 100" aria-hidden="true">
+      <polygon points="50,4 90,27 90,73 50,96 10,73 10,27" />
+      <polygon points="50,24 74,64 26,64" />
+      <path d="M50,4 50,24 M90,27 74,64 M10,27 26,64 M90,73 74,64 M10,73 26,64 M50,96 50,64 M50,24 90,27 M50,24 10,27 M26,64 50,96 74,64" />
+    </svg>
+    <div class="quad s-bottom">
+      <h1>Tabletop Forge</h1>
+      <div class="status">{{STATUS}}</div>
+    </div>
+    <div class="quad s-top" aria-hidden="true">
+      <h1>Tabletop Forge</h1>
+      <div class="status">{{STATUS}}</div>
+    </div>
+    <div class="quad s-right" aria-hidden="true">
+      <h1>Tabletop Forge</h1>
+      <div class="status">{{STATUS}}</div>
+    </div>
+    <div class="quad s-left" aria-hidden="true">
+      <h1>Tabletop Forge</h1>
+      <div class="status">{{STATUS}}</div>
+    </div>
+    {{SETUP}}
+    <table>
+      <tr><td>Server</td><td>{{SERVER}}</td><td>Geräte-ID</td><td>{{ID}}</td><td>Hostname</td><td>{{HOST}}</td></tr>
+      <tr><td>IP-Adresse</td><td>{{IP}}</td><td>WLAN</td><td>{{SSID}}</td><td></td><td></td></tr>
+    </table>
+    <script>
+      // Wartet, bis der Server erreichbar ist, und öffnet dann die Kiosk-Seite.
+      const server = '{{SERVER}}';
+      const id = '{{ID}}';
+      const lines = document.querySelectorAll('.status');
+      const status = {
+        set textContent(text) {
+          lines.forEach((l) => (l.textContent = text));
+        },
+        get textContent() {
+          return lines[0].textContent;
+        },
+      };
+      if (document.querySelector('.setup')) document.body.classList.add('has-setup');
+      if (!status.textContent.trim()) status.textContent = 'Der Tisch wird vorbereitet …';
+      function tryServer() {
+        if (!server) {
+          // Im Einrichtungsmodus steht die Anleitung bereits auf der Seite
+          if (!document.querySelector('.setup')) status.textContent = 'Keine Server-Adresse eingetragen.';
+          return;
+        }
+        // Erreichbarkeit über ein Bild prüfen – funktioniert von file:// aus in jedem Browser (WebKit wie Chromium)
+        const probe = new Image();
+        const retry = (why) => {
+          clearTimeout(timer);
+          console.log('[start] Server nicht erreichbar (' + why + ')');
+          status.textContent = 'Warte auf den Server …';
+          setTimeout(tryServer, 3000);
+        };
+        const timer = setTimeout(() => ((probe.onload = probe.onerror = null), retry('Zeitüberschreitung')), 5000);
+        probe.onload = () => {
+          clearTimeout(timer);
+          console.log('[start] Server erreichbar');
+          openKiosk();
+        };
+        probe.onerror = () => retry('Fehler beim Laden');
+        console.log('[start] Prüfe ' + server);
+        probe.src = server + '/favicon.svg?t=' + Date.now();
+      }
+      // Anmeldung: Der Agent holt mit seinem Geräteschlüssel eine Einmal-Anmeldung für den Browser (auth.json über
+      // den lokalen Dienst). Kurz darauf warten – ohne sie zeigt der Server den QR-Code zum Koppeln.
+      function openKiosk(tries = 0) {
+        const kioskUrl = server + '/kiosk.html?id=' + encodeURIComponent(id);
+        if (location.protocol !== 'http:') return location.replace(kioskUrl);
+        fetch('/auth.json', { cache: 'no-store' })
+          .then((r) => r.json())
+          .catch(() => ({}))
+          .then((a) => {
+            if (a.state === 'ok' && a.token) {
+              console.log('[start] Melde Browser an');
+              location.replace(server + '/auth/kiosk?id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(a.token));
+            } else if (a.state === 'denied') {
+              // Den Grund schreibt der Agent als Status auf diese Seite – hier bleiben und später erneut prüfen
+              setTimeout(() => openKiosk(), 10000);
+            } else if (!a.state && tries < 15) {
+              // Agent hat sich noch nicht beim Server gemeldet
+              setTimeout(() => openKiosk(tries + 1), 1000);
+            } else {
+              location.replace(kioskUrl); // ohne Anmeldung oder noch nicht gekoppelt (dort erscheint der QR-Code)
+            }
+          });
+      }
+      tryServer();
+      // Angezeigte Werte (IP, WLAN) werden vom Agenten aktualisiert
+      setInterval(() => location.reload(), 60000);
+    </script>
+  </body>
+</html>

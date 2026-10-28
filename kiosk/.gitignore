@@ -1,0 +1,3 @@
+dist/
+# Private Voreinstellungen mit WLAN-Passwort – niemals einchecken
+kiosk.local.json

@@ -1,0 +1,14 @@
+{
+  "rev": 0,
+  "serverUrl": "",
+  "hostname": "spieltisch",
+  "country": "DE",
+  "wifi": [],
+  "sshKeys": [],
+  "monitor": null,
+  "browser": {
+    "engine": "cog",
+    "gpu": "auto",
+    "flags": ""
+  }
+}

@@ -1,0 +1,27 @@
+# Overlay-Dateisystem fest einbauen: wird von /sbin/overlay-init vor allen Modulen gebraucht
+CONFIG_OVERLAY_FS=y
+CONFIG_ZRAM=m
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+
+# Root-Dateisystem ist SquashFS (zstd) – fest eingebaut, Entpacken parallel auf allen Kernen und direkt in
+# den Seiten-Cache (keine Zwischenkopie)
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_ZSTD=y
+CONFIG_SQUASHFS_FILE_DIRECT=y
+# CONFIG_SQUASHFS_FILE_CACHE is not set
+CONFIG_SQUASHFS_COMPILE_DECOMP_MULTI_PERCPU=y
+# CONFIG_SQUASHFS_COMPILE_DECOMP_SINGLE is not set
+
+# Grafiktreiber (vc4) fest einbauen statt als Modul: Bildschirm und Browser sind Sekunden früher bereit.
+# Dafür müssen auch DRM und die HDMI-Tonausgabe (von vc4 vorausgesetzt) fest eingebaut sein.
+CONFIG_DRM=y
+CONFIG_DRM_KMS_HELPER=y
+CONFIG_DRM_DISPLAY_HELPER=y
+CONFIG_DRM_GEM_DMA_HELPER=y
+CONFIG_DRM_VC4=y
+CONFIG_CEC_CORE=y
+CONFIG_SND=y
+CONFIG_SND_PCM=y
+CONFIG_SND_SOC=y
+CONFIG_SND_SOC_HDMI_CODEC=y

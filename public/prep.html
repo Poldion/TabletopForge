@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Weiterleitung …</title>
+    <script>
+      // Die Vorbereitung ist jetzt Teil der App-Oberfläche (dm.html)
+      const p = new URLSearchParams(location.search);
+      location.replace(`/dm.html?c=${encodeURIComponent(p.get('c') || '')}${location.hash || '#sessions'}`);
+    </script>
+  </head>
+  <body></body>
+</html>

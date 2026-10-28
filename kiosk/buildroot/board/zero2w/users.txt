@@ -1,0 +1,1 @@
+kiosk -1 kiosk -1 ! /home/kiosk /bin/sh video,render,input,audio,netdev Kiosk-Benutzer
