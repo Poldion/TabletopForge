@@ -193,6 +193,21 @@ wählt jede Kampagne auf der Kampagnenseite (ohne Auswahl der Standard-Vault aus
 Kampagne); verknüpfte Charaktere merken sich ihren Vault. Das Token liegt in `data/basalt.json` und erreicht
 die Oberfläche nie; Bilder laufen über den Server.
 
+### Regeln (Regelwerk aus BasaltNotes)
+
+Liegen die Spielregeln (Zauber, Zustände, Regelkapitel …) als eigener Vault in BasaltNotes, trägt man ihn unter
+**Dienste → BasaltNotes → Regelwerk-Vault** ein. Dann gibt es einen Tab **Regeln** – als Seite auf der Kampagnen-Ebene
+und als Panel beim Spielen:
+
+- **Suchen:** Volltextsuche im Regelwerk mit Treffer-Ausschnitten. Ein Treffer öffnet den Regeltext direkt im Tab;
+  Verweise auf andere Regeln bleiben im Tab, ↗ öffnet die Notiz in BasaltNotes.
+- **KI fragen:** nur wenn in BasaltNotes unter *Einstellungen → Funktionen* der KI-Chat an ist. Man stellt eine Frage
+  („Wie funktioniert der Zauber Feuerwand und wie wende ich ihn an?“), BasaltNotes sucht die passenden Einträge heraus
+  und das Sprachmodell erklärt sie. Unter jeder Antwort stehen die Quellen zum Nachlesen; Rückfragen beziehen sich auf
+  das vorige Thema, **Neu** beginnt ein neues Gespräch.
+
+Ohne Regelwerk-Vault erscheint der Tab nicht. Das Token braucht nur Leserecht auf diesen Vault.
+
 ## Kiosk-Gerät für den Spieltisch (Raspberry Pi)
 
 Unter [`kiosk/`](../kiosk/README.md) liegt ein schreibgeschütztes Raspberry-Pi-Image (z.B. Pi Zero 2 W), das direkt die

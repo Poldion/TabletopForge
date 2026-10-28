@@ -669,6 +669,56 @@ app.get('/api/basalt/attachments/:name', async (req, res) => {
   }
 });
 
+// Regelwerk (optional): ein Vault mit den Regeln in BasaltNotes – Suche, Regeltext und Fragen an dessen KI-Chat
+const noRules = (res) => res.status(404).json({ error: 'Kein Regelwerk eingerichtet' });
+
+app.get('/api/basalt/rules', async (req, res) => {
+  if (!basalt.rulesOn()) return res.json({ enabled: false });
+  res.json({ enabled: true, chat: await basalt.chatEnabled() });
+});
+
+app.get('/api/basalt/rules/search', async (req, res) => {
+  if (!basalt.rulesOn()) return noRules(res);
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json([]);
+  try {
+    res.json(await basalt.searchRules(q));
+  } catch (err) {
+    basaltError(res, err);
+  }
+});
+
+app.get('/api/basalt/rules/notes/:id', async (req, res) => {
+  if (!basalt.rulesOn()) return noRules(res);
+  try {
+    res.json(await basalt.note(req.params.id, basalt.status().rulesVault));
+  } catch (err) {
+    basaltError(res, err);
+  }
+});
+
+// Antwort kommt als Server-Sent Events von BasaltNotes und wird unverändert durchgereicht
+app.post('/api/basalt/rules/chat', async (req, res) => {
+  if (!basalt.rulesOn()) return noRules(res);
+  if (!String(req.body?.question || '').trim()) return res.status(400).json({ error: 'Frage fehlt' });
+  const ctrl = new AbortController();
+  res.on('close', () => ctrl.abort());
+  let up;
+  try {
+    up = await basalt.askRules(req.body, ctrl.signal, i18n.langOf(req));
+  } catch (err) {
+    return basaltError(res, err);
+  }
+  res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
+  try {
+    for await (const chunk of up.body) res.write(chunk);
+  } catch {
+    /* abgebrochen */
+  } finally {
+    res.end();
+  }
+});
+
 // Nachbereitung einer Session als Session-Notiz an BasaltNotes (Recap, Szenen, Stichworte)
 app.post('/api/campaigns/:id/basalt/session', async (req, res) => {
   const st = campaignOr404(req, res);

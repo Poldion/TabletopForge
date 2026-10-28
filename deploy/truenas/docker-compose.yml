@@ -4,7 +4,7 @@
 # Tabletop Forge und bleibt so, damit bestehende Installationen ihre Daten behalten.)
 services:
   tabletop-forge:
-    image: docker.io/poldion/tabletop-forge:0.51.1
+    image: docker.io/poldion/tabletop-forge:0.52.0
     container_name: tabletop-forge
     restart: unless-stopped
     ports:

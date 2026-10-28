@@ -88,6 +88,8 @@ function basaltCard(cfg) {
   const url = h('input', { value: cfg.url, placeholder: 'http://<host>:4400' });
   const key = keyField(cfg.hasToken, 'bn_…', tr('API-Token'));
   const vault = h('input', { value: cfg.vault || 'dnd', placeholder: 'dnd' });
+  const rulesVault = h('input', { value: cfg.rulesVault || '', placeholder: tr('z.B. regeln'), list: 'basaltVaults' });
+  const vaultList = h('datalist', { id: 'basaltVaults' });
   const result = h('div.small.muted');
   const test = h('button', {
     type: 'button',
@@ -96,6 +98,7 @@ function basaltCard(cfg) {
       try {
         const r = await api('POST', '/api/basalt/test', { url: url.value, token: key.typed(), vault: vault.value });
         result.textContent = tr('Verbunden – {n} Kampagnen: {list}', { n: r.campaigns.length, list: r.campaigns.join(', ') });
+        fill(vaultList, ...(r.vaults || []).map((v) => h('option', { value: v })));
       } catch (err) {
         result.textContent = err.message;
       }
@@ -107,9 +110,11 @@ function basaltCard(cfg) {
     h('label.inline', enabled, tr('Aktiv')),
     h('div.row', field(tr('Adresse'), url), key.el),
     h('div.row', field(tr('Standard-Vault'), vault, tr('Gilt für Kampagnen ohne eigenen Vault (Auswahl auf der Kampagnenseite)')), h('div', { style: { alignSelf: 'end' } }, test)),
+    field(tr('Regelwerk-Vault'), rulesVault, tr('Optional: Vault mit den Spielregeln (Zauber, Zustände, Regeln …). Dann gibt es einen Tab „Regeln“ mit Suche; ist in BasaltNotes unter Einstellungen → Funktionen der KI-Chat an, beantwortet dort auch die KI Fragen zu den Regeln.')),
+    vaultList,
     result,
   );
-  return { el, value: () => ({ enabled: enabled.checked, url: url.value, token: key.value(), vault: vault.value }) };
+  return { el, value: () => ({ enabled: enabled.checked, url: url.value, token: key.value(), vault: vault.value, rulesVault: rulesVault.value.trim() }) };
 }
 
 async function render() {

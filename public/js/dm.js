@@ -17,6 +17,7 @@ import { tr } from './i18n.js';
 import { useCampaignUnits } from './units-ui.js';
 import { loadAi } from './ai.js';
 import { loadBasalt } from './basalt.js';
+import { rules, loadRules, createRulesView } from './rules.js';
 import { createPartyView } from './party-view.js';
 import { createLibraryView } from './library-view.js';
 import { createAdventuresView } from './adventure-view.js';
@@ -54,8 +55,8 @@ try {
   alert(err.message);
   location.href = '/';
 }
-// Eingerichtete Dienste (ohne Einrichtung erscheinen keine KI- bzw. Basalt-Knöpfe)
-await Promise.all([loadAi(), loadBasalt()]);
+// Eingerichtete Dienste (ohne Einrichtung erscheinen keine KI- bzw. Basalt-Knöpfe, ohne Regelwerk kein Regeltab)
+await Promise.all([loadAi(), loadBasalt().then(loadRules)]);
 const S = () => sync.state;
 
 // Ebenen der Vorbereitung: Kampagne › Abenteuer › Session. Die Seitenleiste zeigt nur die Seiten der aktuellen
@@ -69,8 +70,9 @@ const LEVELS = {
     ['bestiary', 'skull', tr('Bestiarium')],
     ['library', 'folder', tr('Mediathek')],
     ['screens', 'monitor', tr('Bildschirme')],
+    rules.enabled ? ['rules', 'scale', tr('Regeln')] : null,
     ['campaign', 'settings', tr('Einstellungen')],
-  ],
+  ].filter(Boolean),
   adventure: [
     ['adventure', 'flag', tr('Übersicht')],
     ['maps', 'map', tr('Karten')],
@@ -169,6 +171,7 @@ prepViews.session = createScenesView({ sync, cid, go, play });
 prepViews.material = (id) => prepViews.sessions(id, { solo: true });
 prepViews.ready = createReadyView({ sync, cid, go, play });
 prepViews.wrapup = createWrapupView({ sync, cid, go });
+prepViews.rules = () => createRulesView({ page: true });
 
 // --- Modus: Vorbereiten | Spielen ------------------------------------------------------
 // Vorbereiten = Verwaltung (Sessions, Karten, Lore …) mit Seitenleiste; Spielen = Karte + Panels, ohne Seitenleiste.
@@ -364,7 +367,8 @@ document.addEventListener('keydown', (e) => {
 
 function panelColumn(key, fallback) {
   let cur = store.get(key, fallback);
-  if (!PANELS[cur]) cur = fallback;
+  const available = Object.keys(PANELS).filter((p) => p !== 'rules' || rules.enabled);
+  if (!available.includes(cur)) cur = fallback;
   const body = h('div.panel-body');
   const tabs = h('div.tabs');
   let panel = null;
@@ -375,7 +379,8 @@ function panelColumn(key, fallback) {
     panel = createPanel(name, panelCtx);
     fill(body, panel.el);
   };
-  for (const [name, [iconName, label]] of Object.entries(PANELS)) {
+  for (const name of available) {
+    const [iconName, label] = PANELS[name];
     tabs.append(h('button', { dataset: { p: name }, onclick: () => show(name), title: label }, h('span.tab-icon', icon(iconName)), h('span.tab-label', label)));
   }
   show(cur);

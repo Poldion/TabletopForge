@@ -3,6 +3,14 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.52.0] – 2026-10-28
+
+### Added
+
+- Optional **Rules** tab: set a rulebook vault in BasaltNotes under Services. Full-text search with snippets and the
+  rule text right in the tab; if BasaltNotes' AI chat is switched on, ask questions about the rules and get an
+  explanation with sources. Available as a campaign page and as a panel while playing.
+
 ## [0.51.1] – 2026-10-28
 
 ### Added
@@ -25,4 +33,5 @@ Initial public release.
 
 Development before the public release.
 
+[0.52.0]: https://github.com/Poldion/TabletopForge/releases/tag/v0.52.0
 [0.51.1]: https://github.com/Poldion/TabletopForge/releases/tag/v0.51.1

@@ -16,6 +16,7 @@ import { ai } from './ai.js';
 import { openAiCreator } from './creature-ai.js';
 import { t } from './i18n.js';
 import { dist } from './units-ui.js';
+import { createRulesView } from './rules.js';
 
 // [Symbol, Beschriftung]
 export const PANELS = {
@@ -26,6 +27,8 @@ export const PANELS = {
   creatures: ['skull', tr('Kreaturen')],
   notes: ['note', tr('Notizen')],
   lore: ['book', tr('Lore')],
+  // nur mit eingerichtetem Regelwerk (siehe rules.js)
+  rules: ['scale', tr('Regeln')],
 };
 
 /**
@@ -62,6 +65,7 @@ export function createPanel(name, ctx) {
 
 const builders = {
   scene: (ctx) => scenePanel(ctx),
+  rules: () => createRulesView(),
   // --- Karte: alles zur aktuellen Karte an einem Ort ---------------------------
   map({ sync, cid, currentMapId }) {
     const S = () => sync.state;

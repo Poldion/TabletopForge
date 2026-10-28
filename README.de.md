@@ -35,6 +35,7 @@ Werkzeugen für alles Spontane. Danach die **Nachbereitung** mit Recap und offen
 | **NSC-Generator** | Würfelt Name, Beruf, Aussehen, Persönlichkeit, Stimme, Geheimnis und passende Spielwerte |
 | **Encounter** | Planer mit Schwierigkeit und EP nach den 5e-Regeln, Zufallsbegegnungen per KI |
 | **Kampf-Manager** | Initiative, Zustände mit Dauer, Konzentration, Resistenzen, Todesrettungswürfe, Angriffe direkt aus dem Statblock |
+| **Regeln** | Optionaler Regelwerk-Vault in BasaltNotes: Volltextsuche und eine KI, die Regeln heraussucht und erklärt – als Seite und als Panel beim Spielen |
 | **Notizen & Lore** | Karten-, Session- und Kampagnennotizen, handschriftlicher Notizblock, Lore mit Kontextbezug |
 | **Spieler-Display** | Handouts, Karten, Lore und Vorlesetexte mit weicher Überblendung, Pausenbildschirm |
 | **Tablet & Stift** | Touch-optimiert, Pinch-Zoom, Stiftdruck, Handballen-Erkennung |
@@ -85,7 +86,8 @@ ist, erscheint nirgends.
 - **[ImageGen](https://github.com/Poldion/ImageGen)**: Tokens und Porträts (auch „Token aus Bild“), Battlemaps,
   Ortskarten, Szenenbilder und Handouts – im Hintergrund erzeugt und direkt in der Kampagne abgelegt.
 - **[BasaltNotes](https://github.com/Poldion/BasaltNotes)**: Spielercharaktere mit Hintergrund und Bildern aus einem
-  Vault je Kampagne übernehmen; Session-Notizen gehen zurück in den Eingang des Vaults.
+  Vault je Kampagne übernehmen; Session-Notizen gehen zurück in den Eingang des Vaults. Ein Regelwerk-Vault bringt einen
+  Tab **Regeln** mit Suche und KI-Antworten aus dem Chat von BasaltNotes.
 - **[WhisperNotes](https://github.com/Poldion/WhisperNotes)**: nimmt die Session auf und schreibt den Recap nach
   BasaltNotes. Von dort fließt er zurück in die Vorbereitung.
 

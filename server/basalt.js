@@ -7,9 +7,10 @@ import { DATA_DIR } from './store.js';
 import { cleanUrl } from './ai.js';
 
 const FILE = path.join(DATA_DIR, 'basalt.json');
-const EMPTY = { enabled: false, url: '', token: '', vault: 'dnd' };
+const EMPTY = { enabled: false, url: '', token: '', vault: 'dnd', rulesVault: '' };
 
 let config = load();
+let features = null; // eingeschaltete Funktionen von BasaltNotes (siehe chatEnabled)
 
 function load() {
   try {
@@ -23,7 +24,10 @@ const base = () => cleanUrl(config.url, ['/api/v1']);
 export const on = () => !!(config.enabled && config.url && config.token);
 
 /** Für alle angemeldeten Personen: ist Basalt da, und wo öffnet man Notizen im Browser? */
-export const status = () => (on() ? { enabled: true, url: base(), vault: config.vault } : { enabled: false });
+export const status = () => (on() ? { enabled: true, url: base(), vault: config.vault, rulesVault: config.rulesVault || '' } : { enabled: false });
+
+/** Regelwerk: eigener Vault mit den Regeln (Zauber, Zustände, Regeln …); ohne Eintrag gibt es keinen Regeltab. */
+export const rulesOn = () => on() && !!config.rulesVault;
 
 export function getConfig() {
   const { token, ...rest } = config;
@@ -37,7 +41,9 @@ export function saveConfig(next = {}) {
     url: cleanUrl(next.url, ['/api/v1']),
     token: next.token === undefined ? config.token : String(next.token || '').trim().replace(/^Bearer\s+/i, '').slice(0, 500),
     vault: String(next.vault || 'dnd').trim().slice(0, 80) || 'dnd',
+    rulesVault: next.rulesVault === undefined ? config.rulesVault : /^[\w.-]{1,80}$/.test(String(next.rulesVault).trim()) ? String(next.rulesVault).trim() : '',
   };
+  features = null;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
   return getConfig();
@@ -69,6 +75,20 @@ async function call(p, { token = config.token, url = base(), raw = false, body, 
   return raw ? res : res.json();
 }
 
+/** Eingeschaltete Funktionen von BasaltNotes (KI-Chat ja/nein), eine Minute zwischengespeichert. */
+export async function chatEnabled() {
+  if (!features || Date.now() - features.at > 60000) {
+    let chat = false;
+    try {
+      chat = !!(await call('/system/features')).chat;
+    } catch {
+      /* ältere Version oder nicht erreichbar: Chat bleibt aus */
+    }
+    features = { chat, at: Date.now() };
+  }
+  return features.chat;
+}
+
 /** Vault einer Anfrage (je Kampagne wählbar); ohne Angabe der Standard-Vault aus den Einstellungen. */
 export const vaultId = (v) => (/^[\w.-]{1,80}$/.test(String(v || '')) ? String(v) : config.vault);
 const vault = (v) => encodeURIComponent(vaultId(v));
@@ -77,8 +97,11 @@ const items = (j) => (Array.isArray(j) ? j : j.items || j.notes || j.data || j.r
 /** Verbindung testen (Verwaltung): Kampagnen des Vaults. Ohne Angaben gelten die gespeicherten. */
 export async function test({ url, token, vault: v } = {}) {
   const u = url ? cleanUrl(url, ['/api/v1']) : base();
-  const j = await call(`/vaults/${encodeURIComponent(v || config.vault)}/campaigns`, { url: u, token: token || config.token });
-  return { campaigns: items(j).map((c) => c.title || c.name).filter(Boolean) };
+  const opts = { url: u, token: token || config.token };
+  const j = await call(`/vaults/${encodeURIComponent(v || config.vault)}/campaigns`, opts);
+  // Vaults zur Auswahl des Regelwerks (darf fehlen, z.B. bei einem Token für nur einen Vault)
+  const vs = await call('/vaults', opts).catch(() => []);
+  return { campaigns: items(j).map((c) => c.title || c.name).filter(Boolean), vaults: items(vs).map((x) => x.id).filter(Boolean) };
 }
 
 /** Vaults, auf die das Token Zugriff hat. */
@@ -133,6 +156,59 @@ export async function note(id, v) {
   // Bilder aus den Anhängen brauchen das Token → über unseren Server ausliefern
   html = html.replace(/(<img[^>]*\ssrc=")([^"]*\/attachments\/)([^"?]+)([^"]*")/gi, (_, a, _b, name) => `${a}/api/basalt/attachments/${name}?vault=${vault(v)}"`);
   return { id: n.id, title: n.title, frontmatter: props(n.frontmatter), html, images: embeddedImages(n.body), url: `${base()}/${vault(v)}/note/${n.id}` };
+}
+
+/** Ausschnitt als Fließtext: ohne Markdown-Zeichen und Kommentare (auch abgeschnittene), <mark> bleibt. */
+const plainSnippet = (s) =>
+  String(s || '')
+    .replace(/^(?:(?!<!--)[\s\S])*?-->/, '…')
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, ' ')
+    .replace(/(^|\s)#{1,6}\s+/g, '$1')
+    .replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2')
+    .replace(/[*_`]+|(?<=^|\s)>\s/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** Volltextsuche im Regelwerk: Treffer mit Ausschnitten (<mark>…</mark> um die Suchwörter). */
+export async function searchRules(q) {
+  const p = new URLSearchParams({ q: String(q).slice(0, 200), limit: '30' });
+  const j = await call(`/vaults/${encodeURIComponent(config.rulesVault)}/search?${p}`);
+  return items(j).map((n) => ({ id: n.id, title: n.title, type: n.type || '', highlight: plainSnippet((n.highlights || [])[0]) }));
+}
+
+/**
+ * Frage an den KI-Chat von BasaltNotes über das Regelwerk (Antwort als Server-Sent Events: context, start, token,
+ * done, error). Gibt die offene Antwort zurück; der Aufrufer reicht sie durch.
+ */
+export async function askRules({ question, history, previous }, signal, lang = 'de') {
+  const body = {
+    question: String(question || '').slice(0, 2000),
+    history: (Array.isArray(history) ? history : []).slice(-10).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 8000) })),
+    previous: (Array.isArray(previous) ? previous : []).slice(0, 10).map(String),
+    stream: true,
+  };
+  let res;
+  try {
+    res = await fetch(`${base()}/api/v1/vaults/${encodeURIComponent(config.rulesVault)}/chat`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/json', accept: 'text/event-stream', 'accept-language': lang },
+      body: JSON.stringify(body),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10 * 60000)]),
+    });
+  } catch (err) {
+    throw new Error(err.name === 'TimeoutError' ? 'Zeitüberschreitung' : `nicht erreichbar (${err.cause?.code || err.message})`);
+  }
+  if (!res.ok) {
+    let msg = '';
+    try {
+      const j = await res.json();
+      msg = j.error?.message || j.message || '';
+    } catch {
+      /* keine JSON-Antwort */
+    }
+    throw new Error(`${res.status}${msg ? ` – ${msg}` : ''}`);
+  }
+  return res;
 }
 
 /** Anhang (Bild) holen: { buffer, mime }. */

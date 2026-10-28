@@ -4,7 +4,7 @@ import { h, fill, api, toast } from './util.js';
 import { icon } from './icons.js';
 import { tr } from './i18n.js';
 
-export const basalt = { enabled: false, url: '', vault: '' };
+export const basalt = { enabled: false, url: '', vault: '', rulesVault: '' };
 
 let loading = null;
 export const loadBasalt = () =>

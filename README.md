@@ -35,6 +35,7 @@ improvised. Afterwards there is a **wrap-up** with a recap, and open scenes move
 | **NPC generator** | Rolls name, occupation, appearance, personality, voice, secret and fitting stats |
 | **Encounters** | Planner with difficulty and XP per the 5e rules, AI-generated random encounters |
 | **Combat** | Initiative, conditions with duration, concentration, resistances, death saves, attacks straight from the stat block |
+| **Rules** | Optional rulebook vault in BasaltNotes: full-text search and an AI that looks up and explains rules, as a page and as a panel while playing |
 | **Notes & lore** | Map, session and campaign notes, handwritten notepad, lore linked to context |
 | **Player display** | Handouts, maps, lore and read-aloud text with smooth cross-fades, pause screen |
 | **Tablet & pen** | Touch-optimised, pinch zoom, pen pressure, palm rejection |
@@ -85,7 +86,8 @@ is not enabled there does not appear anywhere.
 - **[ImageGen](https://github.com/Poldion/ImageGen)**: tokens and portraits (including "token from image"), battle
   maps, location maps, scene pictures and handouts – generated in the background and stored right in the campaign.
 - **[BasaltNotes](https://github.com/Poldion/BasaltNotes)**: import player characters with background and pictures
-  from one vault per campaign; session notes go back into the vault's inbox.
+  from one vault per campaign; session notes go back into the vault's inbox. A rulebook vault adds a **Rules** tab with
+  search and AI answers from BasaltNotes' chat.
 - **[WhisperNotes](https://github.com/Poldion/WhisperNotes)**: records the session and writes the recap to
   BasaltNotes. From there it flows back into preparation.
 

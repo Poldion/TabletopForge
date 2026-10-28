@@ -1088,3 +1088,75 @@ img.basalt-thumb {
   object-fit: contain;
   background: repeating-conic-gradient(#2a2620 0 25%, #221f1a 0 50%) 0 0 / 16px 16px;
 }
+
+/* Regeltab: Suche im Regelwerk und Fragen an die KI */
+.rules-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rules-modes {
+  display: flex;
+  gap: 4px;
+}
+.rules-modes button {
+  flex: 1;
+}
+.rules-modes button.active {
+  background: var(--panel2);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.rules-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.rules-body input[type='search'] {
+  flex: 1;
+}
+.rules-snippet {
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.rules-view mark {
+  background: rgba(201, 162, 74, 0.35);
+  color: inherit;
+  border-radius: 2px;
+}
+.rules-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.rules-msg {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--panel2);
+  overflow-wrap: anywhere;
+}
+.rules-msg.user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+}
+.rules-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.rules-sources .chip {
+  cursor: pointer;
+  color: var(--text);
+}
+.rules-ask textarea {
+  width: 100%;
+  resize: vertical;
+}

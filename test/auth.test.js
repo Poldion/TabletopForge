@@ -260,7 +260,17 @@ test('BasaltNotes: nur Admins richten ein, Token bleibt auf dem Server', async (
   assert.equal(saved.json.url, 'http://127.0.0.1:9');
   assert.equal(saved.json.hasToken, true);
   assert.doesNotMatch(JSON.stringify((await req('GET', '/api/basalt/config', { cookie: admin })).json), /geheim/);
-  assert.deepEqual((await req('GET', '/api/basalt', { cookie: dm })).json, { enabled: true, url: 'http://127.0.0.1:9', vault: 'dnd' });
+  assert.deepEqual((await req('GET', '/api/basalt', { cookie: dm })).json, { enabled: true, url: 'http://127.0.0.1:9', vault: 'dnd', rulesVault: '' });
+  // Regeltab nur mit Regelwerk-Vault
+  assert.deepEqual((await req('GET', '/api/basalt/rules', { cookie: dm })).json, { enabled: false });
+  assert.equal((await req('GET', '/api/basalt/rules/search?q=feuer', { cookie: dm })).status, 404);
+  await req('PUT', '/api/basalt/config', { cookie: admin, body: { enabled: true, url: '127.0.0.1:9', vault: 'dnd', rulesVault: 'regeln' } });
+  assert.equal((await req('GET', '/api/basalt', { cookie: dm })).json.rulesVault, 'regeln');
+  assert.deepEqual((await req('GET', '/api/basalt/rules', { cookie: dm })).json, { enabled: true, chat: false });
+  assert.equal((await req('GET', '/api/basalt/rules/search?q=feuer', { cookie: dm })).status, 502);
+  assert.equal((await req('POST', '/api/basalt/rules/chat', { cookie: dm, body: {} })).status, 400);
+  await req('PUT', '/api/basalt/config', { cookie: admin, body: { enabled: true, url: '127.0.0.1:9', vault: 'dnd', rulesVault: '../x' } });
+  assert.equal((await req('GET', '/api/basalt', { cookie: dm })).json.rulesVault, '');
   const chars = await req('GET', '/api/basalt/characters?campaign=x', { cookie: dm });
   assert.equal(chars.status, 502);
   assert.match(chars.json.error, /^BasaltNotes: /);
