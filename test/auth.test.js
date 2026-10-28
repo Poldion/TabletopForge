@@ -26,9 +26,14 @@ before(async () => {
   throw new Error('Server startet nicht');
 });
 
-after(() => {
-  server?.kill();
-  fs.rmSync(dataDir, { recursive: true, force: true });
+after(async () => {
+  // Erst löschen, wenn der Server beendet ist – sonst schreibt er noch in den Datenordner
+  if (server && server.exitCode === null && server.signalCode === null) {
+    const exited = new Promise((r) => server.once('exit', r));
+    server.kill();
+    await exited;
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** Anfrage mit optionalem Cookie; liefert Status, JSON und gesetztes Cookie. */
