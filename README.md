@@ -118,8 +118,8 @@ flowchart LR
 
 ## Documentation
 
-- [docs/handbuch.md](docs/handbuch.md) – all features, login, AI services, calibration, keyboard shortcuts (German)
-- [kiosk/README.md](kiosk/README.md) – Raspberry Pi image for the game table (German)
+- [docs/manual.md](docs/manual.md) – all features, login, AI services, calibration, keyboard shortcuts (German: [handbuch.md](docs/handbuch.md))
+- [kiosk/README.en.md](kiosk/README.en.md) – Raspberry Pi image for the game table (German: [README.md](kiosk/README.md))
 - [CHANGELOG.md](CHANGELOG.md) – version history
 - [CONTRIBUTING.md](CONTRIBUTING.md) – development setup, tests, guidelines, translations
 - [SECURITY.md](SECURITY.md) – reporting security issues

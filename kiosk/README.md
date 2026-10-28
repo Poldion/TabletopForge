@@ -1,5 +1,7 @@
 # Kiosk-Image für den Spieltisch (Raspberry Pi Zero 2 W)
 
+🇬🇧 [English](README.en.md) · 🇩🇪 Deutsch
+
 Ein schlankes, **schreibgeschütztes** Raspberry-Pi-OS-Image, das direkt nach dem Start die
 Spieltisch-Anzeige im Vollbild zeigt. Gesteuert wird alles aus dem DM-System unter
 **Bildschirme → Kiosk-Geräte**.

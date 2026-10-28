@@ -118,8 +118,8 @@ flowchart LR
 
 ## Dokumentation
 
-- [docs/handbuch.md](docs/handbuch.md) – alle Funktionen, Anmeldung, KI-Dienste, Kalibrierung, Tastenkürzel
-- [kiosk/README.md](kiosk/README.md) – Raspberry-Pi-Image für den Spieltisch
+- [docs/handbuch.md](docs/handbuch.md) – alle Funktionen, Anmeldung, KI-Dienste, Kalibrierung, Tastenkürzel (Englisch: [manual.md](docs/manual.md))
+- [kiosk/README.md](kiosk/README.md) – Raspberry-Pi-Image für den Spieltisch (Englisch: [README.en.md](kiosk/README.en.md))
 - [CHANGELOG.md](CHANGELOG.md) – Versionsverlauf (nur Englisch)
 - [CONTRIBUTING.md](CONTRIBUTING.md) – Entwicklungsumgebung, Tests, Regeln (nur Englisch, mit deutschem Abschnitt)
 - [SECURITY.md](SECURITY.md) – Sicherheitslücken melden (nur Englisch)

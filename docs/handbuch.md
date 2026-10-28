@@ -1,5 +1,7 @@
 # Tabletop Forge – Handbuch
 
+🇬🇧 [English](manual.md) · 🇩🇪 Deutsch
+
 Selbst gehostete Web-Anwendung für Dungeon Master: Kampagnen vorbereiten, Sessions leiten und
 einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Browser heraus steuern.
 

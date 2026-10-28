@@ -3,6 +3,13 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.52.1] – 2026-10-29
+
+### Added
+
+- English versions of the manual (`docs/manual.md`) and the kiosk guide (`kiosk/README.en.md`); the English README
+  links to them, every manual has a language switch at the top.
+
 ## [0.52.0] – 2026-10-28
 
 ### Added
