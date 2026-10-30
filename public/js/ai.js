@@ -183,6 +183,7 @@ export async function openAiImage({ sync, cid, purpose = 'picture', prompt = '',
   let suggested = true;
   text.addEventListener('input', () => (suggested = false));
   const enhance = h('input', { type: 'checkbox', checked: ai.enhance !== false });
+  const enhanceField = h('label.inline', { title: tr('Die Bild-App macht aus einer kurzen Beschreibung einen ausführlichen Prompt') }, enhance, tr('Beschreibung ausformulieren lassen'));
   const status = h('span.small.muted.grow');
   const bar = h('div.ai-progress.hidden', h('i'));
   const result = h('div.ai-result-img.hidden');
@@ -200,6 +201,7 @@ export async function openAiImage({ sync, cid, purpose = 'picture', prompt = '',
     const sizes = sizesOf(w);
     fill(sizeSel, ...sizes.map((s, i) => h('option', { value: i }, s.label)));
     sizeField.classList.toggle('hidden', !sizes.length);
+    enhanceField.classList.toggle('hidden', w.canEnhance === false); // öffentliche Dienste formulieren nichts aus
     const edit = w.mode === 'edit';
     srcField.classList.toggle('hidden', !edit);
     if (edit) {
@@ -257,7 +259,7 @@ export async function openAiImage({ sync, cid, purpose = 'picture', prompt = '',
       j = await api('POST', `/api/campaigns/${cid}/ai/image`, {
         workflow: w.file,
         prompt: text.value.trim(),
-        enhance: enhance.checked,
+        enhance: w.canEnhance !== false && enhance.checked,
         width: size?.w,
         height: size?.h,
         sourceAssetId: w.mode === 'edit' ? srcSel.value : null,
@@ -298,7 +300,7 @@ export async function openAiImage({ sync, cid, purpose = 'picture', prompt = '',
     h('div', h('label', tr('Art')), wfSel, summary),
     srcField,
     h('div', h('label', tr('Beschreibung')), text),
-    h('div.row', { style: { flexWrap: 'wrap' } }, sizeField, h('label.inline', { title: tr('Die Bild-App macht aus einer kurzen Beschreibung einen ausführlichen Prompt') }, enhance, tr('Beschreibung ausformulieren lassen'))),
+    h('div.row', { style: { flexWrap: 'wrap' } }, sizeField, enhanceField),
     h('div.row', { style: { margin: '10px 0 6px' } }, status, go),
     bar,
     result,

@@ -2,14 +2,16 @@
 // Beide werden in der Oberfläche eingetragen (Adresse, Schlüssel) und sind ohne Eintrag unsichtbar.
 //  – Text: jede OpenAI-kompatible Schnittstelle (/v1/chat/completions), z.B. der Ollama-Proxy oder Ollama selbst
 //  – Bild: die Bild-App (ComfyUI-Oberfläche) über ihre API (/api/v1/workflows, /api/v1/generate, /api/v1/jobs)
+//    oder ein öffentlicher Dienst mit OpenAI-kompatibler Schnittstelle (/v1/images/generations, /v1/images/edits)
 // Schlüssel bleiben auf dem Server; die Oberfläche erfährt nur, ob einer gesetzt ist.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { DATA_DIR } from './store.js';
 
 const FILE = path.join(DATA_DIR, 'ai.json');
-const EMPTY = { text: { enabled: false, url: '', model: '', apiKey: '' }, image: { enabled: false, url: '', apiKey: '', enhance: true } };
+const EMPTY = { text: { enabled: false, url: '', model: '', apiKey: '' }, image: { enabled: false, provider: 'imagegen', url: '', model: '', apiKey: '', enhance: true } };
 
 let config = load();
 
@@ -40,7 +42,10 @@ const textBase = (url) => (/\/v1$/i.test(url) ? url : `${url}/v1`);
 const imageBase = (url) => cleanUrl(url, ['/api/v1', '/v1']);
 
 export const textOn = () => !!(config.text.enabled && config.text.url && config.text.model);
-export const imageOn = () => !!(config.image.enabled && config.image.url);
+const isPublic = (provider = config.image.provider) => provider === 'openai';
+/** Öffentlicher Dienst: Adresse wie eingetragen, „/v1“ nur ergänzen, wenn keine Versionsangabe dabei ist. */
+const publicBase = (url) => (/\/v\d+\w*(\/openai)?$/i.test(url) ? url : `${url}/v1`);
+export const imageOn = () => !!(config.image.enabled && config.image.url && (!isPublic() || config.image.model));
 
 /** Was die Oberfläche anzeigen soll (für alle angemeldeten Personen). */
 export const status = () => ({ text: textOn(), image: imageOn(), enhance: config.image.enhance !== false });
@@ -64,7 +69,9 @@ export function saveConfig(next = {}) {
     },
     image: {
       enabled: !!i.enabled,
-      url: imageBase(i.url),
+      provider: isPublic(i.provider) ? 'openai' : 'imagegen',
+      url: isPublic(i.provider) ? cleanUrl(i.url) : imageBase(i.url),
+      model: str(i.model, 200),
       apiKey: i.apiKey === undefined ? config.image.apiKey : str(i.apiKey, 500),
       enhance: i.enhance !== false,
     },
@@ -79,8 +86,9 @@ const headers = (key, json = false) => ({ ...(key ? { authorization: `Bearer ${k
 
 async function call(url, { key, body, timeout = 20000, method } = {}) {
   let res;
+  const form = body instanceof FormData;
   try {
-    res = await fetch(url, { method: method || (body ? 'POST' : 'GET'), headers: headers(key, !!body), body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) });
+    res = await fetch(url, { method: method || (body ? 'POST' : 'GET'), headers: headers(key, !!body && !form), body: form ? body : body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) });
   } catch (err) {
     throw new Error(err.name === 'TimeoutError' ? 'Zeitüberschreitung' : `nicht erreichbar (${err.cause?.code || err.message})`);
   }
@@ -107,8 +115,16 @@ export async function testText({ url, apiKey } = {}) {
   return { models: (j.data || j.models || []).map((m) => m.id || m.name).filter(Boolean).sort() };
 }
 
-/** Bildgenerator: Workflows abfragen. */
-export async function testImage({ url, apiKey } = {}) {
+/** Bildgenerator: Workflows der Bild-App bzw. Modelle des öffentlichen Dienstes abfragen. */
+export async function testImage({ url, apiKey, provider } = {}) {
+  if (isPublic(provider)) {
+    const r = await call(`${publicBase(cleanUrl(url || config.image.url))}/models`, { key: apiKey ?? config.image.apiKey });
+    const j = await r.json();
+    const all = (j.data || j.models || []).map((m) => m.id || m.name).filter(Boolean).sort();
+    // Die Liste enthält oft auch Sprachmodelle – Bildmodelle zuerst, sonst alle
+    const images = all.filter((m) => /image|dall-?e|flux|stable|sdxl|sd3|imagen|recraft|ideogram/i.test(m));
+    return { models: images.length ? images : all };
+  }
   const base = imageBase(url || config.image.url);
   const r = await call(`${base}/api/v1/workflows`, { key: apiKey ?? config.image.apiKey });
   return { workflows: pickWorkflows(await r.json()).map((w) => w.title) };
@@ -158,9 +174,43 @@ const pickWorkflows = (list) =>
       defaultPrompt: w.default_prompt || '',
     }));
 
-/** Bild-Workflows der Bild-App (eine Minute zwischengespeichert). */
+// Öffentliche Dienste kennen keine Workflows: feste Arten mit einer Vorgabe für den Prompt (Texte auf Englisch, das
+// verstehen alle Modelle am besten). Titel und Beschreibungen übersetzt die Route.
+const PUBLIC_KINDS = [
+  { file: 'token', variant: 'token', title: 'Token / Porträt', summary: 'Figur von vorn, für Tokens und Porträts', hint: 'Fantasy character portrait for a tabletop role-playing game, head and shoulders, centered, plain background, no text: ' },
+  { file: 'battlemap', variant: 'battlemap', title: 'Battlemap', summary: 'Kampfkarte, genau von oben', wide: true, hint: 'Top-down battle map for a tabletop role-playing game, seen straight from above, no grid, no text, no characters: ' },
+  { file: 'ortskarte', variant: 'ortskarte', title: 'Ortskarte', summary: 'Karte eines Ortes oder einer Stadt', wide: true, hint: 'Fantasy map of a location for a tabletop role-playing game, seen from above, no text: ' },
+  { file: 'illustration', variant: 'illustration', title: 'Illustration', summary: 'Szenenbild oder Handout', wide: true, hint: 'Fantasy illustration for a tabletop role-playing game, no text: ' },
+  { file: 'token-edit', variant: 'token', mode: 'edit', title: 'Token aus Bild', summary: 'Macht aus einem vorhandenen Bild ein Token (nicht jeder Dienst kann das)', hint: '', defaultPrompt: 'Turn this into a fantasy character portrait for a token: head and shoulders, centered, plain background.' },
+];
+
+/** Größen, die das Modell annimmt: [Bezeichnung, Breite, Höhe]; die erste ist die Vorauswahl. */
+function publicSizes(model, wide) {
+  const m = String(model).toLowerCase();
+  if (m.includes('dall-e-2')) return [['Quadrat', 1024, 1024]];
+  const [a, b] = m.includes('dall-e-3') ? [1792, 1024] : m.includes('gpt-image') ? [1536, 1024] : [1344, 768];
+  const square = ['Quadrat', 1024, 1024];
+  const rest = [['Quer', a, b], ['Hoch', b, a]];
+  return wide ? [...rest, square] : [square, ...rest];
+}
+
+const publicWorkflows = () =>
+  PUBLIC_KINDS.map(({ hint, wide, ...k }) => ({
+    mode: 'generate',
+    seconds: 40,
+    defaultSize: null,
+    group: '',
+    tab: '',
+    defaultPrompt: '',
+    canEnhance: false,
+    ...k,
+    sizes: publicSizes(config.image.model, wide),
+  }));
+
+/** Bild-Workflows der Bild-App (eine Minute zwischengespeichert) bzw. die festen Arten eines öffentlichen Dienstes. */
 export async function workflows() {
   if (!imageOn()) throw new Error('Bildgenerator nicht eingerichtet');
+  if (isPublic()) return publicWorkflows();
   if (workflowCache && Date.now() - workflowCache.at < 60000) return workflowCache.list;
   const r = await call(`${imageBase(config.image.url)}/api/v1/workflows`, { key: config.image.apiKey });
   const list = pickWorkflows(await r.json());
@@ -198,7 +248,43 @@ export function startImage(campaignId, opts, save) {
   return job(id);
 }
 
+/** Bild von einem öffentlichen Dienst: Antwort kommt direkt, als base64 oder als Adresse zum Herunterladen. */
+async function runPublicImage(j, opts, save) {
+  const base = publicBase(config.image.url);
+  const key = config.image.apiKey;
+  const kind = PUBLIC_KINDS.find((k) => k.file === opts.workflow);
+  const prompt = `${kind?.hint || ''}${opts.prompt}`;
+  const size = opts.width && opts.height ? `${opts.width}x${opts.height}` : null;
+  const request = async (withSize) => {
+    if (!opts.image) return call(`${base}/images/generations`, { key, timeout: 300000, body: { model: config.image.model, prompt, n: 1, ...(withSize && size ? { size } : {}) } });
+    const form = new FormData();
+    form.set('model', config.image.model);
+    form.set('prompt', prompt);
+    form.set('n', '1');
+    if (withSize && size) form.set('size', size);
+    form.set('image', new Blob([await sharp(opts.image).png().toBuffer()], { type: 'image/png' }), 'image.png');
+    return call(`${base}/images/edits`, { key, timeout: 300000, body: form });
+  };
+  // Nicht jeder Dienst kennt das Feld „size“ oder diese Größe: dann mit seiner Standardgröße
+  const r = await request(true).catch((err) => {
+    if (size && /^4\d\d\b.*size/i.test(err.message)) return request(false);
+    throw err;
+  });
+  const item = (await r.json()).data?.[0];
+  if (!item) throw new Error('Kein Bild im Ergebnis');
+  let buf;
+  if (item.b64_json) buf = Buffer.from(item.b64_json, 'base64');
+  else if (/^https?:\/\//i.test(item.url || '')) buf = Buffer.from(await (await call(item.url, { timeout: 60000 })).arrayBuffer()); // ohne Schlüssel: die Adresse ist schon signiert
+  else throw new Error('Kein Bild im Ergebnis');
+  const meta = await sharp(buf).metadata().catch(() => null);
+  if (!meta?.format) throw new Error('Kein Bild im Ergebnis');
+  j.prompt = item.revised_prompt || prompt;
+  j.asset = await save(buf, `image/${meta.format === 'jpg' ? 'jpeg' : meta.format}`, j);
+  Object.assign(j, { state: 'done', finished: Date.now() });
+}
+
 async function runImage(j, opts, save) {
+  if (isPublic()) return runPublicImage(j, opts, save);
   const base = imageBase(config.image.url);
   const key = config.image.apiKey;
   const body = { workflow: opts.workflow, prompt: opts.prompt, enhance: opts.enhance !== false && config.image.enhance !== false, count: 1 };

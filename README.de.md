@@ -76,6 +76,7 @@ Früher erschien das Projekt als `poldion/dnd-campaign-manager`; dieses Image be
 | `TRUST_PROXY` / `PUBLIC_URL` | – | Betrieb hinter einem Reverse-Proxy |
 | `DEMO_CAMPAIGN` | `1` | Beispielkampagne beim ersten Start anlegen (`en` = englisch, `0` = keine) |
 
+Eine eigene KI ist nicht nötig: Sprachmodell und Bildgenerator laufen auch über öffentliche, OpenAI-kompatible Dienste.
 Sprachmodell, Bildgenerator und BasaltNotes werden in der Oberfläche unter **Dienste** eingetragen. Was dort nicht aktiv
 ist, erscheint nirgends.
 

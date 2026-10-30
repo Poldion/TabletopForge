@@ -542,7 +542,8 @@ app.post('/api/ai/text', async (req, res) => {
 
 app.get('/api/ai/workflows', async (req, res) => {
   try {
-    res.json(await ai.workflows());
+    const lang = i18n.langOf(req);
+    res.json((await ai.workflows()).map((w) => ({ ...w, title: i18n.translate(w.title, lang), summary: i18n.translate(w.summary, lang), sizes: w.sizes?.map(([l, ...s]) => [i18n.translate(l, lang), ...s]) ?? w.sizes })));
   } catch (err) {
     res.status(502).json({ error: `KI-Dienst: ${err.message}` });
   }

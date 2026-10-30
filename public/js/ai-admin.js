@@ -55,8 +55,15 @@ function textCard(cfg) {
 
 function imageCard(cfg) {
   const enabled = h('input', { type: 'checkbox', checked: cfg.enabled });
-  const url = h('input', { value: cfg.url, placeholder: 'http://<host>:8190' });
-  const key = keyField(cfg.hasKey, 'ig_…');
+  const provider = h(
+    'select',
+    h('option', { value: 'imagegen', selected: cfg.provider !== 'openai' }, tr('Eigene Bild-App (ImageGen)')),
+    h('option', { value: 'openai', selected: cfg.provider === 'openai' }, tr('Öffentlicher Dienst (OpenAI-kompatible API)')),
+  );
+  const url = h('input', { value: cfg.url });
+  const model = h('input', { value: cfg.model || '', placeholder: tr('z.B. gpt-image-1'), list: 'imageModels' });
+  const models = h('datalist', { id: 'imageModels' });
+  const key = keyField(cfg.hasKey, tr('Schlüssel des Dienstes'));
   const enhance = h('input', { type: 'checkbox', checked: cfg.enhance !== false });
   const result = h('div.small.muted');
   const test = h('button', {
@@ -64,23 +71,44 @@ function imageCard(cfg) {
     onclick: async () => {
       result.textContent = tr('Prüfe …');
       try {
-        const r = await api('POST', '/api/ai/test', { kind: 'image', url: url.value, apiKey: key.typed() });
-        result.textContent = tr('Verbunden – {n} Bild-Workflows: {list}', { n: r.workflows.length, list: r.workflows.join(', ') });
+        const r = await api('POST', '/api/ai/test', { kind: 'image', provider: provider.value, url: url.value, apiKey: key.typed() });
+        if (r.models) {
+          fill(models, ...r.models.map((m) => h('option', { value: m })));
+          if (!model.value && r.models.length) model.value = r.models[0];
+          result.textContent = tr('Verbunden – {n} Modelle gefunden (Auswahl im Feld „Modell“).', { n: r.models.length });
+        } else result.textContent = tr('Verbunden – {n} Bild-Workflows: {list}', { n: r.workflows.length, list: r.workflows.join(', ') });
       } catch (err) {
         result.textContent = err.message;
       }
     },
   }, icon('check'), tr(' Verbindung testen'));
+  const hint = h('p.small.muted');
+  const modelField = field(tr('Modell'), model);
+  const enhanceField = h('label.inline', enhance, tr('Beschreibungen standardmäßig von der Bild-App ausformulieren lassen'));
+  const renderProvider = () => {
+    const pub = provider.value === 'openai';
+    hint.textContent = pub
+      ? tr('Erzeugt Tokens und Porträts für Kreaturen, Karten und Handout-Bilder über einen Dienst im Internet, ganz ohne eigene KI. Geht mit jeder OpenAI-kompatiblen Schnittstelle (/v1/images/generations), z.B. OpenAI (Adresse https://api.openai.com). Jedes Bild kostet dort Geld, und die Beschreibungen gehen an diesen Dienst.')
+      : tr('Erzeugt Tokens und Porträts für Kreaturen, Karten und Handout-Bilder. Gedacht für die Bild-App (ComfyUI) mit ihrer API; den Schlüssel erzeugst du dort oben unter „API“.');
+    url.placeholder = pub ? 'https://api.openai.com' : 'http://<host>:8190';
+    modelField.classList.toggle('hidden', !pub);
+    enhanceField.classList.toggle('hidden', pub);
+  };
+  provider.addEventListener('change', renderProvider);
+  renderProvider();
   const el = card(
     tr('Bildgenerator'),
-    h('p.small.muted', tr('Erzeugt Tokens und Porträts für Kreaturen, Karten und Handout-Bilder. Gedacht für die Bild-App (ComfyUI) mit ihrer API; den Schlüssel erzeugst du dort oben unter „API“.')),
+    hint,
     h('label.inline', enabled, tr('Aktiv')),
+    field(tr('Anbieter'), provider),
     h('div.row', field(tr('Adresse'), url), key.el),
-    h('label.inline', enhance, tr('Beschreibungen standardmäßig von der Bild-App ausformulieren lassen')),
+    modelField,
+    models,
+    enhanceField,
     h('div.row', { style: { marginTop: '8px' } }, test),
     result,
   );
-  return { el, value: () => ({ enabled: enabled.checked, url: url.value, apiKey: key.value(), enhance: enhance.checked }) };
+  return { el, value: () => ({ enabled: enabled.checked, provider: provider.value, url: url.value, model: model.value, apiKey: key.value(), enhance: enhance.checked }) };
 }
 
 function basaltCard(cfg) {

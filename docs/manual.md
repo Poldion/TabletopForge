@@ -177,7 +177,10 @@ is not active there appears nowhere in the interface.
   notes of sessions and maps, to lore entries and to the background of creatures: write out, read-aloud text, ideas,
   bullet points, flesh out an NPC or your own instruction. The suggestion can be edited before taking it over, then
   replace or append.
-- **Image generator** – the image app (ComfyUI) via its API (`/api/v1/workflows`, `/api/v1/generate`, `/api/v1/jobs`)
+- **Image generator** – choose a provider: a **public service** with an OpenAI-compatible interface
+  (`/v1/images/generations`, `/v1/images/edits` for "token from image") needs no AI of your own – enter the address (e.g.
+  `https://api.openai.com`), key and model; each image costs money there and your descriptions are sent to that service.
+  Or your own image app (ComfyUI) via its API (`/api/v1/workflows`, `/api/v1/generate`, `/api/v1/jobs`)
   with a key created there (`ig_…`). Adds **AI image** to creatures (token/portrait, also “token from image” from the
   existing portrait), **create map with AI** to the maps and **create image with AI** to the handouts. The matching
   workflow is preselected (token, battle map, location map, illustration). Generation runs in the background; finished

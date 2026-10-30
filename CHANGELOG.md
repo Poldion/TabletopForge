@@ -3,6 +3,14 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.53.0] – 2026-10-30
+
+### Added
+
+- Image generator: besides your own image app, any public service with an OpenAI-compatible image API can now be
+  connected (address, key, model), so no self-hosted AI is needed. Tokens, battle maps, location maps and illustrations
+  work out of the box; "token from image" needs a service with image editing.
+
 ## [0.52.1] – 2026-10-29
 
 ### Added
@@ -40,5 +48,6 @@ Initial public release.
 
 Development before the public release.
 
+[0.53.0]: https://github.com/Poldion/TabletopForge/releases/tag/v0.53.0
 [0.52.0]: https://github.com/Poldion/TabletopForge/releases/tag/v0.52.0
 [0.51.1]: https://github.com/Poldion/TabletopForge/releases/tag/v0.51.1

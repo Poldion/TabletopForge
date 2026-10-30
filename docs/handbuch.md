@@ -165,8 +165,11 @@ nicht aktiv ist, erscheint nirgends in der Oberfläche.
   Ergibt einen Knopf **KI** an den Notizen von Sessions und Karten, an Lore-Einträgen und am Hintergrund von
   Kreaturen: ausformulieren, Vorlesetext, Ideen, Stichpunkte, NSC ausarbeiten oder eine eigene Anweisung. Der
   Vorschlag lässt sich vor dem Übernehmen bearbeiten, dann ersetzen oder anhängen.
-- **Bildgenerator** – die Bild-App (ComfyUI) über ihre API (`/api/v1/workflows`, `/api/v1/generate`,
-  `/api/v1/jobs`) mit einem dort erzeugten Schlüssel (`ig_…`). Ergibt **KI-Bild** bei Kreaturen (Token/Porträt,
+- **Bildgenerator** – Anbieter wählbar: die eigene Bild-App (ComfyUI) über ihre API (`/api/v1/workflows`,
+  `/api/v1/generate`, `/api/v1/jobs`) mit einem dort erzeugten Schlüssel (`ig_…`), oder ohne eigene KI ein **öffentlicher
+  Dienst** mit OpenAI-kompatibler Schnittstelle (`/v1/images/generations`, für „Token aus Bild“ `/v1/images/edits`):
+  Adresse (z.B. `https://api.openai.com`), Schlüssel und Modell eintragen. Dort kostet jedes Bild Geld, und die
+  Beschreibungen gehen an diesen Dienst. Ergibt **KI-Bild** bei Kreaturen (Token/Porträt,
   auch „Token aus Bild“ aus dem vorhandenen Porträt), **Karte mit KI erzeugen** bei den Karten und **Bild mit KI
   erzeugen** bei den Handouts. Der passende Workflow ist vorgewählt (Token, Battlemap, Ortskarte, Illustration).
   Erzeugt wird im Hintergrund; fertige Bilder landen als Datei in der Kampagne (mit Workflow und Prompt), auch wenn

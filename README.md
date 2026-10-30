@@ -76,6 +76,7 @@ The project used to be published as `poldion/dnd-campaign-manager`; that image n
 | `TRUST_PROXY` / `PUBLIC_URL` | – | Running behind a reverse proxy |
 | `DEMO_CAMPAIGN` | `1` | Create the example campaign on first start (`en` = English, `0` = none) |
 
+No AI of your own is needed: the language model and image generator also work with public OpenAI-compatible services.
 The language model, image generator and BasaltNotes are configured in the interface under **Services**. Anything that
 is not enabled there does not appear anywhere.
 
