@@ -147,4 +147,4 @@ the Coast; "5e" only refers to the game rules the app is compatible with.
 ## Support
 
 If the project helps you, I'm happy about feedback, bug reports and pull requests – see [CONTRIBUTING.md](CONTRIBUTING.md).
-A donation link will follow. <!-- SPENDEN_LINK -->
+You can also [buy me a coffee](https://buymeacoffee.com/poldion).

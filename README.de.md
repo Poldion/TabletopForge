@@ -148,4 +148,4 @@ wird von ihnen nicht unterstützt oder geprüft; „5e“ bezeichnet nur die Spi
 
 Wenn dir das Projekt hilft, freue ich mich über Rückmeldungen, Fehlerberichte und Pull Requests – siehe
 [CONTRIBUTING.md](CONTRIBUTING.md).
-Ein Spenden-Link folgt. <!-- SPENDEN_LINK -->
+Du kannst mir auch [einen Kaffee ausgeben](https://buymeacoffee.com/poldion).
