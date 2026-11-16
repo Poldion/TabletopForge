@@ -394,6 +394,8 @@ app.get('/api/kiosks/:id/display', (req, res) => {
     campaign: k.display.campaignId ? store.getCampaign(k.display.campaignId)?.name || null : null,
     // Eigene Monitordaten des Geräts (sonst null = globale Kalibrierung)
     calibration: kiosks.calibrationFor(k),
+    // Leistungsprofil der Tischanzeige (flüssiger Nebel nur auf Geräten, die es schaffen)
+    performance: kiosks.performanceFor(k),
   });
 });
 
@@ -411,6 +413,9 @@ app.post('/api/kiosks/:id/command', (req, res) => {
     // Update über das Netz: der Agent lädt das Paket selbst über /api/kiosk-updates/<version>/download
     const version = String(req.body?.version || '');
     if (!kioskUpdates.filePath(version)) return res.status(404).json({ error: 'Update-Paket nicht gefunden' });
+    // Nie ein Paket für ein anderes Gerät bzw. eine andere Systemvariante (z.B. Pi-Update auf dem Orange Pi)
+    const pkg = kioskUpdates.list().find((u) => u.version === version);
+    if (!kiosks.acceptsUpdate(kiosks.get(req.params.id), pkg)) return res.status(400).json({ error: 'Das Update-Paket passt nicht zu diesem Gerät' });
     cmd = `update:${version}`;
   } else if (!['reload', 'reboot', 'restart-browser'].includes(cmd)) {
     return res.status(400).json({ error: 'Unbekannter Befehl' });

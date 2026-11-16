@@ -26,7 +26,11 @@ fi
 
 # Overlay für das Root-Dateisystem (schreibt cmdline.txt und initramfs auf die Boot-Partition)
 mount -o remount,rw "$BOOT" || true
-raspi-config nonint do_overlayfs 0
+if command -v raspi-config >/dev/null; then
+  raspi-config nonint do_overlayfs 0
+fi
+# Armbian (Orange Pi): das initramfs-Skript kiosk-overlay schaltet das Overlay ein, sobald
+# /etc/kiosk-firstboot-done existiert – dafür ist hier nichts weiter zu tun
 sync
 
 touch /etc/kiosk-firstboot-done

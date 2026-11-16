@@ -29,15 +29,25 @@ function cellCssPxXY(settings) {
 // Auf Kiosk-Geräten mit eigenen Monitordaten gelten diese statt der globalen Kalibrierung
 const kioskId = param('kiosk');
 let kioskCalibration = null;
+// Leistungsprofil: „high“ = flüssiger Nebel und 60 Bilder/s, „low“ = sparsam (Pi Zero). Reihenfolge: ?perf=high|low
+// in der Adresse, sonst „Darstellung“ unter Bildschirme → Spieltisch, sonst beim Kiosk das zum Gerät passende Profil
+// (vom Server), sonst – normaler Browser auf Laptop, TV o.ä. – flüssig.
+const urlPerformance = ['high', 'low'].includes(param('perf')) ? param('perf') : null;
+let devicePerformance = null;
 if (kioskId) {
   try {
     const res = await fetch(`/api/kiosks/${encodeURIComponent(kioskId)}/display`, { cache: 'no-store' });
-    if (res.ok) kioskCalibration = (await res.json()).calibration || null;
+    if (res.ok) {
+      const info = await res.json();
+      kioskCalibration = info.calibration || null;
+      devicePerformance = info.performance || null;
+    }
   } catch {
     /* Server nicht erreichbar – globale Kalibrierung */
   }
 }
 const tableSettings = (settings) => kioskCalibration || settings.table;
+const performanceFor = (table) => urlPerformance || (['high', 'low'].includes(table?.perf) ? table.perf : null) || devicePerformance || 'high';
 
 if (param('calibrate') || !campaignId) {
   document.getElementById('loading')?.remove();
@@ -57,7 +67,7 @@ async function runTable() {
   sync.on(() => useCampaignUnits(sync.state));
   sync.on(() => followCampaignLanguage(sync.state.display?.lang));
   connectionBadge(sync);
-  const renderer = new MapRenderer(canvas, { mode: 'table', campaignId, getState: () => sync.state, renderScale: Number(param('scale')) || 1 });
+  const renderer = new MapRenderer(canvas, { mode: 'table', campaignId, getState: () => sync.state, renderScale: Number(param('scale')) || 1, performance: performanceFor(sync.state.display?.table) });
   if (param('maxfps')) renderer.maxFps = Number(param('maxfps'));
   // Ladebildschirm, solange die gewählte Karte noch lädt
   renderer.onLoading = (on) => loading.set(on, tr('Karte wird geladen …'));
@@ -131,6 +141,10 @@ async function runTable() {
     const t = st.display.table;
     const tbl = tableSettings(sync.settings);
     renderer.blackout = !!t.blackout;
+    const perf = performanceFor(t);
+    if (param('fps') && perf !== renderer.perfLogged) console.log(`[fps] Darstellung: ${perf}`);
+    renderer.perfLogged = perf;
+    renderer.setPerformance(perf);
     // Verdunkelt: Pausenbildschirm mit Sprüchen (abschaltbar – dann bleibt der Tisch einfach schwarz)
     pause.set(!!t.blackout && t.pauseScreen !== false, t.pauseText);
     renderer.setMap(t.mapId);
@@ -184,7 +198,9 @@ async function runTable() {
   };
 
   sync.on((changed) => {
-    if (touches(changed, 'display', 'maps', 'settings', 'assets', 'initiative')) update();
+    // Nur Nebel geändert (DM deckt auf): nur die Nebelebene neu – Karte und Tokens bleiben im Zwischenspeicher
+    if (changed.fogOnly) renderer.requestTopRender();
+    else if (touches(changed, 'display', 'maps', 'settings', 'assets', 'initiative')) update();
     if (touches(changed, 'display', 'sessions')) preload();
   });
   sync.onFx((fx) => {

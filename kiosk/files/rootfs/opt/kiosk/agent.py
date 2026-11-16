@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ota  # noqa: E402
 import setup_ap  # noqa: E402
 
-VERSION = "1.7.1"
+VERSION = "1.8.0"
 BOOT = "/boot/firmware" if os.path.isdir("/boot/firmware") else "/boot"
 CONFIG = os.path.join(BOOT, "kiosk.json")
 BACKUP = CONFIG + ".bak"
@@ -184,6 +184,14 @@ def device_id():
                     return "pi-" + line.split(":")[1].strip()[-8:].lower()
     except OSError:
         pass
+    # Allwinner (Orange Pi): Seriennummer des Chips, von U-Boot in den Gerätebaum geschrieben
+    try:
+        with open("/proc/device-tree/serial-number", encoding="ascii", errors="ignore") as f:
+            serial = f.read().strip("\x00\n ").lower()
+        if len(serial) >= 8:
+            return "pi-" + serial[-8:]
+    except OSError:
+        pass
     try:
         with open("/etc/machine-id", encoding="utf-8") as f:
             return "pi-" + f.read().strip()[:8]
@@ -197,6 +205,38 @@ def model():
             return f.read().strip("\x00\n ")
     except OSError:
         return ""
+
+
+def platform():
+    """Gerät und Systemvariante für das DM-System – damit es nur passende Update-Pakete anbietet.
+
+    board:   erster Eintrag im Gerätebaum, z.B. „raspberrypi,model-zero-2-w“ oder „xunlong,orangepi-zero2w“
+    os:      „buildroot“ | „raspios“ | „armbian“ | „linux“
+    updates: Gerätename der Update-Pakete, die dieses System installieren kann (None = keine Updates über das Netz)
+    """
+    board = ""
+    try:
+        with open("/proc/device-tree/compatible", "rb") as f:
+            board = f.read().split(b"\x00")[0].decode("ascii", "ignore").strip()
+    except OSError:
+        pass
+    os_id = ""
+    try:
+        with open("/etc/os-release", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("ID="):
+                    os_id = line[3:].strip().strip('"')
+    except OSError:
+        pass
+    if os_id == "buildroot":
+        variant = "buildroot"
+    elif os.path.exists("/etc/armbian-release"):
+        variant = "armbian"
+    elif os.path.exists("/etc/rpi-issue") or board.startswith("raspberrypi,"):
+        variant = "raspios"
+    else:
+        variant = "linux"
+    return {"board": board[:80], "os": variant, "updates": OTA.board() if OTA.supported() else None}
 
 
 def ip_address():
@@ -491,6 +531,7 @@ def heartbeat(cfg):
         "hostname": socket.gethostname(),
         "ip": ip_address(),
         "model": model(),
+        "platform": platform(),
         "engines": browser_engines(),
         "agent": VERSION,
         "ssid": current_ssid(),

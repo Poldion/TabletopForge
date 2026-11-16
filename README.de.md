@@ -6,7 +6,7 @@
 > Browser heraus – der Spieltisch der Poldion-Familie.
 
 **Lizenz:** MIT · **Sprache:** JavaScript (Node.js, Express, Socket.IO), ohne Build-Schritt ·
-**Läuft auf:** Docker (amd64, arm64), Raspberry Pi als Spieltisch-Kiosk · **Docker:** `poldion/tabletop-forge` ·
+**Läuft auf:** Docker (amd64, arm64), Raspberry Pi oder Orange Pi Zero 2W als Spieltisch-Kiosk · **Docker:** `poldion/tabletop-forge` ·
 **Teil von:** [Poldion Self-Hosted](#die-poldion-familie)
 
 ![Spielansicht von Tabletop Forge](docs/bilder/tabletopforge.png)
@@ -40,7 +40,7 @@ Werkzeugen für alles Spontane. Danach die **Nachbereitung** mit Recap und offen
 | **Spieler-Display** | Handouts, Karten, Lore und Vorlesetexte mit weicher Überblendung, Pausenbildschirm |
 | **Tablet & Stift** | Touch-optimiert, Pinch-Zoom, Stiftdruck, Handballen-Erkennung |
 | **LED-Licht** | WLED-Streifen folgen dem Spiel (Kampf rot, Stimmung je Karte) oder halten eine feste Stimmung |
-| **Kiosk** | Schreibgeschütztes Raspberry-Pi-Image für den Spieltisch, aus der App heraus gesteuert |
+| **Kiosk** | Schreibgeschütztes Image für den Spieltisch (Raspberry Pi, Orange Pi Zero 2W), aus der App heraus gesteuert, mit Updates über das Netz |
 | **Konten** | Admin und Spielleitung, Anzeigen werden per QR-Code freigegeben, Betrieb hinter HTTPS-Reverse-Proxy |
 | **Sprachen** | Deutsch und Englisch; metrisch (1,5 m) oder imperial (5 ft) je Kampagne |
 
@@ -120,7 +120,7 @@ flowchart LR
 ## Dokumentation
 
 - [docs/handbuch.md](docs/handbuch.md) – alle Funktionen, Anmeldung, KI-Dienste, Kalibrierung, Tastenkürzel (Englisch: [manual.md](docs/manual.md))
-- [kiosk/README.md](kiosk/README.md) – Raspberry-Pi-Image für den Spieltisch (Englisch: [README.en.md](kiosk/README.en.md))
+- [kiosk/README.md](kiosk/README.md) – Kiosk-Image für den Spieltisch (Raspberry Pi, Orange Pi Zero 2W) (Englisch: [README.en.md](kiosk/README.en.md))
 - [CHANGELOG.md](CHANGELOG.md) – Versionsverlauf (nur Englisch)
 - [CONTRIBUTING.md](CONTRIBUTING.md) – Entwicklungsumgebung, Tests, Regeln (nur Englisch, mit deutschem Abschnitt)
 - [SECURITY.md](SECURITY.md) – Sicherheitslücken melden (nur Englisch)
@@ -133,7 +133,7 @@ npm test      # Unit-Tests
 ```
 
 Aufbau: `server/` (Express, Socket.IO, JSON-Speicher je Kampagne), `shared/` (Zustandsoperationen und Kalibrierung für
-Server und Browser), `public/` (Oberfläche ohne Build-Schritt), `kiosk/` (Raspberry-Pi-Image). Mitmachen und
+Server und Browser), `public/` (Oberfläche ohne Build-Schritt), `kiosk/` (Kiosk-Images). Mitmachen und
 Übersetzungen: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Lizenz & Drittanbieter

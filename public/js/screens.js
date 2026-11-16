@@ -127,6 +127,22 @@ export function createScreensView({ sync, cid, getLayout, setLayout, centerTv })
               h('button.small', { disabled: t.fit, onclick: () => sync.set(['display', 'table', 'zoom'], 1), title: tr('Maßstabsgetreu: 1 Feld = 1 Zoll') }, '1:1'),
             ),
             (t.zoom || 1) !== 1 && !t.fit ? h('div.small', { style: { color: '#e0a030' } }, tr('Achtung: Bei Zoom ≠ 1:1 sind die Felder nicht 1″ groß.')) : null,
+            // Darstellung: flüssig (60 Bilder/s, Nebel folgt dem Pinsel) oder sparsam für schwache Geräte (Pi Zero)
+            h(
+              'div.row',
+              { style: { marginTop: '10px' } },
+              h('span.small.muted', tr('Darstellung')),
+              h(
+                'select',
+                {
+                  title: tr('Automatisch: Kiosk-Geräte je nach Hardware (Pi Zero sparsam), alle anderen Anzeigen flüssig'),
+                  onchange: (e) => sync.set(['display', 'table', 'perf'], e.target.value === 'auto' ? null : e.target.value),
+                },
+                ['auto', 'high', 'low'].map((v) =>
+                  h('option', { value: v, selected: (t.perf || 'auto') === v }, { auto: tr('Automatisch'), high: tr('Flüssig'), low: tr('Sparsam (schwache Geräte)') }[v]),
+                ),
+              ),
+            ),
             link(`/table.html?c=${cid}`, tr('Tischanzeige öffnen')),
             h('div.row', { style: { marginTop: '8px' } }, h('a.btn.small', { href: '/settings.html', target: '_blank' }, icon('settings'), tr(' TV-Kalibrierung (Größe, Auflösung, Drehung)'))),
           ),

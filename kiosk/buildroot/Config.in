@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_DND_KIOSK_PATH/package/armbian-kernel/Config.in"
+source "$BR2_EXTERNAL_DND_KIOSK_PATH/package/uwe5622-firmware/Config.in"

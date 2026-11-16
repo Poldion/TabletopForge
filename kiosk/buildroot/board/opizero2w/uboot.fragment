@@ -1,0 +1,5 @@
+# U-Boot für den Kiosk: sofort starten, kiosk-boot.txt auf der FAT-Partition umschreiben können (Probestart)
+CONFIG_BOOTDELAY=0
+CONFIG_CMD_FAT=y
+CONFIG_FAT_WRITE=y
+CONFIG_CMD_FS_GENERIC=y

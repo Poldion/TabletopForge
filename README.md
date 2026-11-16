@@ -6,7 +6,7 @@
 > table of the Poldion family.
 
 **License:** MIT · **Language:** JavaScript (Node.js, Express, Socket.IO), no build step ·
-**Runs on:** Docker (amd64, arm64), Raspberry Pi as a table kiosk · **Docker:** `poldion/tabletop-forge` ·
+**Runs on:** Docker (amd64, arm64), Raspberry Pi or Orange Pi Zero 2W as a table kiosk · **Docker:** `poldion/tabletop-forge` ·
 **Part of:** [Poldion Self-Hosted](#the-poldion-family)
 
 ![Game view of Tabletop Forge](docs/bilder/tabletopforge.png)
@@ -40,7 +40,7 @@ improvised. Afterwards there is a **wrap-up** with a recap, and open scenes move
 | **Player display** | Handouts, maps, lore and read-aloud text with smooth cross-fades, pause screen |
 | **Tablet & pen** | Touch-optimised, pinch zoom, pen pressure, palm rejection |
 | **LED lighting** | WLED strips follow the game (red in combat, mood per map) or hold a fixed mood |
-| **Kiosk** | Read-only Raspberry Pi image for the game table, controlled from the app |
+| **Kiosk** | Read-only image for the game table (Raspberry Pi, Orange Pi Zero 2W), controlled from the app, with updates over the network |
 | **Accounts** | Admin and GM roles, displays are paired by QR code, runs behind an HTTPS reverse proxy |
 | **Languages** | English and German; metric (1.5 m) or imperial (5 ft) per campaign |
 
@@ -120,7 +120,7 @@ flowchart LR
 ## Documentation
 
 - [docs/manual.md](docs/manual.md) – all features, login, AI services, calibration, keyboard shortcuts (German: [handbuch.md](docs/handbuch.md))
-- [kiosk/README.en.md](kiosk/README.en.md) – Raspberry Pi image for the game table (German: [README.md](kiosk/README.md))
+- [kiosk/README.en.md](kiosk/README.en.md) – kiosk image for the game table (Raspberry Pi, Orange Pi Zero 2W) (German: [README.md](kiosk/README.md))
 - [CHANGELOG.md](CHANGELOG.md) – version history
 - [CONTRIBUTING.md](CONTRIBUTING.md) – development setup, tests, guidelines, translations
 - [SECURITY.md](SECURITY.md) – reporting security issues
@@ -133,7 +133,7 @@ npm test      # unit tests
 ```
 
 Layout: `server/` (Express, Socket.IO, one JSON store per campaign), `shared/` (state operations and calibration for
-server and browser), `public/` (UI without a build step), `kiosk/` (Raspberry Pi image). Contributing and
+server and browser), `public/` (UI without a build step), `kiosk/` (kiosk images). Contributing and
 translations: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License & third parties

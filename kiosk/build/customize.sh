@@ -3,6 +3,11 @@
 # Erwartet: /kiosk (Projektordner kiosk/, nur lesend), /work (Arbeitsbereich), /out (Ausgabe)
 set -euo pipefail
 
+# Andere Geräte: eigenes Skript (Gerätename als Argument)
+case "${1:-pi}" in
+  orangepi) exec /usr/local/bin/customize-orangepi.sh ;;
+esac
+
 BASE_URL=${BASE_IMAGE_URL:-https://downloads.raspberrypi.com/raspios_lite_arm64_latest}
 EXTRA_MB=${EXTRA_MB:-2560}
 VERSION=${KIOSK_VERSION:-dev}

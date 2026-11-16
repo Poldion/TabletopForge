@@ -18,6 +18,7 @@ FB = "/dev/fb0"
 FBIOGET_VSCREENINFO = 0x4600
 FBIOGET_FSCREENINFO = 0x4602
 BG = (0x0B, 0x0A, 0x08)  # Hintergrund wie start.html
+ORDER = (0, 1, 2, 3)  # Byte-Positionen B, G, R, A im 32-Bit-Bildspeicher (screen_info setzt sie)
 
 
 def pixel(bpp, r, g, b):
@@ -26,9 +27,34 @@ def pixel(bpp, r, g, b):
     return struct.pack("<H", ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3))
 
 
+def channel_order(var):
+    """Byte-Positionen von Blau, Grün, Rot, Alpha im 32-Bit-Pixel laut Bildspeicher (Standard: 0, 1, 2, 3).
+
+    struct fb_var_screeninfo: 8 × u32, dann red/green/blue/transp als {offset, length, msb_right}.
+    """
+    red, green, blue, transp = (struct.unpack_from("<2I", var, 32 + 12 * i) for i in range(4))
+    pos = tuple(f[0] // 8 for f in (blue, green, red))
+    if sorted(pos) != sorted(set(pos)) or max(pos) > 3:
+        return 0, 1, 2, 3
+    alpha = transp[0] // 8 if transp[1] else next(i for i in range(4) if i not in pos)
+    return (*pos, alpha)
+
+
+def reorder(frame, order):
+    """BGRA-Daten in die Byte-Reihenfolge des Bildspeichers bringen (schnell über Slices)."""
+    if order == (0, 1, 2, 3):
+        return frame
+    out = bytearray(len(frame))
+    for src, dst in enumerate(order):
+        out[dst::4] = frame[src::4]
+    return out
+
+
 def screen_info(fd):
     var = fcntl.ioctl(fd, FBIOGET_VSCREENINFO, bytes(160))
     xres, yres, _xv, _yv, _xo, _yo, bpp = struct.unpack_from("<7I", var)
+    global ORDER
+    ORDER = channel_order(var) if bpp == 32 else (0, 1, 2, 3)
     fix = fcntl.ioctl(fd, FBIOGET_FSCREENINFO, bytes(80))
     # struct fb_fix_screeninfo: char id[16]; unsigned long smem_start; u32 smem_len, type, type_aux,
     # visual; u16 xpanstep, ypanstep, ywrapstep; u32 line_length …
@@ -69,9 +95,11 @@ def draw():
             for y in range(h):
                 o = (y0 + y) * stride + x0
                 frame[o : o + row] = img[y * row : (y + 1) * row]
+        if bpp == 32 and stride == xres * 4:
+            frame = reorder(frame, ORDER)
         os.lseek(fd, 0, os.SEEK_SET)
         os.write(fd, frame)
-        print(f"[splash] gezeichnet auf {fb_name()} {xres}x{yres}x{bpp}", flush=True)
+        print(f"[splash] gezeichnet auf {fb_name()} {xres}x{yres}x{bpp}, Kanäle BGRA → {ORDER}", flush=True)
     finally:
         os.close(fd)
 
@@ -94,7 +122,8 @@ def main():
     # Zuerst in den Bildspeicher der Firmware (steht nach ~1 s bereit) …
     first = fb_name()
     draw()
-    if first and first.startswith("vc4"):
+    # Schon der Bildspeicher des Grafiktreibers (vc4drmfb, sun4i-drmdrmfb …)? Dann kommt keiner mehr
+    if first and "drm" in first:
         return 0
     # … und noch einmal, sobald der Grafiktreiber (vc4) übernimmt – er setzt Modus und Bild neu
     for _ in range(300):

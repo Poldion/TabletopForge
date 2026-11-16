@@ -8,6 +8,8 @@ import { dist } from './units-ui.js';
 const TILE_SETS = 3;
 
 const FOG_MASK_MAX = 2048;
+// Weiches Aufdecken des Nebels auf starken Geräten (Dauer des Ausblendens in ms)
+const FOG_FADE_MS = 450;
 
 /**
  * Rasterdaten einer Karte. Sind Spalten und Zeilen hinterlegt, wird die Feldgröße aus den
@@ -118,8 +120,11 @@ export class MapRenderer {
     this.tileSets = new Map(); // vorbereitete Kartenkacheln je Kartenfassung (Tisch/Spieler-Display)
     this.mapUrls = new Set(); // von diesem Renderer geladene Kartenbilder (zum Freigeben)
     this.keepUrls = new Set(); // vorgeladene Karten der Sitzung
-    // Animationen auf dem Tisch/Spieler-Display auf 30 Bilder/s begrenzen (schwache Geräte wie Pi Zero)
-    this.maxFps = opts.mode === 'dm' ? 0 : 30;
+    // Leistungsprofil der Anzeige: „low“ (Pi Zero 2 W & Co.: 30 Bilder/s, Nebel gedrosselt und mit gröberer Maske)
+    // oder „high“ (z.B. Orange Pi Zero 2W, PC: 60 Bilder/s, Nebel sofort und weich ausgeblendet)
+    this.highPerf = opts.mode === 'dm' || opts.performance === 'high';
+    // Animationen auf dem Tisch/Spieler-Display begrenzen (schwache Geräte wie Pi Zero: 30 Bilder/s)
+    this.maxFps = opts.mode === 'dm' ? 0 : this.highPerf ? 60 : 30;
     this.lastFrame = 0;
     // DM-Ansicht: „tableLook“ zeigt Licht, Nebel und Tokens exakt wie auf dem Spieltisch (Vorschau)
     this.tableLook = false;
@@ -480,6 +485,97 @@ export class MapRenderer {
     this.raf = requestAnimationFrame(frame);
   }
 
+  /** Leistungsprofil umstellen (Tisch/Spieler-Display): „high“ = flüssig, sonst sparsam. */
+  setPerformance(p) {
+    if (this.mode === 'dm') return;
+    const high = p === 'high';
+    if (high === this.highPerf) return;
+    this.highPerf = high;
+    this.maxFps = high ? 60 : 30;
+    this.requestRender();
+  }
+
+  /** Obere Ebene (eigene Canvas) neu zeichnen – bei neuen Pinselstrichen nur deren Bildschirmbereich. */
+  renderTopOnly(map, img) {
+    const { W, H } = this.mapSize(map, img);
+    const tctx = this.topEl.getContext('2d', this.ctxOpts);
+    const rect = this.fogStrokeRect(map);
+    tctx.save();
+    tctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (rect) {
+      tctx.beginPath();
+      tctx.rect(rect[0], rect[1], rect[2], rect[3]);
+      tctx.clip();
+      tctx.clearRect(rect[0], rect[1], rect[2], rect[3]);
+    } else {
+      tctx.clearRect(0, 0, this.topEl.width, this.topEl.height);
+    }
+    this.applyTransform(tctx);
+    this.drawDrawings(tctx, map, 'above');
+    if (map.fog?.enabled) this.drawFog(tctx, map, W, H);
+    tctx.restore();
+  }
+
+  /**
+   * Bildschirmbereich (Gerätepixel) der Pinselstriche, die seit dem letzten Bild zum Aufdecken dazugekommen sind –
+   * null, wenn sich mehr geändert hat (dann ganze Ebene).
+   */
+  fogStrokeRect(map) {
+    const c = this.fogCache;
+    const ops = map.fog?.ops || [];
+    if (!this.highPerf || !c || c.mapId !== map.id || c.ops !== ops || !(c.texApplied >= 0) || c.texApplied >= ops.length || c.fadeAt) return null;
+    const g = gridOf(map);
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (let i = c.texApplied; i < ops.length; i++) {
+      const o = ops[i];
+      if (o.m === 'hide' || o.s !== 'stroke') return null;
+      const pad = o.r + g.size * 0.3 + 2;
+      for (let j = 0; j < o.pts.length; j += 2) {
+        x0 = Math.min(x0, o.pts[j] - pad);
+        y0 = Math.min(y0, o.pts[j + 1] - pad);
+        x1 = Math.max(x1, o.pts[j] + pad);
+        y1 = Math.max(y1, o.pts[j + 1] + pad);
+      }
+    }
+    if (!isFinite(x0)) return null;
+    // Ecken in Bildschirmkoordinaten (gleiche Abbildung wie applyTransform)
+    const { cx, cy, scale, rotation, aspect = 1 } = this.view;
+    const a = ((rotation || 0) * Math.PI) / 180;
+    const cos = Math.cos(a);
+    const sin = Math.sin(a);
+    let sx0 = Infinity;
+    let sy0 = Infinity;
+    let sx1 = -Infinity;
+    let sy1 = -Infinity;
+    for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      const u = (x - cx) * scale;
+      const v = (y - cy) * scale * aspect;
+      const px = this.dpr * (this.width / 2 + u * cos - v * sin);
+      const py = this.dpr * (this.height / 2 + u * sin + v * cos);
+      sx0 = Math.min(sx0, px);
+      sy0 = Math.min(sy0, py);
+      sx1 = Math.max(sx1, px);
+      sy1 = Math.max(sy1, py);
+    }
+    const l = Math.max(0, Math.floor(sx0) - 2);
+    const t = Math.max(0, Math.floor(sy0) - 2);
+    return [l, t, Math.min(this.topEl.width, Math.ceil(sx1) + 2) - l, Math.min(this.topEl.height, Math.ceil(sy1) + 2) - t];
+  }
+
+  /** Nur die obere Ebene (Nebel, Zeichnungen oben) neu zeichnen – z.B. wenn die Spielleitung Nebel aufdeckt. */
+  requestTopRender() {
+    this.topDirty = true;
+    if (this.raf) return;
+    this.raf = requestAnimationFrame((t) => {
+      this.raf = 0;
+      this.lastFrame = t;
+      this.render(t);
+    });
+  }
+
   applyTransform(ctx, k = 1) {
     const { cx, cy, scale, rotation, aspect = 1 } = this.view;
     ctx.setTransform(this.dpr * k, 0, 0, this.dpr * k, 0, 0);
@@ -616,12 +712,29 @@ export class MapRenderer {
     const img = this.image;
     let animate = false;
     const rebuild = this.dirty;
+    // Tisch/Spieler-Display: nur die obere Ebene (eigene Canvas) hat sich geändert, z.B. weil die Spielleitung Nebel
+    // aufdeckt – dann bleibt die Karten-Canvas unangetastet, und neu gezeichnet wird nur der Bereich der neuen
+    // Pinselstriche (sonst müsste der Grafikchip bei jedem Teilstück das ganze Bild neu zusammensetzen)
+    if (!rebuild && this.topDirty && this.topEl && this.mode !== 'dm' && map && img && !this.blackout && !this.overlay && !this.screenOverlay) {
+      this.topDirty = false;
+      this.fogFading = false;
+      this.renderTopOnly(map, img);
+      if (this.fogFading) {
+        this.topDirty = true;
+        this.requestRender(false);
+      }
+      return;
+    }
+    // Nur die obere Ebene (Nebel) neu, z.B. während der Nebel weich ausblendet – Karte und Tokens bleiben im Cache
+    const rebuildTop = rebuild || this.topDirty;
     this.dirty = false;
+    this.topDirty = false;
+    this.fogFading = false;
 
     // Reines Animationsbild auf Tisch/Spieler-Display: nur die Bereiche um flackernde Lichter und
     // Pings neu zeichnen (plus die des letzten Bildes, damit nichts stehen bleibt)
     let clip = null;
-    if (!rebuild && this.mode !== 'dm' && !this.overlay && !this.screenOverlay && map && img && !this.blackout && this.prevRects) {
+    if (!rebuildTop && this.mode !== 'dm' && !this.overlay && !this.screenOverlay && map && img && !this.blackout && this.prevRects) {
       const current = this.animationRects(map, now);
       clip = current.concat(this.prevRects);
       this.prevRects = current;
@@ -646,7 +759,7 @@ export class MapRenderer {
     // bei Änderungen direkt hinein; die DM-Ansicht legt jedes Mal den Cache plus Werkzeug-Overlay darüber.
     const direct = !!this.topEl && this.mode !== 'dm';
     const tctx = this.topEl ? this.topEl.getContext('2d', this.ctxOpts) : ctx;
-    const drawTop = !direct || rebuild;
+    const drawTop = !direct || rebuildTop;
     if (this.topEl && drawTop) {
       tctx.save();
       tctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -675,7 +788,10 @@ export class MapRenderer {
         this.drawDrawings(b, map, 'below');
         for (const aoe of Object.values(map.aoes || {})) this.drawAoe(b, map, aoe);
         this.drawTokens(b, map);
-
+        this.lightDirty = true;
+        this.syncGlows(map);
+      }
+      if (rebuildTop) {
         // Obere Ebene (Licht-Markierungen, Zeichnungen oben, Nebel)
         const t = direct ? tctx : this.sizeLayer(this.topCanvas);
         if (!direct) {
@@ -686,8 +802,6 @@ export class MapRenderer {
         if (lit && this.dmLook) this.drawLightMarkers(t, map);
         this.drawDrawings(t, map, 'above');
         if (map.fog?.enabled) this.drawFog(t, map, W, H);
-        this.lightDirty = true;
-        this.syncGlows(map);
       }
       ctx.drawImage(this.baseCanvas, 0, 0);
 
@@ -727,6 +841,10 @@ export class MapRenderer {
         this.loadingShown = loading;
         this.onLoading(loading);
       }
+    }
+    if (this.fogFading) {
+      this.topDirty = true;
+      animate = true;
     }
     if (animate) this.requestRender(false);
   }
@@ -1091,8 +1209,8 @@ export class MapRenderer {
     }
     let c = this.fogCache;
     const soft = map.fog.soft !== false;
-    // Mit weichem Rand reicht eine gröbere Maske (spart auf dem Pi Grafikspeicher)
-    const maxMask = soft ? FOG_MASK_MAX / 2 : FOG_MASK_MAX;
+    // Mit weichem Rand reicht eine gröbere Maske (spart auf dem Pi Grafikspeicher) – starke Geräte nehmen die volle
+    const maxMask = soft && !this.highPerf ? FOG_MASK_MAX / 2 : FOG_MASK_MAX;
     if (!c || c.mapId !== map.id || c.ops !== ops || c.applied > ops.length || c.W !== W || c.H !== H || c.maxMask !== maxMask) {
       const k = Math.min(1, maxMask / Math.max(W, H));
       const canvas = c?.canvas || document.createElement('canvas');
@@ -1115,16 +1233,58 @@ export class MapRenderer {
     const g = gridOf(map);
     let src = c.canvas;
     if (style !== 'black' || soft) {
-      const key = `${style}|${soft}|${c.applied}|${g.size}`;
-      // Tisch/Spieler-Display: während der DM malt (mehrere Teilstücke pro Sekunde) höchstens alle 0,25 s
-      // neu aufbereiten und solange das letzte Ergebnis zeigen – sonst läuft auf dem Pi der Grafikspeicher
+      const key = `${style}|${soft}|${g.size}`;
+      const sameTex = !!c.tex?.width && c.texKey === key && c.texMap === map.id && c.tex.width === c.canvas.width && c.tex.height === c.canvas.height;
+      const stale = !sameTex || c.texApplied !== c.applied;
+      // Starke Geräte: neue Pinselstriche zum Aufdecken direkt aus der fertigen Textur radieren (nur deren Bereich,
+      // mit weichem Rand) statt alles neu zu berechnen – so folgt der Tisch dem Pinsel flüssig. Kurz nach dem
+      // letzten Strich wird die Textur einmal exakt neu berechnet.
+      const newOps = stale && sameTex && c.texApplied >= 0 && c.texApplied < c.applied ? ops.slice(c.texApplied, c.applied) : null;
+      const incremental = this.highPerf && this.mode !== 'dm' && newOps?.length && newOps.every((o) => o.m !== 'hide' && o.s === 'stroke');
+      // Tisch/Spieler-Display (schwache Geräte): während der DM malt (mehrere Teilstücke pro Sekunde) höchstens alle
+      // 0,25 s neu aufbereiten und solange das letzte Ergebnis zeigen – sonst läuft auf dem Pi der Grafikspeicher
       // voll und der Nebel erscheint als schwarze Fläche ohne Textur
-      const stale = !c.tex || c.texKey !== key || c.tex.width !== c.canvas.width || c.tex.height !== c.canvas.height;
-      const wait = stale && c.tex?.width && c.texMap === map.id && this.mode !== 'dm' ? 250 - (performance.now() - (c.texAt || 0)) : 0;
-      if (wait > 0) {
+      const wait = stale && !this.highPerf && sameTex && this.mode !== 'dm' ? 250 - (performance.now() - (c.texAt || 0)) : 0;
+      if (incremental) {
+        const t = c.tex.getContext('2d', this.ctxOpts);
+        for (const op of newOps) eraseFogStroke(t, op, c.k, soft ? g.size * 0.3 : 0);
+        c.texApplied = c.applied;
+        clearTimeout(this.fogTimer);
+        this.fogTimer = setTimeout(() => {
+          c.texApplied = -1; // exakt neu berechnen (ohne Ausblenden – das Bild ändert sich dabei kaum)
+          c.exact = true;
+          this.requestTopRender();
+        }, 1200);
+      } else if (wait > 0) {
         clearTimeout(this.fogTimer);
         this.fogTimer = setTimeout(() => this.requestRender(), wait + 10);
       } else if (stale) {
+        // Weiches Aufdecken (Tisch/Spieler-Display, starke Geräte): bisherigen Nebel merken, um den gerade
+        // aufgedeckten Teil über FOG_FADE_MS auszublenden statt ihn schlagartig verschwinden zu lassen
+        const fade = this.highPerf && this.mode !== 'dm' && sameTex && !c.exact;
+        c.exact = false;
+        if (fade) {
+          c.fadeTex ??= document.createElement('canvas');
+          if (c.fadeTex.width !== c.tex.width || c.fadeTex.height !== c.tex.height) {
+            c.fadeTex.width = c.tex.width;
+            c.fadeTex.height = c.tex.height;
+          }
+          const f = c.fadeTex.getContext('2d', this.ctxOpts);
+          f.globalCompositeOperation = 'source-over';
+          f.globalAlpha = 1;
+          // Ein noch laufendes Ausblenden fließt mit seinem aktuellen Stand ein
+          const left = c.fadeAt ? 1 - (performance.now() - c.fadeAt) / FOG_FADE_MS : 0;
+          if (left > 0) {
+            f.globalCompositeOperation = 'copy';
+            f.globalAlpha = left;
+            f.drawImage(c.fadeTex, 0, 0);
+            f.globalCompositeOperation = 'source-over';
+            f.globalAlpha = 1;
+          } else {
+            f.clearRect(0, 0, c.fadeTex.width, c.fadeTex.height);
+          }
+          f.drawImage(c.tex, 0, 0);
+        }
         c.texAt = performance.now();
         c.texMap = map.id;
         c.tex ??= document.createElement('canvas');
@@ -1173,6 +1333,15 @@ export class MapRenderer {
           t.globalCompositeOperation = 'source-over';
         }
         c.texKey = key;
+        c.texApplied = c.applied;
+        if (fade) {
+          // Ausblenden nur, wo jetzt kein Nebel mehr ist (der Rest bleibt unverändert sichtbar)
+          const f = c.fadeTex.getContext('2d', this.ctxOpts);
+          f.globalCompositeOperation = 'destination-out';
+          f.drawImage(c.tex, 0, 0);
+          f.globalCompositeOperation = 'source-over';
+          c.fadeAt = performance.now();
+        }
       }
       src = c.tex;
     }
@@ -1180,6 +1349,15 @@ export class MapRenderer {
     ctx.globalAlpha = this.fogAlpha;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(src, 0, 0, W, H);
+    const left = c.fadeAt && src === c.tex ? 1 - (performance.now() - c.fadeAt) / FOG_FADE_MS : 0;
+    if (left > 0) {
+      // sanft auslaufend (ease-out)
+      ctx.globalAlpha = this.fogAlpha * left * left;
+      ctx.drawImage(c.fadeTex, 0, 0, W, H);
+      this.fogFading = true;
+    } else {
+      c.fadeAt = 0;
+    }
     ctx.restore();
   }
 
@@ -1383,6 +1561,54 @@ function scaleInto(cv, from, ctxOpts) {
   x.drawImage(from, 0, 0, cv.width, cv.height);
   x.globalCompositeOperation = 'source-over';
   return cv;
+}
+
+/**
+ * Pinselstrich zum Aufdecken direkt aus einer fertigen Nebeltextur radieren (Maskenmaßstab k). feather > 0: weicher
+ * Rand dieser Breite (in Kartenpixeln) – kreisförmige Stempel mit Verlauf entlang des Strichs.
+ */
+function eraseFogStroke(t, op, k, feather) {
+  const pts = op.pts || [];
+  if (pts.length < 2) return;
+  t.save();
+  t.setTransform(k, 0, 0, k, 0, 0);
+  t.globalCompositeOperation = 'destination-out';
+  if (!feather) {
+    applyFogOp(t, op, 0, 0);
+    t.restore();
+    return;
+  }
+  const inner = Math.max(0, op.r - feather);
+  const outer = op.r + feather;
+  const stamp = (x, y) => {
+    const gr = t.createRadialGradient(x, y, inner, x, y, outer);
+    gr.addColorStop(0, 'rgba(0,0,0,1)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    t.fillStyle = gr;
+    t.fillRect(x - outer, y - outer, outer * 2, outer * 2);
+  };
+  // Innen voll aufdecken (breiter Strich), Rand über die Stempel weich auslaufen lassen
+  if (inner > 0 && pts.length >= 4) {
+    t.lineCap = 'round';
+    t.lineJoin = 'round';
+    t.lineWidth = inner * 2;
+    t.strokeStyle = '#000';
+    t.beginPath();
+    t.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) t.lineTo(pts[i], pts[i + 1]);
+    t.stroke();
+  }
+  const step = Math.max(2, feather * 0.6);
+  stamp(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) {
+    const x0 = pts[i - 2];
+    const y0 = pts[i - 1];
+    const dx = pts[i] - x0;
+    const dy = pts[i + 1] - y0;
+    const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / step));
+    for (let j = 1; j <= n; j++) stamp(x0 + (dx * j) / n, y0 + (dy * j) / n);
+  }
+  t.restore();
 }
 
 export function applyFogOp(m, op, W, H) {

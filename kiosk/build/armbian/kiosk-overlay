@@ -1,0 +1,33 @@
+#!/bin/sh
+# initramfs (Armbian-Variante): Root-Dateisystem schreibgeschützt, Änderungen nur im RAM.
+# Gleiche Aufteilung wie das Overlay von Raspberry Pi OS: das Original liegt unter /media/root-ro,
+# die Änderungen unter /media/root-rw. Aktiv, sobald die Ersteinrichtung erledigt ist
+# (/etc/kiosk-firstboot-done); mit „kiosk.overlay=0“ auf der Kernel-Kommandozeile abschaltbar.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+  prereqs) prereqs; exit 0 ;;
+esac
+
+. /scripts/functions
+
+grep -qw 'kiosk.overlay=0' /proc/cmdline && exit 0
+[ -f "${rootmnt}/etc/kiosk-firstboot-done" ] || exit 0
+modprobe -q overlay || { log_warning_msg "kiosk-overlay: kein overlay-Modul"; exit 0; }
+
+mkdir -p /kiosk-lower /kiosk-upper
+mount -t tmpfs -o mode=755 tmpfs /kiosk-upper || exit 0
+mkdir -p /kiosk-upper/data /kiosk-upper/work
+mount -n -o move "${rootmnt}" /kiosk-lower || exit 0
+mount -o remount,ro /kiosk-lower
+if ! mount -t overlay -o lowerdir=/kiosk-lower,upperdir=/kiosk-upper/data,workdir=/kiosk-upper/work overlay "${rootmnt}"; then
+  log_warning_msg "kiosk-overlay: Overlay fehlgeschlagen – starte beschreibbar"
+  mount -n -o move /kiosk-lower "${rootmnt}"
+  exit 0
+fi
+mkdir -p "${rootmnt}/media/root-ro" "${rootmnt}/media/root-rw"
+mount -n -o move /kiosk-lower "${rootmnt}/media/root-ro"
+mount -n -o move /kiosk-upper "${rootmnt}/media/root-rw"
+# Root-Eintrag aus fstab nehmen (nur im RAM), sonst prüft und hängt systemd das ext4 erneut ein
+sed -i -E '/^[^#[:space:]]+[[:space:]]+\/[[:space:]]/d' "${rootmnt}/etc/fstab"
+exit 0

@@ -1,0 +1,4 @@
+config BR2_PACKAGE_UWE5622_FIRMWARE
+	bool "uwe5622-firmware"
+	help
+	  Firmware des WLAN-Chips UWE5622/AW859A (Orange Pi Zero 2W, Zero 3) aus dem Armbian-Firmware-Archiv.

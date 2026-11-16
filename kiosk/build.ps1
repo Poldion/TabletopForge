@@ -1,12 +1,16 @@
 # Baut das Kiosk-Image unter Windows (Docker Desktop erforderlich).
-# Aufruf im Ordner kiosk:  powershell -ExecutionPolicy Bypass -File .uild.ps1
+# Aufruf im Ordner kiosk:
+#   powershell -ExecutionPolicy Bypass -File .\build.ps1            Raspberry Pi (Raspberry Pi OS Lite)
+#   powershell -ExecutionPolicy Bypass -File .\build.ps1 orangepi   Orange Pi Zero 2W (Armbian)
 #
 # WLAN und Server-Adresse werden aus kiosk.local.json vorbelegt (wird nicht eingecheckt).
 # Fehlt die Datei, fragt das Skript die Werte ab.
+param([ValidateSet('pi', 'orangepi')][string]$Board = 'pi')
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$version = (Get-Content "$here..package.json" | ConvertFrom-Json).version
+$version = (Get-Content (Join-Path $here '..\package.json') | ConvertFrom-Json).version
 $local = Join-Path $here 'kiosk.local.json'
+$dist = Join-Path $here 'dist'
 
 if (-not (Test-Path $local)) {
   Write-Host 'Voreinstellungen für das Image (Enter = Standardwert bzw. überspringen):'
@@ -27,13 +31,13 @@ if (-not (Test-Path $local)) {
   Write-Host "Gespeichert in $local (wird nicht eingecheckt)."
 }
 
-New-Item -ItemType Directory -Force "$heredist" | Out-Null
-docker build -t dnd-kiosk-builder "$hereuild"
+New-Item -ItemType Directory -Force $dist | Out-Null
+docker build -t dnd-kiosk-builder (Join-Path $here 'build')
 docker run --rm --privileged `
   -e KIOSK_VERSION=$version `
   -v dnd-kiosk-work:/work `
   -v "${here}:/kiosk:ro" `
-  -v "${here}dist:/out" `
-  dnd-kiosk-builder
-Write-Host "Fertig: $heredist"
+  -v "${dist}:/out" `
+  dnd-kiosk-builder $Board
+Write-Host "Fertig: $dist"
 Write-Host 'Hinweis: Ein Image mit "-privat" im Namen enthält dein WLAN-Passwort – nicht weitergeben.'

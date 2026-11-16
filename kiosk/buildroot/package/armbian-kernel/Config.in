@@ -1,0 +1,6 @@
+config BR2_PACKAGE_ARMBIAN_KERNEL
+	bool "armbian-kernel"
+	help
+	  Kernel, Gerätebaum und Module aus selbst gebauten Armbian-Kernelpaketen (.deb) – für Geräte, deren
+	  Unterstützung (HDMI, WLAN-Treiber) nur in den Armbian-Patches steckt, z.B. den Orange Pi Zero 2W.
+	  Die Pakete legt build.sh nach armbian-debs/ (gebaut mit Armbians compile.sh, siehe README).

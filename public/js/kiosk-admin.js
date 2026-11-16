@@ -11,6 +11,10 @@ const agentTooOld = (v) => {
   return a < 1 || (a === 1 && b < 7);
 };
 
+// Systemvariante des Geräts und Gerät eines Update-Pakets (Eigennamen, nicht übersetzt)
+const OS_LABEL = { buildroot: 'Buildroot', raspios: 'Raspberry Pi OS', armbian: 'Armbian' };
+const BOARD_LABEL = { zero2w: 'Raspberry Pi Zero 2 W', opizero2w: 'Orange Pi Zero 2W' };
+
 const ago = (ts) => {
   if (!ts) return 'nie';
   const s = Math.round((Date.now() - ts) / 1000);
@@ -218,7 +222,9 @@ export function createKioskAdmin(sync, cid) {
   /** Systemversion, Stromversorgung und Update des Geräts. */
   const systemRow = (k) => {
     const u = k.info.update;
-    const latest = updates[0];
+    // Nur Pakete für genau dieses Gerät und diese Systemvariante (nie ein Pi-Update auf dem Orange Pi)
+    const channel = k.info.platform?.updates || (k.info.slot ? 'zero2w' : null);
+    const latest = channel ? updates.find((x) => x.board === channel) : null;
     const p = k.info.power;
     const parts = [];
     if (p?.undervoltage || p?.undervoltageSeen) {
@@ -246,30 +252,32 @@ export function createKioskAdmin(sync, cid) {
     } else if (u?.state === 'done') {
       parts.push(h('div.small', { style: { color: 'var(--ok)', margin: '4px 0' } }, icon('check'), ` ${u.message}`));
     }
+    const board = k.info.platform?.board || '';
+    const piPackage = updates.find((x) => x.board === 'zero2w');
+    if (!channel && piPackage && k.info.system && piPackage.version !== k.info.system && !busy && (board.includes('zero-2-w') || (!board && k.info.platform?.os !== 'armbian'))) {
+      // Pi Zero 2 W ohne Systemplätze (Raspberry Pi OS oder älteres Buildroot-Image): Updates erst nach neuem Image
+      parts.push(h('div.small.muted', { style: { margin: '4px 0' } }, tr('System {system} – für Updates über das Netz einmal das aktuelle Image flashen.', { system: k.info.system })));
+    }
     if (latest && k.info.system && latest.version !== k.info.system && !busy) {
-      if (!k.info.slot) {
-        parts.push(h('div.small.muted', { style: { margin: '4px 0' } }, tr('System {system} – für Updates über das Netz einmal das aktuelle Image flashen.', { system: k.info.system })));
-      } else {
-        const install = async () => {
-          const mb = Math.round(latest.size / 1048576);
-          const question = tr('„{name}“ auf {version} aktualisieren? Das Gerät lädt das Update ({mb} MB), startet neu und ist dabei einige Minuten nicht verfügbar. Startet das neue System nicht, kehrt es von selbst zur bisherigen Version zurück.', { name: k.name, version: latest.version, mb });
-          if (!(await confirm2(question))) return;
-          try {
-            await api('POST', `/api/kiosks/${k.id}/command`, { cmd: 'update', version: latest.version });
-            toast(tr('Update wird beim nächsten Kontakt gestartet'));
-          } catch (err) {
-            toast(err.message);
-          }
-        };
-        parts.push(
-          h(
-            'div.row',
-            { style: { margin: '4px 0' } },
-            h('span.small', tr('System {system} – Update {version} verfügbar', { system: k.info.system, version: latest.version })),
-            h('button.small.primary', { disabled: !k.online, title: k.online ? '' : tr('Gerät ist offline'), onclick: install }, icon('download'), tr(' Update installieren')),
-          ),
-        );
-      }
+      const install = async () => {
+        const mb = Math.round(latest.size / 1048576);
+        const question = tr('„{name}“ auf {version} aktualisieren? Das Gerät lädt das Update ({mb} MB), startet neu und ist dabei einige Minuten nicht verfügbar. Startet das neue System nicht, kehrt es von selbst zur bisherigen Version zurück.', { name: k.name, version: latest.version, mb });
+        if (!(await confirm2(question))) return;
+        try {
+          await api('POST', `/api/kiosks/${k.id}/command`, { cmd: 'update', version: latest.version });
+          toast(tr('Update wird beim nächsten Kontakt gestartet'));
+        } catch (err) {
+          toast(err.message);
+        }
+      };
+      parts.push(
+        h(
+          'div.row',
+          { style: { margin: '4px 0' } },
+          h('span.small', tr('System {system} – Update {version} verfügbar', { system: k.info.system, version: latest.version })),
+          h('button.small.primary', { disabled: !k.online, title: k.online ? '' : tr('Gerät ist offline'), onclick: install }, icon('download'), tr(' Update installieren')),
+        ),
+      );
     }
     return parts;
   };
@@ -301,7 +309,7 @@ export function createKioskAdmin(sync, cid) {
                 'div.row',
                 { style: { gap: '8px' } },
                 h('span', i === 0 ? h('b', u.version) : u.version),
-                h('span.muted', tr('{round} MB · hochgeladen {ago}', { round: Math.round(u.size / 1048576), ago: ago(u.uploadedAt) })),
+                h('span.muted', [BOARD_LABEL[u.board] || u.board, tr('{round} MB · hochgeladen {ago}', { round: Math.round(u.size / 1048576), ago: ago(u.uploadedAt) })].filter(Boolean).join(' · ')),
                 h('span.spacer'),
                 h('button.small', { title: tr('Paket löschen'), onclick: () => remove(u) }, icon('trash')),
               ),
@@ -360,7 +368,7 @@ export function createKioskAdmin(sync, cid) {
       k.info?.agent && agentTooOld(k.info.agent)
         ? h('div.small', { style: { color: 'var(--danger)', margin: '4px 0' } }, tr('Kiosk-Software {agent} kennt die Anmeldung noch nicht – bitte aktualisieren, bevor du unter „Benutzer & Geräte“ das erste Konto anlegst (danach kann sie keine Updates mehr laden).', { agent: k.info.agent }))
         : null,
-      h('div.small.muted', { style: { margin: '4px 0 8px' } }, [k.info.ip && tr('IP {ip}', { ip: k.info.ip }), k.info.ssid && tr('WLAN „{ssid}“', { ssid: k.info.ssid }), k.info.model, k.info.system && tr('System {system}{x}', { system: k.info.system, x: k.info.slot ? tr(' (Platz {toUpperCase})', { toUpperCase: k.info.slot.toUpperCase() }) : '' }), k.info.agent && tr('Agent {agent}', { agent: k.info.agent }), Number.isFinite(k.info.power?.temp) && `${Math.round(k.info.power.temp)} °C`, tr('ID {id}', { id: k.id })].filter(Boolean).join(' · ')),
+      h('div.small.muted', { style: { margin: '4px 0 8px' } }, [k.info.ip && tr('IP {ip}', { ip: k.info.ip }), k.info.ssid && tr('WLAN „{ssid}“', { ssid: k.info.ssid }), k.info.model, OS_LABEL[k.info.platform?.os], k.info.system && tr('System {system}{x}', { system: k.info.system, x: k.info.slot ? tr(' (Platz {toUpperCase})', { toUpperCase: k.info.slot.toUpperCase() }) : '' }), k.info.agent && tr('Agent {agent}', { agent: k.info.agent }), Number.isFinite(k.info.power?.temp) && `${Math.round(k.info.power.temp)} °C`, tr('ID {id}', { id: k.id })].filter(Boolean).join(' · ')),
       ...systemRow(k),
       h(
         'div.row',

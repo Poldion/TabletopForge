@@ -1,9 +1,13 @@
 #!/bin/sh
-# Nach einem Update startet der Pi einmalig zur Probe ins neue System (tryboot). Bestätigt der Kiosk-Agent
-# es nicht innerhalb von 10 Minuten (/run/kiosk/update-confirmed – erst nach Kontakt zum Server), startet
-# der Pi neu und landet damit automatisch wieder im vorherigen System.
+# Nach einem Update startet das Gerät einmalig zur Probe ins neue System (Pi: tryboot, Orange Pi: kiosk.trial=1
+# vom U-Boot-Startskript). Bestätigt der Kiosk-Agent es nicht innerhalb von 10 Minuten
+# (/run/kiosk/update-confirmed – erst nach Kontakt zum Server), startet das Gerät neu und landet damit
+# automatisch wieder im vorherigen System.
 FLAG=/proc/device-tree/chosen/bootloader/tryboot
-[ -f "$FLAG" ] && [ "$(od -An -tx1 "$FLAG" | tr -d ' \n')" = "00000001" ] || exit 0
+TRIAL=0
+[ -f "$FLAG" ] && [ "$(od -An -tx1 "$FLAG" | tr -d ' \n')" = "00000001" ] && TRIAL=1
+grep -qw kiosk.trial=1 /proc/cmdline && TRIAL=1
+[ "$TRIAL" = 1 ] || exit 0
 echo "Probestart nach Update – warte auf Bestätigung"
 sleep 600
 if [ ! -f /run/kiosk/update-confirmed ]; then

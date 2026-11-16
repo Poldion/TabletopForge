@@ -4,6 +4,8 @@
 # Gebaut wird in einer eigenen WSL-Distribution („dnd-buildroot“), die unter D:\WSL liegt –
 # Quellen, Zwischenstände und Cache (rund 30 GB) landen also nicht auf C:.
 # Fehlt die Distribution, wird sie aus dem Docker-Image debian:trixie-slim angelegt.
+# Orange Pi Zero 2W:  ... -File .\build-buildroot.ps1 opizero2w
+param([ValidateSet('zero2w', 'opizero2w')][string]$Board = 'zero2w')
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $distro = 'dnd-buildroot'
@@ -24,7 +26,7 @@ if (-not $known) {
 }
 
 $script = (wsl -d $distro -- wslpath -a ($here -replace '\\', '/')).Trim() + '/buildroot/build.sh'
-wsl -d $distro -- bash "$script"
+wsl -d $distro -- bash "$script" $Board
 if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen" }
 Write-Host "Fertig: $here\dist"
 Write-Host 'Hinweis: Ein Image mit "-privat" im Namen enthält dein WLAN-Passwort – nicht weitergeben.'

@@ -1,0 +1,147 @@
+# Spieltisch-Kiosk von Tabletop Forge für den Orange Pi Zero 2W (Allwinner H618, Mali-G31)
+# Minimal-Linux: Armbian-Kernel, U-Boot, Mesa (Panfrost), WPE WebKit + cog im Wayland-Kiosk cage,
+# NetworkManager, Python für den Kiosk-Agenten. Updates über das Netz mit Systemplätzen A/B (U-Boot).
+
+# --- Zielsystem / Toolchain (gleicher Prozessor wie der Pi Zero 2 W: Cortex-A53)
+BR2_aarch64=y
+BR2_cortex_a53=y
+BR2_ARM_FPU_VFPV4=y
+BR2_TOOLCHAIN_EXTERNAL=y
+BR2_TOOLCHAIN_EXTERNAL_BOOTLIN=y
+BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_AARCH64_GLIBC_STABLE=y
+# Prüfsummen für U-Boot/ATF in den von Buildroot vorgegebenen Versionen
+BR2_GLOBAL_PATCH_DIR="board/orangepi/orangepi-zero2w/patches $(BR2_EXTERNAL_DND_KIOSK_PATH)/patches"
+BR2_DOWNLOAD_FORCE_CHECK_HASHES=y
+BR2_CCACHE=y
+BR2_OPTIMIZE_2=y
+
+# --- System
+BR2_INIT_SYSTEMD=y
+BR2_TARGET_GENERIC_HOSTNAME="dnd-tisch"
+BR2_TARGET_GENERIC_ISSUE="Tabletop Forge"
+# BR2_TARGET_GENERIC_GETTY is not set
+# BR2_TARGET_ENABLE_ROOT_LOGIN is not set
+BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW=y
+BR2_SYSTEM_DHCP=""
+BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_DND_KIOSK_PATH)/board/zero2w/users.txt"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DND_KIOSK_PATH)/rootfs-common $(BR2_EXTERNAL_DND_KIOSK_PATH)/board/zero2w/overlay $(BR2_EXTERNAL_DND_KIOSK_PATH)/board/opizero2w/overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DND_KIOSK_PATH)/board/opizero2w/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_DND_KIOSK_PATH)/board/opizero2w/post-image.sh"
+BR2_GENERATE_LOCALE="de_DE.UTF-8"
+BR2_TARGET_TZ_INFO=y
+BR2_TARGET_LOCALTIME="Europe/Berlin"
+
+# --- Kernel: Armbian „current“ (6.18) – HDMI, Panfrost und WLAN-Treiber stecken in Armbians Patches.
+# Die Pakete baut build.sh mit Armbians compile.sh (festgelegter Armbian-Stand).
+BR2_PACKAGE_ARMBIAN_KERNEL=y
+
+# --- Bootloader: ATF + U-Boot (wie Buildroots orangepi_zero2w_defconfig), Startskript mit A/B-Umschaltung
+BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
+BR2_TARGET_ARM_TRUSTED_FIRMWARE_CUSTOM_VERSION=y
+BR2_TARGET_ARM_TRUSTED_FIRMWARE_CUSTOM_VERSION_VALUE="v2.11"
+BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="sun50i_h616"
+BR2_TARGET_UBOOT=y
+BR2_TARGET_UBOOT_BUILD_SYSTEM_KCONFIG=y
+BR2_TARGET_UBOOT_CUSTOM_VERSION=y
+BR2_TARGET_UBOOT_CUSTOM_VERSION_VALUE="2024.10"
+BR2_TARGET_UBOOT_BOARD_DEFCONFIG="orangepi_zero2w"
+BR2_TARGET_UBOOT_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_DND_KIOSK_PATH)/board/opizero2w/uboot.fragment"
+BR2_TARGET_UBOOT_NEEDS_DTC=y
+BR2_TARGET_UBOOT_NEEDS_PYLIBFDT=y
+BR2_TARGET_UBOOT_NEEDS_OPENSSL=y
+BR2_TARGET_UBOOT_NEEDS_GNUTLS=y
+BR2_TARGET_UBOOT_NEEDS_ATF_BL31=y
+BR2_TARGET_UBOOT_SPL=y
+BR2_TARGET_UBOOT_SPL_NAME="u-boot-sunxi-with-spl.bin"
+BR2_TARGET_UBOOT_CUSTOM_MAKEOPTS="SCP=/dev/null"
+BR2_PACKAGE_HOST_UBOOT_TOOLS=y
+
+# --- Firmware
+BR2_PACKAGE_UWE5622_FIRMWARE=y
+BR2_PACKAGE_WIRELESS_REGDB=y
+
+# --- Grafik: Mesa mit Panfrost (Mali-G31) – Bildschirmausgabe über sun4i-drm (kmsro).
+# Panfrost braucht LLVM (Mesa übersetzt beim Bauen interne Shader vor; dafür baut Buildroot LLVM/clang einmal –
+# der erste Lauf dauert deshalb Stunden). EGL_WL_bind_wayland_display: damit lief cog unter cage im Test
+# (Debian-Mesa 25 hat es noch fest drin, Mesa 26 nur noch auf Wunsch).
+BR2_PACKAGE_MESA3D=y
+BR2_PACKAGE_MESA3D_LLVM=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_PANFROST=y
+BR2_PACKAGE_MESA3D_LEGACY_BIND_WAYLAND_DISPLAY=y
+BR2_PACKAGE_MESA3D_GBM=y
+BR2_PACKAGE_MESA3D_OPENGL_EGL=y
+BR2_PACKAGE_MESA3D_OPENGL_ES=y
+
+# --- Wayland-Kiosk: cage (wlroots) mit seatd – kann getrennte Ausgabe-/Grafikgeräte, cog direkt per DRM nicht
+BR2_PACKAGE_WAYLAND=y
+BR2_PACKAGE_WLROOTS=y
+BR2_PACKAGE_CAGE=y
+BR2_PACKAGE_SEATD=y
+BR2_PACKAGE_SEATD_DAEMON=y
+# Tastaturbelegungen: cogs Wayland-Plattform bricht ohne sie ab (auch ohne angeschlossene Tastatur)
+BR2_PACKAGE_XKEYBOARD_CONFIG=y
+
+# --- Browser: WPE WebKit + cog (ohne Multimedia, ohne Sandbox – es läuft nur die eigene Anwendung)
+BR2_PACKAGE_WPEWEBKIT=y
+# BR2_PACKAGE_WPEWEBKIT_MULTIMEDIA is not set
+# BR2_PACKAGE_WPEWEBKIT_SANDBOX is not set
+# BR2_PACKAGE_WPEWEBKIT_WEBDRIVER is not set
+BR2_PACKAGE_COG=y
+BR2_PACKAGE_COG_PROGRAMS_HOME_URI=""
+BR2_PACKAGE_COG_PLATFORM_FDO=y
+# cogs Wayland-Plattform braucht cairo (Buildroots cog-Paket wählt es dafür nicht selbst aus)
+BR2_PACKAGE_CAIRO=y
+BR2_PACKAGE_COG_PLATFORM_DRM=y
+BR2_PACKAGE_FONTCONFIG=y
+BR2_PACKAGE_DEJAVU=y
+
+# --- Netzwerk: NetworkManager mit WLAN und Hotspot (geteilte Verbindung über dnsmasq)
+BR2_PACKAGE_NETWORK_MANAGER=y
+BR2_PACKAGE_NETWORK_MANAGER_CLI=y
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_WPA_SUPPLICANT_NL80211=y
+BR2_PACKAGE_WPA_SUPPLICANT_AP_SUPPORT=y
+BR2_PACKAGE_WPA_SUPPLICANT_DBUS=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
+BR2_PACKAGE_DNSMASQ=y
+BR2_PACKAGE_IW=y
+BR2_PACKAGE_CA_CERTIFICATES=y
+BR2_PACKAGE_OPENSSH=y
+# BR2_PACKAGE_OPENSSH_CLIENT is not set
+BR2_PACKAGE_OPENSSH_SERVER=y
+BR2_PACKAGE_OPENSSH_KEY_UTILS=y
+
+# --- systemd: nur was gebraucht wird
+# BR2_PACKAGE_SYSTEMD_NETWORKD is not set
+BR2_PACKAGE_SYSTEMD_RESOLVED=y
+BR2_PACKAGE_SYSTEMD_TIMESYNCD=y
+BR2_PACKAGE_SYSTEMD_HOSTNAMED=y
+BR2_PACKAGE_SYSTEMD_ANALYZE=y
+# BR2_PACKAGE_SYSTEMD_HWDB is not set
+
+# --- Werkzeuge für den Kiosk-Agenten
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_PYC_ONLY=y
+BR2_PACKAGE_PYTHON3_SSL=y
+BR2_PACKAGE_PYTHON3_ZLIB=y
+BR2_PACKAGE_PYTHON3_UNICODEDATA=y
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+BR2_PACKAGE_UTIL_LINUX_MOUNT=y
+BR2_PACKAGE_UTIL_LINUX_MOUNTPOINT=y
+BR2_PACKAGE_UTIL_LINUX_RFKILL=y
+BR2_PACKAGE_UTIL_LINUX_UNSHARE=y
+BR2_PACKAGE_UTIL_LINUX_ZRAMCTL=y
+BR2_PACKAGE_KMOD=y
+BR2_PACKAGE_KMOD_TOOLS=y
+BR2_PACKAGE_XZ=y
+
+# --- Images: SquashFS (zstd), zwei Systemplätze A/B (board/opizero2w/genimage.cfg)
+BR2_TARGET_ROOTFS_SQUASHFS=y
+BR2_TARGET_ROOTFS_SQUASHFS4_ZSTD=y
+# BR2_TARGET_ROOTFS_TAR is not set
+BR2_PACKAGE_HOST_DOSFSTOOLS=y
+BR2_PACKAGE_HOST_GENIMAGE=y
+BR2_PACKAGE_HOST_KMOD=y
+BR2_PACKAGE_HOST_KMOD_XZ=y
+BR2_PACKAGE_HOST_MTOOLS=y

@@ -1,0 +1,29 @@
+[Unit]
+Description=Kiosk-Browser (cog/WPE WebKit im Wayland-Kiosk cage)
+# Startet parallel zum WLAN-Aufbau (kiosk-setup): WebKit von der Karte zu laden dauert mehrere Sekunden,
+# die Startseite wartet ohnehin selbst auf den Server.
+# cage holt sich Bildschirm und Eingabegeräte über seatd (keine Anmeldesitzung auf dem Kiosk).
+After=kiosk-prepare.service kiosk-startpage.service systemd-udevd.service seatd.service
+Wants=kiosk-prepare.service seatd.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=kiosk
+SupplementaryGroups=video render input
+RuntimeDirectory=kiosk-browser
+Environment=XDG_RUNTIME_DIR=/run/kiosk-browser HOME=/home/kiosk LIBSEAT_BACKEND=seatd
+# Unsichtbarer Mauszeiger (cage und cog lesen das Zeigermotiv aus diesem Thema)
+Environment=XCURSOR_THEME=kiosk-hidden XCURSOR_PATH=/usr/share/icons XCURSOR_SIZE=24
+# Auf Bildschirmausgabe und Grafikchip warten (Panfrost wird als Modul geladen), höchstens 10 s
+ExecStartPre=/bin/sh -c 'for i in $(seq 100); do ls /dev/dri/card* >/dev/null 2>&1 && ls /dev/dri/renderD* >/dev/null 2>&1 && exit 0; sleep 0.1; done; exit 0'
+ExecStart=/usr/local/bin/kiosk-browser
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=2
+TimeoutStopSec=5
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

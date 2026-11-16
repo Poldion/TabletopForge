@@ -3,6 +3,31 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.54.0] – 2026-11-16
+
+### Added
+
+- Kiosk for the **Orange Pi Zero 2W** (Allwinner H618, Mali-G31): lean Buildroot image with updates over the network
+  (system slots A/B, trial start via U-Boot), built with `build-buildroot.ps1 opizero2w`. The browser (WPE WebKit/cog)
+  runs in the Wayland kiosk cage; on the 1 GB board about 700 MB stay free for maps and effects. An Armbian-based
+  image (`build.ps1 orangepi`) is available for trying things out.
+- Game table **rendering** under Screens → Game table: *Smooth* (60 frames/s, the fog follows the brush while
+  revealing and fades out softly) or *Economical* for weak devices. *Automatic* (default) picks it per kiosk device
+  from its hardware (Pi Zero 2 W/Pi 3 economical, Orange Pi and Pi 4/5 smooth); other browsers run smooth.
+  `?perf=low|high` in the address overrides it for a single browser.
+- Kiosk devices report their board and system (Buildroot, Raspberry Pi OS, Armbian); the device list shows it and
+  update packages are only offered to – and accepted for – the board they were built for.
+
+### Changed
+
+- Revealing fog redraws only the fog layer and, on capable devices, only the area of the new brush strokes.
+- Kiosk: if display output and graphics chip are separate devices (Orange Pi, Pi 4/5), cog runs inside cage
+  instead of directly on the screen; the mouse pointer is hidden.
+
+### Fixed
+
+- `kiosk/build.ps1` lost its path separators and could not run.
+
 ## [0.53.0] – 2026-10-30
 
 ### Added

@@ -1,25 +1,27 @@
-# Kiosk image for the game table (Raspberry Pi Zero 2 W)
+# Kiosk image for the game table (Raspberry Pi, Orange Pi Zero 2W)
 
 🇬🇧 English · 🇩🇪 [Deutsch](README.md)
 
-A lean, **read-only** Raspberry Pi OS image that shows the game table display in full screen right after booting.
-Everything is controlled from the game master app under **Screens → Kiosk devices**.
+A lean, **read-only** system that shows the game table display in full screen right after booting. Everything is
+controlled from the game master app under **Screens → Kiosk devices**.
 
-Suitable for Raspberry Pi Zero 2 W, 3, 4 and 5 (64-bit). The Zero 2 W outputs at most 1080p – enough for the game
-table, and the 1″ calibration calculates correctly by itself.
+Suitable for Raspberry Pi Zero 2 W, 3, 4 and 5 (64-bit) and the **Orange Pi Zero 2W**. The Zero 2 W outputs at most
+1080p – enough for the game table, and the 1″ calibration calculates correctly by itself.
 
-## Two variants
+## Variants
 
-| | **Buildroot** (recommended for Pi Zero 2 W) | **Raspberry Pi OS Lite** |
-| --- | --- | --- |
-| Contents | only kernel, graphics driver, WPE WebKit/cog, NetworkManager, Python for the agent | complete Debian system, plus Chromium |
-| Image | `tabletop-forge-kiosk-<version>-buildroot-<date>.img.xz` | `tabletop-forge-kiosk-<version>-<date>.img.xz` |
-| Start | read-only from the first boot, no initial setup | one-time initial setup with a reboot |
-| Build | `build-buildroot.ps1` (WSL on D:, first run several hours) | `build.ps1` (Docker, about 30 min) |
-| Devices | Pi Zero 2 W only | Pi Zero 2 W, 3, 4, 5 |
+| | **Buildroot – Pi Zero 2 W** | **Buildroot – Orange Pi Zero 2W** | **Raspberry Pi OS Lite** |
+| --- | --- | --- | --- |
+| Contents | only kernel, graphics driver, WPE WebKit/cog, NetworkManager, Python for the agent | as on the left, plus Armbian kernel and the Wayland kiosk cage | complete Debian system, plus Chromium |
+| Image | `tabletop-forge-kiosk-<version>-buildroot-<date>.img.xz` | `tabletop-forge-kiosk-orangepi-zero2w-<version>-buildroot-<date>.img.xz` | `tabletop-forge-kiosk-<version>-<date>.img.xz` |
+| Start | read-only from the first boot | read-only from the first boot | one-time initial setup with a reboot |
+| Updates over the network | yes (A/B, trial start) | yes (A/B, trial start via U-Boot) | no |
+| Rendering | economical (30 frames/s) | smooth (60 frames/s) | depends on the device |
+| Build | `build-buildroot.ps1` | `build-buildroot.ps1 opizero2w` | `build.ps1` (Docker, about 30 min) |
 
-Both use the same kiosk agent and the same `kiosk.json` and are controlled the same way from the game master app.
-The Buildroot variant only has cog as its browser.
+All use the same kiosk agent and the same `kiosk.json` and are controlled the same way from the game master app.
+The Buildroot variants only have cog as their browser. The Orange Pi Zero 2W (4 cores, Mali-G31, 1 GB) is the
+stronger choice for the table: about 700 MB of memory stay free for maps and effects while it runs.
 
 ## How it works
 
@@ -132,12 +134,16 @@ acceleration**) or in `kiosk.json`:
 ## Updates over the network (Buildroot)
 
 The SD card has two system slots: kernel etc. in `a/` and `b/` on the boot partition, the root file system on
-partition 2 and 3. Which slot boots is set in `config.txt` (`os_prefix=a/`). Process:
+partition 2 and 3. Which slot boots is set in `config.txt` (`os_prefix=a/`) on the Pi, in `kiosk-boot.txt` (`slot=a`, read by the
+U-Boot script `boot.scr`) on the Orange Pi. Process:
 
-1. The build creates `dist/tabletop-forge-kiosk-<version>.kup` next to the image – without private data.
+1. The build creates `dist/tabletop-forge-kiosk-<version>.kup` next to the image (Orange Pi:
+   `tabletop-forge-kiosk-orangepi-zero2w-<version>.kup`) – without private data. Each package only fits its board:
+   the game master app only offers it to matching devices, server and device reject other packages.
 2. Upload it in the game master app under **Screens → Kiosk devices → Kiosk updates**.
 3. At the device, **install update**: the agent downloads the package straight into the free slot, checks the
-   checksums and boots once **on trial** into the new system (`tryboot.txt`).
+   checksums and boots once **on trial** into the new system (Pi: `tryboot.txt`; Orange Pi: `trial=b` in
+   `kiosk-boot.txt`, which the boot script removes again right away).
 4. If the new system reaches the server, it becomes permanent (`config.txt` switched). If it does not start, hangs
    (watchdog) or does not check in within 10 minutes (`kiosk-trial-guard`), the Pi automatically falls back to the
    previous system on restart – the game master app shows this as an error.
@@ -252,6 +258,62 @@ Duration 20–60 minutes depending on the machine.
 | `files/rootfs/etc/systemd/system/` | services `kiosk-setup`, `kiosk-agent`, `kiosk-browser`, `kiosk-firstboot` |
 | `build/` | Docker build environment |
 
+### Orange Pi Zero 2W (Buildroot, recommended)
+
+The kernel comes from Armbian: HDMI, graphics (Panfrost) and the Wi-Fi driver (AW859A/UWE5622) of the H618 only exist
+in Armbian's kernel patches. It is built once with Armbian's own build system – **as root** in the build distribution
+(Armbian installs tools for it and mounts file systems), at a fixed Armbian revision:
+
+```bash
+wsl -d dnd-buildroot -u root -- bash -c "cd /home/br/dnd-kiosk && git clone https://github.com/armbian/build.git armbian && cd armbian && git checkout 45fdf1c7fa68 && ./compile.sh kernel BOARD=orangepizero2w BRANCH=current KERNEL_CONFIGURE=no NO_HOST_RELEASE_CHECK=yes"
+```
+
+The packages end up in `~/dnd-kiosk/armbian/output/debs` (other location: `KIOSK_ARMBIAN_DEBS`). Then as usual:
+
+```powershell
+cd kiosk
+powershell -ExecutionPolicy Bypass -File .\build-buildroot.ps1 opizero2w
+```
+
+The first run takes several hours: Mesa's Panfrost driver needs LLVM/clang while building (`post-build.sh` removes
+the parts that aren't needed at runtime). Later runs take a few minutes.
+
+| Area | Orange Pi Zero 2W |
+| --- | --- |
+| SD card | U-Boot from 8 KB, partition 1: FAT `KIOSK` (`boot.scr`, `kiosk-boot.txt`, `kiosk.json`, system slots `a/` `b/` with kernel, device tree, `cmdline.txt`), partitions 2/3: system A/B (SquashFS) |
+| Boot script | `buildroot/board/opizero2w/boot.cmd` – slot choice and trial start (`trial=`) from `kiosk-boot.txt`, HDMI mode and kernel options from `<slot>/cmdline.txt` (format `bootargs=…`) |
+| Browser | cog inside the Wayland kiosk **cage** with seatd: display output (sun4i-drm) and graphics chip (Panfrost) are separate devices, which cog can't handle directly on the screen. Mouse pointer hidden |
+| Wi-Fi | driver loaded at boot (`/etc/modules-load.d/uwe5622.conf`), firmware from the Armbian firmware archive |
+| Kernel modules | `post-build.sh` keeps only the needed ones (about 20 of 2680) |
+| Rendering | smooth: 60 frames/s, fog follows the brush |
+
+Troubleshooting as on the Pi: put `kiosk-debug.txt` on the `KIOSK` partition, after a few minutes `kiosk-log.txt`
+appears there. With an SSH key in `kiosk.json` (`sshKeys`), access as `root` is possible (the Buildroot variant has
+no sudo).
+
+### Orange Pi Zero 2W (Armbian, for trying out)
+
+```powershell
+cd kiosk
+powershell -ExecutionPolicy Bypass -File .\build.ps1 orangepi
+```
+
+```bash
+cd kiosk && ./build.sh orangepi
+```
+
+Based on the official *Armbian minimal* (Debian Trixie, current kernel), result
+`tabletop-forge-kiosk-orangepi-zero2w-<version>-<date>.img.xz`. Same packages as the Raspberry Pi OS variant (cog,
+Chromium/cage, NetworkManager), Mesa from Debian (the development build from Armbian's package archive is blocked).
+No updates over the network. Differences from the Raspberry Pi OS variant:
+
+| Area | Orange Pi Zero 2W (Armbian) |
+| --- | --- |
+| SD card | partition 1: system (ext4, fixed size), partition 2: FAT `KIOSK` with `kiosk.json`, `cmdline.txt`, diagnostics |
+| Overlay | own initramfs script `build/armbian/kiosk-overlay`, active after the initial setup (original under `/media/root-ro`); can be switched off with `kiosk.overlay=0` in `extraargs` of `/boot/armbianEnv.txt` |
+| HDMI mode | the agent writes `video=HDMI-A-1:…` into `cmdline.txt` on `KIOSK`, the Armbian boot script reads it |
+| Network | NetworkManager instead of systemd-networkd/netplan; zram via `armbian-zram-config` |
+
 ## Passing on images (licenses)
 
 The images contain free software under GPL, LGPL and other licenses (Linux kernel, BusyBox, WPE WebKit, cog …).
@@ -261,6 +323,9 @@ of the GPL components.
 - **Buildroot image:** `build.sh` automatically puts `dist/tabletop-forge-kiosk-<version>-legal-info.tar` next to the
   image (Buildroot `make legal-info`: license texts, sources and patches of all packages). Offer this archive together
   with the image. Switch it off for pure test builds: `KIOSK_LEGAL_INFO=0`.
+- **Orange Pi (Buildroot):** in addition to the `legal-info` archive, point to the kernel sources – Linux from
+  kernel.org with the Armbian patches of the revision used (<https://github.com/armbian/build>, commit in this README).
+  The Wi-Fi firmware (UWE5622) comes from <https://github.com/armbian/firmware>.
 - **Raspberry Pi OS image:** based on the official Raspberry Pi OS Lite; the sources of the included packages are
   provided by Raspberry Pi and Debian (<https://archive.raspberrypi.com/debian/>, <https://sources.debian.org/>). When
   passing it on, refer to these sources or offer them as well.

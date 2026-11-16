@@ -43,9 +43,10 @@ inst = ota.Ota(boot, lambda *a: logs.append(" ".join(map(str, a))), contextlib.n
 slot = {"cur": "a", "trial": False}
 inst.current_slot = lambda: slot["cur"]
 ota.Ota.trial = staticmethod(lambda: slot["trial"])
+ota.Ota.board = staticmethod(lambda: "zero2w")
 
 
-def bundle(version, rootfs, corrupt=False, corrupt_boot=False):
+def bundle(version, rootfs, corrupt=False, corrupt_boot=False, board="zero2w"):
     """Update-Paket wie aus post-image.sh."""
     bt = io.BytesIO()
     with tarfile.open(fileobj=bt, mode="w") as t:
@@ -55,7 +56,7 @@ def bundle(version, rootfs, corrupt=False, corrupt_boot=False):
             t.addfile(info, io.BytesIO(data))
     boot_tar = bt.getvalue()
     entry = lambda f, d: {"file": f, "size": len(d), "sha256": hashlib.sha256(d).hexdigest()}
-    manifest = {"format": 1, "board": "zero2w", "version": version, "boot": entry("boot.tar", boot_tar), "rootfs": entry("rootfs.squashfs", rootfs)}
+    manifest = {"format": 1, "board": board, "version": version, "boot": entry("boot.tar", boot_tar), "rootfs": entry("rootfs.squashfs", rootfs)}
     if corrupt:
         rootfs = rootfs[:-1] + b"X"
     if corrupt_boot:
@@ -131,6 +132,43 @@ results.append(ok(read("config.txt") == before and not os.path.exists(os.path.jo
 inst._run(f"{base}/u/kaputt-boot", "0.18.2")
 results.append(ok(ota.status["state"] == "error" and not os.path.exists(os.path.join(boot, "a.new")), "beschädigter Kernel-Teil: Fehler, halber Ordner entfernt"))
 results.append(ok(open(os.path.join(boot, "b", "Image"), "rb").read() == b"kernel-0.18.0" and "os_prefix=b/" in read("config.txt"), "laufender Platz und config.txt bleiben unverändert"))
+
+files["/u/opi"] = bundle("0.19.0", rootfs, board="opizero2w")
+inst._run(f"{base}/u/opi", "0.19.0")
+results.append(ok(ota.status["state"] == "error" and "passt nicht" in ota.status["message"], "Paket für ein anderes Gerät wird abgelehnt"))
+
+# --- Orange Pi (U-Boot): Platzwahl in kiosk-boot.txt, Probestart über trial=<Platz> ---------------------
+print("5. Orange Pi (U-Boot): Update, Probestart, Bestätigung, Rückfall")
+uboot = os.path.join(tmp, "boot-opi")
+os.makedirs(os.path.join(uboot, "a"))
+with open(os.path.join(uboot, "kiosk-boot.txt"), "w") as f:
+    f.write("slot=a\n")
+with open(os.path.join(uboot, "a", "cmdline.txt"), "w") as f:
+    f.write("bootargs=root=/dev/mmcblk0p2 rootfstype=squashfs ro quiet\n")
+uread = lambda *p: open(os.path.join(uboot, *p), encoding="utf-8").read()
+opi = ota.Ota(uboot, lambda *a: logs.append(" ".join(map(str, a))), contextlib.nullcontext)
+opi.current_slot = lambda: slot["cur"]
+ota.Ota.board = staticmethod(lambda: "opizero2w")
+slot.update(cur="a", trial=False)
+results.append(ok(opi.uboot() and opi.configured_slot() == "a" and opi.supported(), "U-Boot-Gerät erkannt, Platz a aktiv"))
+reboots.clear()
+opi._install(f"{base}/u/opi", "0.19.0")
+results.append(ok(uread("kiosk-boot.txt") == "slot=a\ntrial=b\n", "kiosk-boot.txt: fester Platz a, Probestart b"))
+results.append(ok(uread("b", "cmdline.txt").startswith(f"bootargs=root={ota.DISK}p3 "), "cmdline.txt (U-Boot-Format) mit neuer Root-Partition"))
+results.append(ok(reboots and reboots[-1] == ["systemctl", "reboot"], "normaler Neustart (U-Boot wertet trial= aus)"))
+slot.update(cur="b", trial=True)
+opi.boot_check()
+opi.confirm()
+results.append(ok(uread("kiosk-boot.txt") == "slot=b\n" and ota.status["state"] == "done", "bestätigt: Platz b startet dauerhaft"))
+opi._install(f"{base}/u/opi", "0.19.0")  # von b nach a
+slot.update(cur="b", trial=False)  # U-Boot hat beim Probestart trial= gelöscht, Neustart landet wieder in b
+with open(os.path.join(uboot, "kiosk-boot.txt"), "w") as f:
+    f.write("slot=b\n")
+opi.boot_check()
+results.append(ok(ota.status["state"] == "error" and uread("kiosk-boot.txt") == "slot=b\n", "Rückfall gemeldet, Platz b bleibt"))
+files["/u/pi"] = bundle("0.19.1", rootfs)
+opi._run(f"{base}/u/pi", "0.19.1")
+results.append(ok(ota.status["state"] == "error" and "passt nicht" in ota.status["message"] and uread("kiosk-boot.txt") == "slot=b\n", "Pi-Paket auf dem Orange Pi abgelehnt"))
 
 srv.shutdown()
 

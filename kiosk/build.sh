@@ -1,6 +1,10 @@
 #!/bin/sh
-# Baut das Kiosk-Image (Linux/macOS mit Docker). Aufruf im Ordner kiosk: ./build.sh
+# Baut das Kiosk-Image (Linux/macOS mit Docker). Aufruf im Ordner kiosk:
+#   ./build.sh            Raspberry Pi (Raspberry Pi OS Lite)
+#   ./build.sh orangepi   Orange Pi Zero 2W (Armbian)
 set -e
+BOARD=${1:-pi}
+case "$BOARD" in pi|orangepi) ;; *) echo "Unbekanntes Gerät: $BOARD (pi oder orangepi)"; exit 1 ;; esac
 HERE=$(cd "$(dirname "$0")" && pwd)
 VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$HERE/../package.json" | head -1)
 LOCAL="$HERE/kiosk.local.json"
@@ -24,5 +28,5 @@ mkdir -p "$HERE/dist"
 docker run --rm --privileged tonistiigi/binfmt --install arm64 >/dev/null 2>&1 || true
 docker build -t dnd-kiosk-builder "$HERE/build"
 docker run --rm --privileged -e KIOSK_VERSION="$VERSION" \
-  -v dnd-kiosk-work:/work -v "$HERE:/kiosk:ro" -v "$HERE/dist:/out" dnd-kiosk-builder
+  -v dnd-kiosk-work:/work -v "$HERE:/kiosk:ro" -v "$HERE/dist:/out" dnd-kiosk-builder "$BOARD"
 echo "Fertig: $HERE/dist"

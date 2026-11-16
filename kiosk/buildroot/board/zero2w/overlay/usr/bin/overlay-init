@@ -18,6 +18,8 @@ if grep -qw kiosk.rw /proc/cmdline; then
 fi
 
 OVL=/media/overlay
+# Orange Pi: Armbian-Kernel hat overlay als Modul (beim Pi fest eingebaut – dann ohne Wirkung)
+modprobe overlay 2>/dev/null
 if mount -t tmpfs -o mode=0755 tmpfs "$OVL" &&
    mkdir -p "$OVL/upper" "$OVL/work" "$OVL/root" &&
    mount -t overlay overlay -o "lowerdir=/,upperdir=$OVL/upper,workdir=$OVL/work" "$OVL/root"; then

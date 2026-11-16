@@ -74,7 +74,7 @@ export class Sync {
       this.socket.on('ops', (ops) => {
         if (!this.state) return;
         applyOps(this.state, ops);
-        this.notify(ops.map((o) => o.p[0]));
+        this.notify(ops.map((o) => o.p[0]), ops);
       });
       this.socket.on('settings', (s) => {
         this.settings = s;
@@ -98,7 +98,7 @@ export class Sync {
     if (!ops.length) return;
     applyOps(this.state, ops);
     for (const op of ops) this.enqueue(op);
-    this.notify(ops.map((o) => o.p[0]));
+    this.notify(ops.map((o) => o.p[0]), ops);
   }
 
   enqueue(op) {
@@ -124,7 +124,7 @@ export class Sync {
   local(...ops) {
     ops = ops.flat().filter(Boolean);
     applyOps(this.state, ops);
-    this.notify(ops.map((o) => o.p[0]));
+    this.notify(ops.map((o) => o.p[0]), ops);
   }
 
   /** Bereits lokal angewendete Ops sofort (nach der Warteschlange) senden. */
@@ -167,13 +167,18 @@ export class Sync {
     this.statusListeners.forEach((fn) => fn(this));
   }
 
-  notify(keys) {
+  notify(keys, ops = null) {
     keys.forEach((k) => this.pendingKeys.add(k));
+    // Betrifft alles seit dem letzten Melden nur den Nebel einer Karte? (Tisch zeichnet dann nur die Nebelebene neu)
+    const fogOnly = !!ops && ops.every((o) => o.p[0] === 'maps' && o.p[2] === 'fog');
+    this.pendingFogOnly = (this.pendingFogOnly ?? true) && fogOnly;
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
       const changed = this.pendingKeys;
+      changed.fogOnly = this.pendingFogOnly === true;
       this.pendingKeys = new Set();
+      this.pendingFogOnly = undefined;
       this.listeners.forEach((fn) => fn(changed));
     });
   }

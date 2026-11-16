@@ -1,0 +1,1 @@
+bootargs=root=/dev/mmcblk0p2 rootfstype=squashfs rootwait ro init=/sbin/overlay-init panic=10 console=ttyS0,115200 quiet loglevel=3 consoleblank=0 vt.global_cursor_default=0 logo.nologo

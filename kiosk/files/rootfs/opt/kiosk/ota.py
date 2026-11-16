@@ -1,17 +1,18 @@
 """Updates über das Netz für die Buildroot-Variante (zwei Systemplätze A/B).
 
-Aufbau der SD-Karte: Boot-Partition mit Firmware, kiosk.json und je einem Ordner a/ und b/ (Kernel, Gerätebaum,
-Overlays, cmdline.txt); Root-Dateisystem von Platz A auf Partition 2, von Platz B auf Partition 3. Welcher Platz
-startet, steht in config.txt (os_prefix=a/ bzw. b/).
+Aufbau der SD-Karte: Boot-Partition mit kiosk.json und je einem Ordner a/ und b/ (Kernel, Gerätebaum,
+cmdline.txt); Root-Dateisystem von Platz A auf Partition 2, von Platz B auf Partition 3. Welcher Platz startet:
+  - Raspberry Pi (Firmware):     config.txt → os_prefix=a/ bzw. b/; Probestart über tryboot.txt
+  - Orange Pi Zero 2W (U-Boot):  kiosk-boot.txt → slot=a bzw. b; Probestart über „trial=<Platz>“ – das
+                                 Startskript (boot.scr) nimmt den Probeplatz einmal und löscht den Eintrag dabei
 
 Ablauf eines Updates:
   1. Paket (.kup = tar mit manifest.json, boot.tar, rootfs.squashfs) vom Server laden – direkt beim Laden in den
      freien Platz schreiben und die Prüfsummen bilden (kein Zwischenspeicher nötig).
-  2. tryboot.txt = config.txt mit dem neuen Platz; Neustart mit „tryboot“ – die Firmware nimmt tryboot.txt nur
-     dieses eine Mal.
-  3. Meldet sich das neue System beim Server, wird es dauerhaft (config.txt umgestellt). Startet es nicht oder
-     bekommt keinen Kontakt, landet der Pi beim nächsten Neustart (Watchdog bzw. kiosk-trial-guard nach 10 min)
-     automatisch wieder im alten System.
+  2. Probestart des neuen Platzes einrichten (siehe oben) und neu starten – das gilt nur dieses eine Mal.
+  3. Meldet sich das neue System beim Server, wird es dauerhaft. Startet es nicht oder bekommt keinen Kontakt,
+     landet das Gerät beim nächsten Neustart (Watchdog bzw. kiosk-trial-guard nach 10 min) automatisch wieder
+     im alten System.
 """
 import hashlib
 import http.client
@@ -28,6 +29,10 @@ import urllib.request
 DISK = "/dev/mmcblk0"
 PARTITION = {"a": 2, "b": 3}
 TRYBOOT_FLAG = "/proc/device-tree/chosen/bootloader/tryboot"
+UBOOT_STATE = "kiosk-boot.txt"  # Platzwahl für das U-Boot-Startskript (Orange Pi)
+UBOOT_TRIAL_ARG = "kiosk.trial=1"  # setzt boot.scr beim Probestart auf die Kernel-Kommandozeile
+# Gerät, für das Update-Pakete gebaut sind (manifest.json → "board"), je nach Gerätebaum
+BOARDS = {"raspberrypi,model-zero-2-w": "zero2w", "xunlong,orangepi-zero2w": "opizero2w"}
 CONFIRMED = "/run/kiosk/update-confirmed"
 CHUNK = 1 << 20
 READ_TIMEOUT = 30  # Sekunden ohne Daten → Verbindung neu aufbauen und fortsetzen
@@ -55,7 +60,25 @@ class Ota:
     # --- Systemplätze -----------------------------------------------------------------
 
     def supported(self):
-        return self.configured_slot() is not None and self.current_slot() is not None
+        return self.board() is not None and self.configured_slot() is not None and self.current_slot() is not None
+
+    @staticmethod
+    def board():
+        """Gerätename der passenden Update-Pakete (None = unbekanntes Gerät)."""
+        try:
+            with open("/proc/device-tree/compatible", "rb") as f:
+                compatible = f.read().split(b"\x00")
+        except OSError:
+            return None
+        for entry in compatible:
+            name = BOARDS.get(entry.decode("ascii", "ignore"))
+            if name:
+                return name
+        return None
+
+    def uboot(self):
+        """Startet U-Boot mit kiosk-boot.txt (Orange Pi) statt der Pi-Firmware mit config.txt?"""
+        return os.path.isfile(os.path.join(self.boot, UBOOT_STATE))
 
     def current_slot(self):
         """Laufender Platz laut Kernel-Kommandozeile (root=/dev/mmcblk0p2 → a, p3 → b)."""
@@ -68,22 +91,46 @@ class Ota:
         return next((s for s, n in PARTITION.items() if n == num), None)
 
     def configured_slot(self):
-        """Platz, den config.txt dauerhaft startet."""
+        """Platz, der dauerhaft startet (config.txt bzw. kiosk-boot.txt)."""
+        if self.uboot():
+            path, pattern = os.path.join(self.boot, UBOOT_STATE), r"^slot=([ab])[ \t]*$"
+        else:
+            path, pattern = os.path.join(self.boot, "config.txt"), r"^os_prefix=([ab])/[ \t]*$"
         try:
-            with open(os.path.join(self.boot, "config.txt"), encoding="utf-8") as f:
-                m = re.search(r"^os_prefix=([ab])/[ \t]*$", f.read(), re.M)
+            with open(path, encoding="utf-8") as f:
+                m = re.search(pattern, f.read(), re.M)
         except OSError:
             return None
         return m.group(1) if m else None
 
     @staticmethod
     def trial():
-        """Läuft gerade ein Probestart (tryboot)?"""
+        """Läuft gerade ein Probestart (Pi: tryboot, Orange Pi: kiosk.trial=1 vom Startskript)?"""
+        try:
+            with open("/proc/cmdline", encoding="ascii") as f:
+                if UBOOT_TRIAL_ARG in f.read().split():
+                    return True
+        except OSError:
+            pass
         try:
             with open(TRYBOOT_FLAG, "rb") as f:
                 return f.read()[-1:] == b"\x01"
         except OSError:
             return False
+
+    def _make_permanent(self, slot):
+        """Platz dauerhaft starten (Probestart ist damit erledigt)."""
+        if self.uboot():
+            _write(os.path.join(self.boot, UBOOT_STATE), f"slot={slot}\n")
+        else:
+            _write(os.path.join(self.boot, "config.txt"), self._config_for(slot))
+
+    def _arm_trial(self, current, target):
+        """Nächsten Start einmalig im neuen Platz – danach (ohne Bestätigung) wieder im bisherigen."""
+        if self.uboot():
+            _write(os.path.join(self.boot, UBOOT_STATE), f"slot={current}\ntrial={target}\n")
+        else:
+            _write(os.path.join(self.boot, "tryboot.txt"), self._config_for(target))
 
     def _config_for(self, slot):
         with open(os.path.join(self.boot, "config.txt"), encoding="utf-8") as f:
@@ -125,7 +172,7 @@ class Ota:
         if not state or cur != state.get("slot") or not self.trial():
             return
         with self.boot_rw():
-            _write(os.path.join(self.boot, "config.txt"), self._config_for(cur))
+            self._make_permanent(cur)
             for name in ("tryboot.txt", "kiosk-update.json"):
                 _remove(os.path.join(self.boot, name))
         os.makedirs(os.path.dirname(CONFIRMED), exist_ok=True)
@@ -137,6 +184,10 @@ class Ota:
         with self.boot_rw():
             for name in ("tryboot.txt", "kiosk-update.json", ".ota-boot.tar"):
                 _remove(os.path.join(self.boot, name))
+            # Orange Pi: einen noch offenen Probestart verwerfen (kiosk-boot.txt nur mit dem festen Platz)
+            slot = self.configured_slot()
+            if self.uboot() and slot:
+                _write(os.path.join(self.boot, UBOOT_STATE), f"slot={slot}\n")
 
     # --- Update installieren ------------------------------------------------------------
 
@@ -185,7 +236,7 @@ class Ota:
                 name = member.name.lstrip("./")
                 if name == "manifest.json":
                     manifest = json.load(tf.extractfile(member))
-                    if manifest.get("format") != 1 or manifest.get("board") != "zero2w":
+                    if manifest.get("format") != 1 or manifest.get("board") != self.board():
                         raise RuntimeError("Paket passt nicht zu diesem Gerät")
                     got.add(name)
                 elif name == "boot.tar":
@@ -229,12 +280,15 @@ class Ota:
             shutil.rmtree(final, ignore_errors=True)
             os.rename(new_dir, final)
             _write(os.path.join(final, "cmdline.txt"), cmdline + "\n")
-            _write(os.path.join(self.boot, "tryboot.txt"), self._config_for(target))
+            self._arm_trial(cur, target)
             _write(self.state_file, json.dumps({"version": new_version, "slot": target, "from": cur, "at": int(time.time())}))
         _set("reboot", new_version, 100, "Starte neu ins neue System (zur Probe) …")
         self.log("Update", new_version, "installiert – Neustart zur Probe")
         time.sleep(2)
-        subprocess.run(["systemctl", "reboot", "--reboot-argument=0 tryboot"], check=False)
+        if self.uboot():
+            subprocess.run(["systemctl", "reboot"], check=False)
+        else:
+            subprocess.run(["systemctl", "reboot", "--reboot-argument=0 tryboot"], check=False)
 
 
 class _Hashing:

@@ -29,6 +29,17 @@ if [ "$KIOSK_ENGINE" = "chromium" ] && ! command -v chromium >/dev/null && ! com
   KIOSK_ENGINE=cog
 fi
 
+# Bildschirmausgabe ohne eigenen Render-Knoten (getrennter Grafikchip)? Geprüft wird das DRM-Gerät mit Anschlüssen.
+split_gpu() {
+  for c in /sys/class/drm/card[0-9]*; do
+    case "${c##*/}" in *-*) continue ;; esac
+    ls -d "$c"-* >/dev/null 2>&1 || continue
+    ls "$c/device/drm" 2>/dev/null | grep -q '^renderD' && return 1
+    return 0
+  done
+  return 1
+}
+
 echo "[kiosk-browser] Engine: $KIOSK_ENGINE, GPU: $KIOSK_GPU${KIOSK_EXTRA_FLAGS:+, Zusatz: $KIOSK_EXTRA_FLAGS}, Start: $START_URL"
 
 if [ "$KIOSK_ENGINE" = "cog" ]; then
@@ -38,8 +49,13 @@ if [ "$KIOSK_ENGINE" = "cog" ]; then
   fi
   # WebKits Sandbox braucht Benutzer-Namespaces; fehlen sie, startet der Web-Prozess sonst gar nicht.
   # Auf dem Kiosk läuft ausschließlich die eigene Anwendung, daher ist der Verzicht hier vertretbar.
+  # Geprüft wird mit bubblewrap selbst: Auf manchen Systemen (Armbian) gibt es Namespaces, bwrap bricht aber
+  # trotzdem ab („Unexpected capabilities“) – dann stürzte cog bei jedem Start ab und das Bild blieb schwarz.
   if ! unshare --user true 2>/dev/null; then
     echo "[kiosk-browser] Keine Benutzer-Namespaces – WebKit-Sandbox deaktiviert"
+    export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+  elif command -v bwrap >/dev/null && ! bwrap --unshare-all --ro-bind / / true 2>/dev/null; then
+    echo "[kiosk-browser] bubblewrap startet nicht ($(bwrap --unshare-all --ro-bind / / true 2>&1 | head -1)) – WebKit-Sandbox deaktiviert"
     export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
   fi
   # Texturen-Cache von WebKit (Skia) begrenzen – Standard sind 256 MB, so viel Grafikspeicher hat der
@@ -50,11 +66,17 @@ if [ "$KIOSK_ENGINE" = "cog" ]; then
   [ -n "${KIOSK_MODE:-}" ] && export COG_PLATFORM_DRM_MODE_MAX="$KIOSK_MODE"
   CANVAS_ACCEL=false
   [ "$KIOSK_GPU" = "on" ] && CANVAS_ACCEL=true
+  # Darstellung: cog zeichnet normalerweise selbst per DRM/KMS (schlank, ohne Compositor). Liegen Bildschirm-
+  # ausgabe und Grafikchip auf getrennten Geräten (Orange Pi: sun4i-drm + Panfrost), bekommt WebKits Web-Prozess
+  # dort keinen Grafikzugang und cog stürzt ab – dann läuft cog im Wayland-Kiosk cage (der kann das).
+  # KIOSK_COG_MODE=drm|wayland erzwingt eine Variante.
+  COG_MODE="${KIOSK_COG_MODE:-auto}"
+  if [ "$COG_MODE" = auto ]; then
+    COG_MODE=drm
+    if command -v cage >/dev/null && split_gpu; then COG_MODE=wayland; fi
+  fi
   # shellcheck disable=SC2086 # Zusatz-Flags sollen in einzelne Argumente zerfallen
-  # renderer=gles: Bild per OpenGL ES auf den Bildschirm bringen. „modeset“ (ohne Kopie, ~15 % schneller)
-  # stürzt beim Seitenwechsel (neuer Web-Prozess) ab – daher nicht verwenden.
-  exec cog --platform=drm \
-    --platform-params="renderer=${KIOSK_COG_RENDERER:-gles}" \
+  set -- \
     --bg-color='#0b0a08' \
     --webprocess-failure=restart \
     --web-mem-limit=220 \
@@ -70,6 +92,16 @@ if [ "$KIOSK_ENGINE" = "cog" ]; then
     --enable-dns-prefetching=false \
     $KIOSK_EXTRA_FLAGS \
     "$START_URL"
+  echo "[kiosk-browser] cog über ${COG_MODE}"
+  if [ "$COG_MODE" = wayland ]; then
+    # Vollbild (sonst öffnet cog ein Fenster in Standardgröße oben links); Mauszeiger: cog lädt das Zeigerthema
+    # „default“ – auf dem Kiosk ein unsichtbares (siehe buildroot/board/opizero2w)
+    export COG_PLATFORM_WL_VIEW_FULLSCREEN=1
+    exec cage -d -- cog --platform=wl "$@"
+  fi
+  # renderer=gles: Bild per OpenGL ES auf den Bildschirm bringen. „modeset“ (ohne Kopie, ~15 % schneller)
+  # stürzt beim Seitenwechsel (neuer Web-Prozess) ab – daher nicht verwenden.
+  exec cog --platform=drm --platform-params="renderer=${KIOSK_COG_RENDERER:-gles}" "$@"
 fi
 
 # --- Chromium unter cage -----------------------------------------------------------

@@ -55,6 +55,18 @@ if [ -x "$HOST_DIR/bin/fc-cache" ]; then
   fi
 fi
 
+# Unsichtbarer Mauszeiger (cage/cog laden das Zeigerthema „default“): alle üblichen Zeigernamen auf das
+# durchsichtige Motiv aus rootfs-common/usr/share/icons/kiosk-hidden
+CUR="$T/usr/share/icons/kiosk-hidden/cursors"
+if [ -f "$CUR/default" ]; then
+  for n in left_ptr arrow top_left_arrow pointer hand1 hand2 text xterm watch wait progress grab grabbing crosshair \
+           move all-scroll not-allowed col-resize row-resize ew-resize ns-resize nesw-resize nwse-resize; do
+    ln -sf default "$CUR/$n"
+  done
+  rm -rf "$T/usr/share/icons/default"
+  ln -sfn kiosk-hidden "$T/usr/share/icons/default"
+fi
+
 # Kiosk-Benutzer: Heimatverzeichnis
 mkdir -p "$T/home/kiosk"
 

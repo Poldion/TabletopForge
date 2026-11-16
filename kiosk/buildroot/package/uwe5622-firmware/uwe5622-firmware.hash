@@ -1,0 +1,3 @@
+# Geprüft gegen die Dateien eines laufenden Armbian-Systems (Orange Pi Zero 2W)
+sha256  119b87ce30875734a67462f7293fb8fe85acf3270fe8b78c978ae24be7715a80  wcnmodem.bin
+sha256  1f3c40ec245a8d0b99ad1c23706597d6dd5008ab80cefb7bcc1956efc4e938f7  wifi_2355b001_1ant.ini

@@ -54,10 +54,10 @@ TMP=$(mktemp)
   done
   echo
   echo "--- Grafik-Treiber (dmesg)"
-  dmesg 2>/dev/null | grep -iE "drm|vc4|hdmi|v3d|cma|oom|under-voltage" | tail -40
+  dmesg 2>/dev/null | grep -iE "drm|vc4|hdmi|v3d|panfrost|sun4i|mali|cma|oom|under-voltage|sprdwl|WCN|uwe5622|firmware" | tail -40
   echo
   echo "--- Journal Kiosk-Dienste"
-  journalctl -b --no-pager -o short-monotonic -u kiosk-firstboot -u kiosk-setup -u kiosk-agent -u kiosk-browser 2>&1 | tail -400
+  journalctl -b --no-pager -o short-monotonic -u kiosk-splash -u kiosk-firstboot -u kiosk-setup -u kiosk-agent -u kiosk-browser 2>&1 | tail -400
   echo
   echo "--- Warnungen/Fehler im System"
   journalctl -b --no-pager -o short-monotonic -p warning 2>&1 | tail -150

@@ -81,6 +81,8 @@ export function heartbeat(id, body = {}) {
     hostname: String(body.hostname || '').slice(0, 64),
     ip: String(body.ip || '').slice(0, 64),
     model: String(body.model || '').slice(0, 80),
+    // Gerät und Systemvariante (Buildroot, Raspberry Pi OS, Armbian) und welche Update-Pakete passen
+    platform: sanitizePlatform(body.platform, body.slot),
     agent: String(body.agent || '').slice(0, 20),
     // Vorhandene Browser (fehlt bei älteren Agenten → Oberfläche bietet alle an)
     engines: Array.isArray(body.engines) ? body.engines.filter((e) => ['cog', 'chromium'].includes(e)) : null,
@@ -118,6 +120,35 @@ export function heartbeat(id, body = {}) {
   const needsUpdate = k.desired.rev > k.reportedRev;
   return { desired: needsUpdate ? k.desired : null, commands: commands.map((c) => c.cmd), ack };
 }
+
+const OS_VARIANTS = ['buildroot', 'raspios', 'armbian', 'linux'];
+
+/** Plattform des Geräts. Ältere Agenten (vor 1.8) melden sie nicht: mit Systemplätzen ist es die Buildroot-Variante des Pi Zero 2 W. */
+function sanitizePlatform(p, slot) {
+  const legacy = ['a', 'b'].includes(slot) ? 'zero2w' : null;
+  if (!p || typeof p !== 'object') return { board: '', os: legacy ? 'buildroot' : '', updates: legacy };
+  const updates = typeof p.updates === 'string' && /^[\w.-]{1,40}$/.test(p.updates) ? p.updates : null;
+  return {
+    board: String(p.board || '').slice(0, 80),
+    os: OS_VARIANTS.includes(p.os) ? p.os : '',
+    updates,
+  };
+}
+
+/**
+ * Leistungsprofil der Tischanzeige: „low“ für Raspberry Pi bis Modell 3 / Zero 2 W (VideoCore IV – Nebel gedrosselt,
+ * 30 Bilder/s), „high“ für alles mit modernerem Grafikchip (Orange Pi Zero 2W, Pi 4/5). Unbekannt → „low“.
+ */
+export function performanceFor(k) {
+  const board = k?.info?.platform?.board || '';
+  if (!board) return 'low';
+  // z.B. raspberrypi,model-zero-2-w · raspberrypi,3-model-b-plus · raspberrypi,model-b-plus (Pi 1)
+  if (/^raspberrypi,(model-zero|model-[ab]|[0-3]-)/.test(board)) return 'low';
+  return 'high';
+}
+
+/** Passt ein Update-Paket (manifest → board) zu diesem Gerät? */
+export const acceptsUpdate = (k, pkg) => Boolean(pkg && k?.info?.platform?.updates && pkg.board === k.info.platform.updates);
 
 function sanitizeUpdate(u) {
   if (!u || typeof u !== 'object') return null;
