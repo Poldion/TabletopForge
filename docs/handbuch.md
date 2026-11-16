@@ -45,7 +45,10 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
 - **Spieltisch-Kalibrierung:** Auflösung, Bildformat, Diagonale oder physische Maße – ein Rasterfeld ist auf dem TV immer exakt 1″ × 1″
 - **Encounter:** Gegner/NSCs vorab verdeckt platzieren und mit einem Tipp aufdecken
 - **Licht:** statische und flackernde Lichtquellen, Fackeln an Tokens, Umgebungslicht
-- **Zauberradien:** Kreis/Sphäre, Kegel, Würfel, Linie mit Hervorhebung der betroffenen Felder
+- **Zauber:** Kreis/Sphäre, Kegel, Würfel, Linie. Standard ist ein *Effekt*: er leuchtet auf Tisch, Spieler-Display und
+  DM-Ansicht kurz in der gewählten Farbe auf (Feuerball-Welle, aufgefächerter Kegel, auflodernder Würfel; Linie als
+  Geschoss oder Strahl) – sechs Farben oder eine eigene. *Bereich markieren* lässt ihn wie bisher mit Hervorhebung der
+  betroffenen Felder auf der Karte stehen (z.B. Feuerwand); „Effekt abspielen“ lässt ihn erneut aufleuchten.
 - **NPC- & Monster-Kartei:** Kreaturen mit vollständigem 5e-Statblock, Hintergrund und Porträt. Import per Copy & Paste eines Statblocks (z.B. aus D&D Beyond, deutsch oder englisch) oder per Suche in frei lizenzierten 5e-Daten (SRD über open5e.com). Beim Spielen direkt als Token setzen oder in die Initiative nehmen (W20 + GE automatisch).
 - **NSC-Generator:** würfelt Name (passend zum Volk), Beruf, Aussehen, Persönlichkeit, Eigenheit, Stimme, Ideal, Bindung, Makel, Motivation und Geheimnis – einzeln neu würfelbar, mit passenden SRD-Spielwerten. Im Spiel als „Spontan-NSC“ auf Knopfdruck.
 - **Monster-Datenbank:** Suche auch mit deutschen Namen („Eulenbär“, „roter Drache“), Filter nach Typ und Herausforderungsgrad, Vorschau des Statblocks vor dem Übernehmen.

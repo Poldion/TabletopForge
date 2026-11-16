@@ -91,6 +91,7 @@ sync.on((changed) => {
 sync.onFx((fx) => {
   if (fx.type === 'ping' && fx.target === 'player') renderer.addPing(fx);
   if (fx.type === 'ruler') renderer.showRuler(fx);
+  if (fx.type === 'spell' && sync.state.display.player.mode === 'map') renderer.addSpell(fx);
 });
 window.addEventListener('resize', () => {
   if (sync.state.display.player.mode === 'map') renderer.fit();

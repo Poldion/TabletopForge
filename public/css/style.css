@@ -428,6 +428,30 @@ dialog.modal form > * + * {
   border-color: #fff;
   box-shadow: 0 0 0 2px var(--accent);
 }
+/* Freie Farbwahl im selben Look: Regenbogen, solange keine eigene Farbe gewählt ist, sonst die gewählte Farbe */
+input.swatch[type='color'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: conic-gradient(#e53935, #ffb300, #4caf50, #3fa7d6, #9c27b0, #e53935);
+  overflow: hidden;
+}
+input.swatch[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input.swatch[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+input.swatch[type='color']:not(.active)::-webkit-color-swatch {
+  opacity: 0;
+}
+input.swatch[type='color']::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+input.swatch[type='color']:not(.active)::-moz-color-swatch {
+  opacity: 0;
+}
 
 /* Vollbild-Anzeigen (Tisch und Spieler) */
 body.display {

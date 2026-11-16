@@ -30,7 +30,7 @@ Werkzeugen für alles Spontane. Danach die **Nachbereitung** mit Recap und offen
 | **Karten** | Kampf-, Orts- und Weltkarten, Raster per Spalten/Zeilen oder Rechteck ausrichten, fliegender Wechsel |
 | **Spieltisch** | Kalibrierung über Auflösung, Diagonale oder Maße – ein Feld ist auf dem TV immer genau 1″ × 1″ |
 | **Nebel des Krieges** | Pinsel oder Rechteck, dauerhaft über Sessions hinweg gespeichert |
-| **Taktik** | Verdeckt platzierte Gegner, Licht und Fackeln, Zauberradien (Kreis, Kegel, Würfel, Linie), Lineal |
+| **Taktik** | Verdeckt platzierte Gegner, Licht und Fackeln, Zaubereffekte und -bereiche (Kreis, Kegel, Würfel, Linie), Lineal |
 | **Kreaturen** | Kartei mit 5e-Statblöcken, Import per Copy & Paste oder aus den SRD-Daten von Open5e, deutsche Suche, Porträt-Bibliothek |
 | **NSC-Generator** | Würfelt Name, Beruf, Aussehen, Persönlichkeit, Stimme, Geheimnis und passende Spielwerte |
 | **Encounter** | Planer mit Schwierigkeit und EP nach den 5e-Regeln, Zufallsbegegnungen per KI |

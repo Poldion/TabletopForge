@@ -224,6 +224,7 @@ async function runTable() {
   sync.onFx((fx) => {
     if (fx.type === 'ping') renderer.addPing(fx);
     if (fx.type === 'ruler') renderer.showRuler(fx);
+    if (fx.type === 'spell') renderer.addSpell(fx);
   });
   window.addEventListener('resize', update);
   update();

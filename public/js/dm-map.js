@@ -65,7 +65,9 @@ export function createMapEditor(sync, cid, hooks = {}) {
     tool: 'select',
     brush: 2, // Pinselbreite in Feldern
     token: { name: 'Gegner', kind: 'enemy', color: TOKEN_COLORS[0], size: 1, hidden: true },
-    aoe: { shape: 'circle', size: 20, color: '#ff6a00' },
+    // mode: 'fx' = kurzer Zaubereffekt auf allen Anzeigen, 'mark' = Bereich bleibt markiert (z.B. Feuerwand)
+    // style (nur Linie): 'bolt' = Geschoss fliegt die Linie entlang, 'beam' = Strahl flammt auf (z.B. Blitz)
+    aoe: { shape: 'circle', size: 20, color: '#ff6a00', mode: 'fx', style: 'bolt' },
     pen: { color: '#e53935', width: 4, vis: 'all' },
   };
   let mapId = null;
@@ -306,6 +308,14 @@ export function createMapEditor(sync, cid, hooks = {}) {
   const brushInCells = () => gridOf(M()).show !== false;
   const brushRadius = () => (brushInCells() ? (opt.brush * gridOf(M()).size) / 2 : (opt.brush * BRUSH_SCREEN_PX) / 2 / renderer.view.scale);
   const brushLabel = () => (brushInCells() ? tr('{brush} Felder', { brush: opt.brush }) : tr('{round} px', { round: Math.round(opt.brush * BRUSH_SCREEN_PX) }));
+
+  /** Zaubereffekt auf allen Anzeigen abspielen (Tisch, Spieler-Display, weitere DM-Geräte) und hier selbst. */
+  function castSpell(aoe) {
+    if (!mapId) return;
+    const fx = { type: 'spell', mapId, shape: aoe.shape, x: aoe.x, y: aoe.y, angle: aoe.angle || 0, size: aoe.size, width: aoe.width, color: aoe.color, style: aoe.style };
+    sync.fx(fx);
+    renderer.addSpell(fx);
+  }
 
   function startStream(kind, first) {
     stream = { kind, pts: [...first], last: performance.now(), id: null };
@@ -619,9 +629,14 @@ export function createMapEditor(sync, cid, hooks = {}) {
         }
       }
       if (preview?.type === 'aoe') {
-        const id = uid();
-        sync.set(P('aoes', id), { ...preview.aoe, id });
-        select({ type: 'aoe', id });
+        const { mode, ...aoe } = preview.aoe;
+        if (mode === 'fx') {
+          castSpell(aoe);
+        } else {
+          const id = uid();
+          sync.set(P('aoes', id), { ...aoe, id });
+          select({ type: 'aoe', id });
+        }
       }
       preview = opt.tool === 'reveal' || opt.tool === 'hide' ? { type: 'brush', x: p.x, y: p.y, r: brushRadius() } : null;
       renderer.requestRender();
@@ -718,11 +733,23 @@ export function createMapEditor(sync, cid, hooks = {}) {
     renderer.requestRender();
   }
 
-  function swatchRow(get, set, colors = TOKEN_COLORS) {
+  /** Farbfelder; custom: zusätzlich ein Feld mit freier Farbwahl (zeigt die gewählte Farbe, wenn sie keine Vorgabe ist). */
+  function swatchRow(get, set, colors = TOKEN_COLORS, custom = false) {
     const row = h('div.row', { style: { gap: '4px' } });
     const draw = () => {
+      const own = !colors.includes(get());
+      const picker = custom
+        ? h('input.swatch', {
+            type: 'color',
+            value: own ? get() : '#ffffff',
+            title: tr('Eigene Farbe'),
+            class: own ? 'active' : '',
+            onchange: (e) => (set(e.target.value), draw()),
+          })
+        : null;
       clear(row).append(
         ...colors.map((c) => h('button.swatch', { style: { background: c }, class: get() === c ? 'active' : '', onclick: () => (set(c), draw()) })),
+        ...(picker ? [picker] : []),
       );
     };
     draw();
@@ -789,7 +816,20 @@ export function createMapEditor(sync, cid, hooks = {}) {
       shape.addEventListener('change', () => (opt.aoe.shape = shape.value));
       const size = h('input', { type: 'number', min: distIn(5), step: unitStep(), value: distIn(opt.aoe.size), style: { width: '80px' } });
       size.addEventListener('input', () => (opt.aoe.size = Math.max(5, distFrom(size.value) || 5)));
-      add(shape, size, h('span.small', unitLabel()), swatchRow(() => opt.aoe.color, (c) => (opt.aoe.color = c), ['#ff6a00', '#3fa7d6', '#9c27b0', '#4caf50', '#f5f5f5', '#e53935']));
+      // Kurzer Effekt (Standard) oder dauerhaft markierter Bereich
+      const mode = h('select', { style: { width: '170px' }, title: tr('Effekt: leuchtet auf allen Anzeigen kurz auf. Markieren: Bereich bleibt auf der Karte (z.B. Feuerwand)') },
+        h('option', { value: 'fx' }, tr('Effekt (kurz)')),
+        h('option', { value: 'mark' }, tr('Bereich markieren')),
+      );
+      mode.value = opt.aoe.mode || 'fx';
+      mode.addEventListener('change', () => (opt.aoe.mode = mode.value));
+      // Linie: Geschoss (Pfeil, Feuerpfeil) oder Strahl (Blitz)
+      const style = h('select', { style: { width: '120px' } }, h('option', { value: 'bolt' }, tr('Geschoss')), h('option', { value: 'beam' }, tr('Strahl')));
+      style.value = opt.aoe.style || 'bolt';
+      style.addEventListener('change', () => (opt.aoe.style = style.value));
+      style.hidden = opt.aoe.shape !== 'line';
+      shape.addEventListener('change', () => (style.hidden = shape.value !== 'line'));
+      add(mode, shape, style, size, h('span.small', unitLabel()), swatchRow(() => opt.aoe.color, (c) => (opt.aoe.color = c), ['#ff6a00', '#3fa7d6', '#9c27b0', '#4caf50', '#f5f5f5', '#e53935'], true));
       add(h('span.small.muted', tr('Tippen = Ursprung, Ziehen = Richtung & Größe')));
       add(h('button.small', { onclick: () => sync.set(P('aoes'), {}) }, tr('Alle entfernen')));
     } else if (t === 'draw') {
@@ -1004,7 +1044,13 @@ export function createMapEditor(sync, cid, hooks = {}) {
         input('label', { placeholder: tr('Bezeichnung (z.B. Feuerball)') }),
         h('div.grid2', shape, h('div.row', h('div.grow', distInput('size', 5)), unitLabel())),
         h('div.row', h('span.small.muted', tr('Drehen')), h('button.small', { onclick: () => sync.set(OP('angle'), (M().aoes[obj.id].angle || 0) - Math.PI / 4) }, icon('rotateLeft'), ' 45°'), h('button.small', { onclick: () => sync.set(OP('angle'), (M().aoes[obj.id].angle || 0) + Math.PI / 4) }, icon('rotateRight'), ' 45°')),
-        h('div.row.end', { style: { marginTop: '8px' } }, del),
+        h(
+          'div.row.end',
+          { style: { marginTop: '8px' } },
+          // Markierten Bereich (z.B. Feuerwand) einmal mit Effekt aufleuchten lassen
+          h('button.small', { onclick: () => M()?.aoes?.[obj.id] && castSpell(M().aoes[obj.id]), title: tr('Zaubereffekt auf allen Anzeigen abspielen') }, icon('aoe'), tr(' Effekt abspielen')),
+          del,
+        ),
       );
     }
   }

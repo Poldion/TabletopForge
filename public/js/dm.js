@@ -648,6 +648,7 @@ sync.on((changed) => {
 });
 sync.onFx((fx) => {
   if (fx.type === 'ping') editor?.renderer.addPing(fx);
+  if (fx.type === 'spell') editor?.renderer.addSpell(fx);
 });
 
 refreshHeader();

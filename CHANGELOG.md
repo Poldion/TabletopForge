@@ -3,6 +3,17 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.56.0] – 2026-11-16
+
+### Added
+
+- **Spell effects:** the spell tool now plays a short animation in the chosen colour on the game table, the player
+  display and other game master devices – a fireball wave with flash, shock ring and sparks; a cone that fans out with
+  ripples; a cube that flares up; a line as a flying projectile (fire arrow) or a flashing beam (lightning bolt).
+  Red looks like fire, blue like water or ice. Six preset colours plus a free colour choice.
+- *Mark area* keeps the previous behaviour (area stays on the map with the affected squares highlighted, e.g. wall of
+  fire); a marked area can play its effect again from its info box.
+
 ## [0.55.0] – 2026-11-16
 
 ### Added

@@ -30,7 +30,7 @@ improvised. Afterwards there is a **wrap-up** with a recap, and open scenes move
 | **Maps** | Battle, location and world maps; align the grid by columns/rows or a rectangle; switch on the fly |
 | **Game table** | Calibration via resolution, diagonal or dimensions – one cell is always exactly 1″ × 1″ on the TV |
 | **Fog of war** | Brush or rectangle, saved across sessions |
-| **Tactics** | Hidden enemies, light and torches, spell areas (circle, cone, cube, line), ruler |
+| **Tactics** | Hidden enemies, light and torches, spell effects and areas (circle, cone, cube, line), ruler |
 | **Creatures** | 5e stat blocks, import by copy & paste or from the Open5e SRD data, portrait library |
 | **NPC generator** | Rolls name, occupation, appearance, personality, voice, secret and fitting stats |
 | **Encounters** | Planner with difficulty and XP per the 5e rules, AI-generated random encounters |

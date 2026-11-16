@@ -49,7 +49,10 @@ lying flat) and a player display, all from one browser.
   always exactly 1″ × 1″.
 - **Encounters:** place enemies/NPCs hidden in advance and reveal them with one tap.
 - **Light:** static and flickering light sources, torches on tokens, ambient light.
-- **Spell areas:** circle/sphere, cone, cube, line, with the affected squares highlighted.
+- **Spells:** circle/sphere, cone, cube, line. By default an *effect*: it flashes briefly in the chosen colour on the
+  table, the player display and the game master view (fireball wave, fanning cone, flaring cube; a line as projectile
+  or beam) – six colours or your own. *Mark area* keeps it on the map with the affected squares highlighted (e.g. wall
+  of fire); “Play effect” makes it flash again.
 - **NPC & monster index:** creatures with a full 5e stat block, background and portrait. Import by copying and pasting a
   stat block (e.g. from D&D Beyond, German or English) or by searching freely licensed 5e data (SRD via open5e.com).
   While playing, place them directly as a token or add them to the initiative (d20 + DEX automatically).

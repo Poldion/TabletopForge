@@ -3,6 +3,7 @@
 import { getImage, fileUrl, forgetImage } from './util.js';
 import { tr } from './i18n.js';
 import { dist } from './units-ui.js';
+import { spellEffect } from './spellfx.js';
 
 // Wie viele Karten der Spieltisch mit ihren vorbereiteten Kacheln behält (je etwa ein bis zwei Bildschirme groß)
 const TILE_SETS = 3;
@@ -320,6 +321,30 @@ export class MapRenderer {
       x: this.width / 2 + dx * Math.cos(a) - dy * Math.sin(a),
       y: this.height / 2 + dx * Math.sin(a) + dy * Math.cos(a),
     };
+  }
+
+  /**
+   * Zaubereffekt abspielen (fx: { mapId, shape, x, y, angle (Bogenmaß, Karte), size/width in Fuß, color, style }).
+   * Kurze CSS-Animation über der Karte – auf allen Anzeigen inkl. DM-Ansicht.
+   */
+  addSpell(fx) {
+    const map = this.map;
+    if (!this.pingLayer || !map || fx.mapId !== map.id || this.blackout) return;
+    this.attachFx();
+    const o = this.mapToScreen(fx.x, fx.y);
+    const scale = this.view.scale;
+    // Richtung auf dem Bildschirm: Kartenwinkel plus Drehung der Anzeige (Seitenverhältnis der Felder ≈ 1)
+    const angle = ((fx.angle || 0) * 180) / Math.PI + (this.view.rotation || 0);
+    spellEffect(this.pingLayer, {
+      x: o.x,
+      y: o.y,
+      angle,
+      len: feetToPx(map, fx.size || 20) * scale,
+      width: feetToPx(map, fx.width || 5) * scale,
+      shape: fx.shape,
+      style: fx.style,
+      color: fx.color,
+    });
   }
 
   addPing(p) {
