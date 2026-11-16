@@ -187,7 +187,86 @@ const D20_SVG = '<svg class="boot-icon" viewBox="0 0 100 100" aria-hidden="true"
  * oder einer eigenen Nachricht der Spielleitung.
  */
 export function pauseScreen() {
-  const el = h('div.loading-screen.pause-screen.hidden.gone', { innerHTML: D20_SVG });
+  // Auftritt: Der Würfel fällt von oben auf die Karte (Schatten wird dunkler), beim Aufprall läuft eine Druckwelle
+  // nach außen und färbt den Tisch schwarz, dann erscheinen die Texte – nur Transform/Deckkraft, das rechnet der
+  // Grafikchip (auch auf dem Pi)
+  // Abgang: Der Würfel taucht in den Tisch ab, dann läuft wieder eine Welle nach außen – diesmal wird die Karte
+  // innerhalb der Welle sichtbar (pause-reveal: Canvas, auf dem die Dunkelheit mit wachsendem Loch gezeichnet wird)
+  const el = h('div.loading-screen.pause-screen.hidden.gone', {
+    innerHTML: `<div class="pause-wave"></div><div class="pause-wave pause-wave2"></div><div class="pause-fill"></div><canvas class="pause-reveal"></canvas><div class="pause-shadow"></div>${D20_SVG}`,
+  });
+  const reveal = el.querySelector('.pause-reveal');
+  const SINK_MS = 650; // Würfel taucht ab (siehe pause-sink in style.css)
+  const REVEAL_MS = 1800; // Welle legt die Karte frei
+  let revealRaf = 0;
+  const stopReveal = () => {
+    cancelAnimationFrame(revealRaf);
+    revealRaf = 0;
+    el.classList.remove('leave', 'revealing');
+  };
+  const leave = () => {
+    stopReveal();
+    el.classList.remove('enter');
+    el.classList.add('leave');
+    const t0 = performance.now() + SINK_MS;
+    const frame = (now) => {
+      if (now < t0) {
+        revealRaf = requestAnimationFrame(frame);
+        return;
+      }
+      // Halbe Auflösung (die Welle ist ohnehin weich) – ein Viertel der Pixel je Bild, der Browser skaliert hoch
+      const W = Math.round(el.clientWidth / 2);
+      const H = Math.round(el.clientHeight / 2);
+      if (reveal.width !== W || reveal.height !== H) {
+        reveal.width = W;
+        reveal.height = H;
+      }
+      const ctx = reveal.getContext('2d');
+      const p = Math.min(1, (now - t0) / REVEAL_MS);
+      const ease = (x) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 2.2);
+      const min = Math.min(W, H);
+      const maxR = Math.hypot(W, H) / 2 + min * 0.12;
+      const cx = W / 2;
+      const cy = H / 2;
+      const soft = min * 0.06;
+      const rimW = min * 0.045;
+      const r = ease(p) * maxR;
+      // Dunkelheit mit weichem Loch in der Mitte …
+      ctx.fillStyle = '#0b0a08';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'destination-out';
+      const hole = ctx.createRadialGradient(cx, cy, Math.max(0, r - soft), cx, cy, Math.max(1, r));
+      hole.addColorStop(0, 'rgba(0,0,0,1)');
+      hole.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = hole;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1, r), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      // … und goldener Saum an der Welle, dahinter ein blasserer Nachhall
+      const rim = (radius, alpha) => {
+        if (radius <= 0) return;
+        const g = ctx.createRadialGradient(cx, cy, Math.max(0, radius - rimW), cx, cy, radius + rimW * 0.6);
+        g.addColorStop(0, 'rgba(201,162,74,0)');
+        g.addColorStop(0.55, `rgba(230,190,95,${alpha})`);
+        g.addColorStop(1, 'rgba(201,162,74,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + rimW * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      rim(r, 0.75 * (1 - p * 0.4));
+      rim(ease((now - t0 - 220) / REVEAL_MS) * maxR, 0.35 * (1 - p));
+      if (!el.classList.contains('revealing')) el.classList.add('revealing');
+      if (p < 1) {
+        revealRaf = requestAnimationFrame(frame);
+      } else {
+        stopReveal();
+        el.classList.add('hidden', 'gone');
+      }
+    };
+    revealRaf = requestAnimationFrame(frame);
+  };
   el.append(h('div.quad', h('div.boot-title', tr('Kurze Pause')), h('div.boot-sub', tr('Gleich geht es weiter …')), h('div.boot-fact')));
   document.body.append(el);
   const q = quadSides(el);
@@ -214,7 +293,10 @@ export function pauseScreen() {
       clearTimeout(goneTimer);
       if (on) {
         if (!custom) setFact(next());
-        el.classList.remove('gone');
+        stopReveal();
+        el.classList.remove('gone', 'enter');
+        void el.offsetWidth; // Auftritts-Animation jedes Mal von vorn
+        el.classList.add('enter');
         requestAnimationFrame(() => el.classList.remove('hidden'));
         // Eigene Nachricht bleibt stehen, sonst alle 9 s ein neuer Spruch
         rotate = setInterval(() => {
@@ -225,9 +307,10 @@ export function pauseScreen() {
             q.toggle('.boot-fact', 'fade', false);
           }, 600);
         }, 9000);
-      } else {
+      } else if (el.classList.contains('gone')) {
         el.classList.add('hidden');
-        goneTimer = setTimeout(() => el.classList.add('gone'), 600);
+      } else {
+        leave();
       }
     },
   };

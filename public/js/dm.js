@@ -13,7 +13,7 @@ import { icon } from './icons.js';
 import { createMoodSelect } from './wled-admin.js';
 import { putOnTable } from './table-view.js';
 import { authState } from './account.js';
-import { tr } from './i18n.js';
+import { tr, lang } from './i18n.js';
 import { useCampaignUnits } from './units-ui.js';
 import { loadAi } from './ai.js';
 import { loadBasalt } from './basalt.js';
@@ -55,6 +55,9 @@ try {
   alert(err.message);
   location.href = '/';
 }
+// Sprache der Spielleitung für die Anzeigen merken („wie die Spielleitung“ unter Kampagne → Sprache): Spieltisch und
+// Spieler-Display nehmen sie, solange für die Kampagne keine eigene Sprache eingestellt ist
+if (sync.state.display && sync.state.display.dmLang !== lang) sync.set(['display', 'dmLang'], lang);
 // Eingerichtete Dienste (ohne Einrichtung erscheinen keine KI- bzw. Basalt-Knöpfe, ohne Regelwerk kein Regeltab)
 await Promise.all([loadAi(), loadBasalt().then(loadRules)]);
 const S = () => sync.state;

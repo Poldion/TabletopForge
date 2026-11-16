@@ -73,9 +73,13 @@ export function setLang(l) {
 
 /**
  * Anzeigen (Spieltisch, Spieler-Display) folgen der Sprache der Kampagne: weicht sie ab, einmal umstellen und neu laden.
+ * Übergeben wird der display-Zweig des Zustands: Sprache der Kampagne, sonst („wie die Spielleitung“) die Sprache,
+ * in der die Spielleitung die Kampagne zuletzt geöffnet hat – nicht die Browsersprache des Anzeigegeräts (ein Kiosk
+ * steht meist auf Englisch).
  */
-export function followCampaignLanguage(campaignLang) {
-  if (LANGUAGES[campaignLang] && campaignLang !== lang) setLang(campaignLang);
+export function followCampaignLanguage(display) {
+  const target = display?.lang || display?.dmLang;
+  if (LANGUAGES[target] && target !== lang) setLang(target);
 }
 
 /** Gebietsschema für Datum und Zahlen. */

@@ -73,7 +73,8 @@ lying flat) and a player display, all from one browser.
   combat log. On the map HP bars above the token and condition markers; players see nothing, only a “bloodied” symbol
   (from 25 % or 50 %) or the bar, as you choose.
 - **Break screen:** when the game master blacks out the table, it shows “Short break” with changing sayings or your own
-  message (Screens → Game table). Available in German and English.
+  message (Screens → Game table). Available in German and English. On entry a die drops onto the map and a shock
+  wave turns the table black; at the end it sinks into the table and a wave uncovers the map again.
 - **Table rendering:** *Smooth* (60 frames/s, the fog follows the brush directly while revealing and fades out softly)
   or *Economical* for weak devices (30 frames/s, fog in steps). *Automatic* (default): kiosk devices depending on their
   hardware – Pi Zero 2 W/Pi 3 economical, Orange Pi and Pi 4/5 smooth –, all other browsers smooth. Switch under

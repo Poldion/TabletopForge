@@ -10,6 +10,8 @@ const TILE_SETS = 3;
 const FOG_MASK_MAX = 2048;
 // Weiches Aufdecken des Nebels auf starken Geräten (Dauer des Ausblendens in ms)
 const FOG_FADE_MS = 450;
+// Breite des weichen Nebelrands: von voll durchsichtig zu ganz deckend über so viele Rasterfelder
+const FOG_SOFT_CELLS = 1.5;
 
 /**
  * Rasterdaten einer Karte. Sind Spalten und Zeilen hinterlegt, wird die Feldgröße aus den
@@ -532,7 +534,7 @@ export class MapRenderer {
     for (let i = c.texApplied; i < ops.length; i++) {
       const o = ops[i];
       if (o.m === 'hide' || o.s !== 'stroke') return null;
-      const pad = o.r + g.size * 0.3 + 2;
+      const pad = o.r + (g.size * FOG_SOFT_CELLS) / 2 + 2;
       for (let j = 0; j < o.pts.length; j += 2) {
         x0 = Math.min(x0, o.pts[j] - pad);
         y0 = Math.min(y0, o.pts[j + 1] - pad);
@@ -1247,7 +1249,7 @@ export class MapRenderer {
       const wait = stale && !this.highPerf && sameTex && this.mode !== 'dm' ? 250 - (performance.now() - (c.texAt || 0)) : 0;
       if (incremental) {
         const t = c.tex.getContext('2d', this.ctxOpts);
-        for (const op of newOps) eraseFogStroke(t, op, c.k, soft ? g.size * 0.3 : 0);
+        for (const op of newOps) eraseFogStroke(t, op, c.k, soft ? (g.size * FOG_SOFT_CELLS) / 2 : 0);
         c.texApplied = c.applied;
         clearTimeout(this.fogTimer);
         this.fogTimer = setTimeout(() => {
@@ -1294,10 +1296,11 @@ export class MapRenderer {
         t.globalCompositeOperation = 'source-over';
         t.clearRect(0, 0, c.tex.width, c.tex.height);
         if (soft) {
-          // Weicher, halbdurchsichtiger Rand: Maske stufenweise halbieren, bis ein Pixel ≈ ¼ Rasterfeld ist,
-          // und stufenweise wieder vergrößern. Jede Stufe mittelt weich – zusammen ein glatter Übergang von
-          // etwa einem halben Rasterfeld, ganz auf der Grafikeinheit (Pixelschleifen in JS sind auf dem Pi zu langsam)
-          const levels = Math.max(1, Math.min(7, Math.round(Math.log2((g.size * c.k) / 4))));
+          // Weicher, halbdurchsichtiger Rand: Maske stufenweise halbieren und stufenweise wieder vergrößern. Jede
+          // Stufe mittelt weich – zusammen ein glatter Übergang von voll durchsichtig zu ganz deckend über
+          // FOG_SOFT_CELLS Rasterfelder (≈ 2 Pixel der kleinsten Stufe), ganz auf der Grafikeinheit (Pixelschleifen in
+          // JS sind auf dem Pi zu langsam)
+          const levels = Math.max(1, Math.min(9, Math.round(Math.log2((FOG_SOFT_CELLS * g.size * c.k) / 2))));
           const chain = (this.fogChain ??= []);
           let from = c.canvas;
           for (let i = 0; i < levels; i++) {

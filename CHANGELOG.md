@@ -3,6 +3,23 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.55.0] – 2026-11-16
+
+### Added
+
+- Break screen with an entrance and an exit: a die drops onto the still visible map and a shock wave turns the table
+  black from the point of impact; when the break ends, the die sinks into the table and a wave uncovers the map from the
+  inside out. Only transforms and opacity (plus a half-resolution canvas for the exit wave), so weak devices keep up.
+
+### Changed
+
+- Soft fog edge: from fully transparent to fully opaque over 1½ grid cells (was about half a cell).
+
+### Fixed
+
+- Game table and player display now follow the game master's language when the campaign has no display language of its
+  own ("same as the game master"); before, they fell back to the browser language of the device – English on the kiosk.
+
 ## [0.54.0] – 2026-11-16
 
 ### Added

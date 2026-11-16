@@ -65,6 +65,8 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
   Zustandsmarken; Spieler sehen wahlweise nichts, nur ein „Blutend“-Symbol (ab 25 % bzw. 50 %) oder den Balken.
 - **Pausenbildschirm:** Verdunkelt die Spielleitung den Tisch, erscheint dort „Kurze Pause“ mit wechselnden Sprüchen
   („Bitte warten – der DM räumt gerade ein paar Sachen um.“) oder einer eigenen Nachricht (Bildschirme → Spieltisch).
+  Zum Auftritt fällt ein Würfel auf die Karte, eine Druckwelle färbt den Tisch schwarz; zum Ende taucht er in den Tisch
+  ab und eine Welle legt die Karte wieder frei.
 - **Darstellung des Tischs:** *Flüssig* (60 Bilder/s, der Nebel folgt beim Aufdecken direkt dem Pinsel und blendet
   weich aus) oder *Sparsam* für schwache Geräte (30 Bilder/s, Nebel in Schritten). *Automatisch* (Standard): Kiosk-Geräte
   je nach Hardware – Pi Zero 2 W/Pi 3 sparsam, Orange Pi und Pi 4/5 flüssig –, alle anderen Browser flüssig.

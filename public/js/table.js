@@ -59,13 +59,16 @@ if (param('calibrate') || !campaignId) {
 async function runTable() {
   const loading = loadingScreen();
   const pause = pauseScreen();
+  // Dauer des Pausen-Auftritts, bis die Druckwelle den ganzen Tisch bedeckt (siehe .pause-screen.enter in style.css)
+  const PAUSE_ENTER_MS = 2600;
+  let blackoutTimer = null;
   const sync = new Sync(campaignId, 'table');
   await sync.connect();
   // Anzeigen sprechen die Sprache der Kampagne (in der Spielleitung unter „Kampagne“ einstellbar)
-  followCampaignLanguage(sync.state.display?.lang);
+  followCampaignLanguage(sync.state.display);
   useCampaignUnits(sync.state);
   sync.on(() => useCampaignUnits(sync.state));
-  sync.on(() => followCampaignLanguage(sync.state.display?.lang));
+  sync.on(() => followCampaignLanguage(sync.state.display));
   connectionBadge(sync);
   const renderer = new MapRenderer(canvas, { mode: 'table', campaignId, getState: () => sync.state, renderScale: Number(param('scale')) || 1, performance: performanceFor(sync.state.display?.table) });
   if (param('maxfps')) renderer.maxFps = Number(param('maxfps'));
@@ -140,13 +143,28 @@ async function runTable() {
     const st = sync.state;
     const t = st.display.table;
     const tbl = tableSettings(sync.settings);
-    renderer.blackout = !!t.blackout;
+    // Verdunkelt: Pausenbildschirm mit Sprüchen (abschaltbar – dann bleibt der Tisch einfach schwarz)
+    const pauseOn = !!t.blackout && t.pauseScreen !== false;
+    if (pauseOn) {
+      // Karte erst ausschalten, wenn der Auftritt des Pausenbildschirms sie überdeckt hat – der Würfel fällt auf
+      // die sichtbare Karte, die Druckwelle löscht das Bild
+      if (!renderer.blackout && !blackoutTimer) {
+        blackoutTimer = setTimeout(() => {
+          blackoutTimer = null;
+          renderer.blackout = !!sync.state.display.table.blackout;
+          renderer.requestRender();
+        }, PAUSE_ENTER_MS);
+      }
+    } else {
+      clearTimeout(blackoutTimer);
+      blackoutTimer = null;
+      renderer.blackout = !!t.blackout;
+    }
     const perf = performanceFor(t);
     if (param('fps') && perf !== renderer.perfLogged) console.log(`[fps] Darstellung: ${perf}`);
     renderer.perfLogged = perf;
     renderer.setPerformance(perf);
-    // Verdunkelt: Pausenbildschirm mit Sprüchen (abschaltbar – dann bleibt der Tisch einfach schwarz)
-    pause.set(!!t.blackout && t.pauseScreen !== false, t.pauseText);
+    pause.set(pauseOn, t.pauseText);
     renderer.setMap(t.mapId);
     const map = st.maps[t.mapId];
     renderer.view.rotation = tbl.rotation || 0;

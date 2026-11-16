@@ -12,10 +12,10 @@ setupDisplayChrome();
 const sync = new Sync(campaignId, 'player');
 await sync.connect();
 // Anzeigen sprechen die Sprache der Kampagne (in der Spielleitung unter „Kampagne“ einstellbar)
-followCampaignLanguage(sync.state.display?.lang);
+followCampaignLanguage(sync.state.display);
 useCampaignUnits(sync.state);
 sync.on(() => useCampaignUnits(sync.state));
-sync.on(() => followCampaignLanguage(sync.state.display?.lang));
+sync.on(() => followCampaignLanguage(sync.state.display));
 connectionBadge(sync);
 
 const renderer = new MapRenderer($('#mapCanvas'), { mode: 'player', campaignId, getState: () => sync.state });

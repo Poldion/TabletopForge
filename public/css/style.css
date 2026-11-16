@@ -541,9 +541,161 @@ body.display.show-cursor {
 /* Pausenbildschirm (Tisch verdunkelt): über dem Ladebildschirm, Würfel atmet statt sich zu drehen */
 .pause-screen {
   z-index: 6;
+  /* Dunkel macht pause-fill (beim Auftritt erst nach der Irisblende) */
+  background: transparent;
+}
+/* Beim Auftritt bleibt die Gesamtdeckkraft sofort voll – das Hereinkommen übernehmen Iris und Würfel */
+.pause-screen.enter:not(.hidden) {
+  transition: none;
+}
+.pause-fill {
+  position: absolute;
+  inset: 0;
+  background: #0b0a08;
+}
+.pause-wave,
+.pause-shadow {
+  display: none;
 }
 .pause-screen .boot-icon {
-  animation: pause-breathe 4s ease-in-out infinite;
+  /* Gefüllt: der Würfel liegt als Körper auf der Karte, statt sie durchscheinen zu lassen */
+  fill: #0b0a08;
+  /* Fünfmal so groß angelegt und auf ⅕ verkleinert: Beim Fall startet er groß – ein klein gezeichneter, hochskalierter
+     Würfel wäre dann verpixelt, ein groß gezeichneter, verkleinerter bleibt scharf */
+  top: calc(50% - 37.03vh);
+  left: calc(50% - 37.03vh);
+  width: 74.05vh;
+  height: 74.05vh;
+  transform: scale(0.2);
+  animation: pause-breathe-big 4s ease-in-out infinite;
+}
+@keyframes pause-breathe-big {
+  0%,
+  100% { opacity: 0.55; transform: scale(0.192); }
+  50% { opacity: 1; transform: scale(0.208); }
+}
+
+/* Auftritt: Der Würfel fällt von oben auf die Karte, beim Aufprall läuft eine Druckwelle nach außen und färbt den
+   Tisch schwarz, dann erscheinen die Texte. Kleine Elemente, groß skaliert: nur Transform, kein Neuzeichnen je Bild. */
+.pause-screen.enter .pause-fill {
+  opacity: 0;
+  animation: pause-fade-in 0.4s 2.2s ease-out forwards;
+}
+/* Würfel: fällt aus der Höhe (groß, nah am Betrachter) beschleunigt auf die Karte, staucht beim Aufprall und
+   federt zurück; danach atmet er wie gewohnt */
+.pause-screen.enter .boot-icon {
+  animation:
+    pause-drop 0.95s cubic-bezier(0.45, 0, 0.55, 1) both,
+    pause-breathe-big 4s 3s ease-in-out infinite;
+}
+@keyframes pause-drop {
+  0% { opacity: 0; transform: scale(1) rotate(-35deg); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  15% { opacity: 1; }
+  70% { transform: scale(0.2) rotate(0deg); animation-timing-function: ease-out; }
+  78% { transform: scale(0.224, 0.172) rotate(0deg); animation-timing-function: ease-in-out; }
+  88% { transform: scale(0.19, 0.21) rotate(0deg); }
+  100% { opacity: 1; transform: scale(0.2) rotate(0deg); }
+}
+/* Schatten unter dem Würfel: groß und blass, solange er hoch ist, klein und dunkel beim Aufprall */
+.pause-screen.enter .pause-shadow {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22vh;
+  height: 22vh;
+  margin: -11vh 0 0 -11vh;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.35) 55%, transparent);
+  will-change: transform, opacity;
+  animation: pause-shadow 2.4s linear both;
+}
+@keyframes pause-shadow {
+  0% { opacity: 0; transform: scale(3.2); }
+  28% { opacity: 0.9; transform: scale(1); }
+  55% { opacity: 0.9; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+/* Druckwelle: innen schwarz, goldener Saum, außen durchsichtig – wächst vom Aufprallpunkt über den ganzen Tisch */
+.pause-screen.enter .pause-wave {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40vmax;
+  height: 40vmax;
+  margin: -20vmax 0 0 -20vmax;
+  background: radial-gradient(
+    circle closest-side,
+    #0b0a08 0 80%,
+    rgba(70, 55, 25, 0.95) 88%,
+    rgba(230, 190, 95, 0.85) 93%,
+    rgba(201, 162, 74, 0.25) 97%,
+    transparent 100%
+  );
+  will-change: transform;
+  transform: scale(0);
+  animation: pause-wave 1.8s 0.66s cubic-bezier(0.3, 0.45, 0.45, 1) forwards;
+}
+/* Zweite, blassere Welle als Nachhall (nur der Saum, innen durchsichtig) */
+.pause-screen.enter .pause-wave2 {
+  background: radial-gradient(
+    circle closest-side,
+    transparent 0 84%,
+    rgba(230, 190, 95, 0.55) 92%,
+    transparent 100%
+  );
+  animation: pause-wave2 2s 0.95s cubic-bezier(0.3, 0.45, 0.45, 1) forwards;
+}
+@keyframes pause-wave {
+  from { transform: scale(0.05); }
+  to { transform: scale(3.6); }
+}
+@keyframes pause-wave2 {
+  from { opacity: 1; transform: scale(0.05); }
+  80% { opacity: 0.7; }
+  to { opacity: 0; transform: scale(3.8); }
+}
+/* Abgang: Würfel taucht in den Tisch ab, Texte verblassen; danach legt die Welle (Canvas pause-reveal) die Karte
+   von innen nach außen frei */
+.pause-reveal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+.pause-screen.revealing .pause-reveal {
+  display: block;
+}
+.pause-screen.revealing .pause-fill {
+  opacity: 0;
+}
+.pause-screen.leave .boot-icon {
+  animation: pause-sink 0.7s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+@keyframes pause-sink {
+  from { opacity: 1; transform: scale(0.2) rotate(0deg); }
+  30% { opacity: 1; transform: scale(0.215, 0.185) rotate(0deg); }
+  to { opacity: 0; transform: scale(0.03) rotate(25deg); }
+}
+.pause-screen.leave .quad {
+  animation: pause-fade-out 0.35s ease-in forwards;
+}
+@keyframes pause-fade-out {
+  to { opacity: 0; }
+}
+/* Texte nacheinander, reihum um den Tisch */
+.pause-screen.enter .quad {
+  animation: pause-fade-in 0.7s ease-out both;
+}
+.pause-screen.enter .quad.s-bottom { animation-delay: 2.4s; }
+.pause-screen.enter .quad.s-right { animation-delay: 2.55s; }
+.pause-screen.enter .quad.s-top { animation-delay: 2.7s; }
+.pause-screen.enter .quad.s-left { animation-delay: 2.85s; }
+@keyframes pause-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes pause-breathe {
   0%,
