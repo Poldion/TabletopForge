@@ -4,6 +4,8 @@ import { getImage, fileUrl, forgetImage } from './util.js';
 import { tr } from './i18n.js';
 import { dist } from './units-ui.js';
 import { spellEffect } from './spellfx.js';
+import { visibilityPolygon } from './visibility.js';
+import { wallsWithDoors, doorState, drawDoor } from './doors.js';
 
 // Wie viele Karten der Spieltisch mit ihren vorbereiteten Kacheln behält (je etwa ein bis zwei Bildschirme groß)
 const TILE_SETS = 3;
@@ -147,6 +149,13 @@ export class MapRenderer {
     this.fxLayer = opts.domEffects !== false ? createFxLayer() : null;
     this.topEl = this.fxLayer ? Object.assign(document.createElement('canvas'), { className: 'mr-top' }) : null;
     this.pingLayer = this.fxLayer ? createFxLayer() : null;
+    // Belebte Karten (Kartenbauer): wiegende Bäume, Wasser, Vögel als eigene Ebene direkt über dem Kartenbild. Damit
+    // Spielfiguren und Dunkelheit nicht darunter verschwinden, liegen sie dann auf einer eigenen Canvas darüber.
+    // Beides entsteht erst, wenn eine belebte Karte auf einer starken Anzeige gezeigt wird – schwache Geräte laden
+    // weder das Modul noch bekommen sie eine zusätzliche Ebene.
+    this.anim = null;
+    this.midEl = null;
+    this.animWanted = !!this.fxLayer && opts.mode !== 'dm';
     this.attachFx();
     this.glows = new Map();
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -256,9 +265,11 @@ export class MapRenderer {
         st.width = `${this.canvas.clientWidth}px`;
         st.height = `${this.canvas.clientHeight}px`;
       }
-      if (this.topEl.width !== w || this.topEl.height !== h) {
-        this.topEl.width = w;
-        this.topEl.height = h;
+      for (const cv of [this.topEl, this.midEl]) {
+        if (cv && (cv.width !== w || cv.height !== h)) {
+          cv.width = w;
+          cv.height = h;
+        }
       }
     }
     // Automatisch eingepasste Ansichten bei Größenänderung neu einpassen
@@ -415,7 +426,7 @@ export class MapRenderer {
 
   /** Zusätzliche Ebenen über der Karte (zum Einhängen neben die Canvas). */
   get layers() {
-    return [this.fxLayer, this.topEl, this.pingLayer].filter(Boolean);
+    return [this.anim?.el, this.midEl, this.fxLayer, this.topEl, this.pingLayer].filter(Boolean);
   }
 
   /** Ebenen in richtiger Reihenfolge direkt hinter die Canvas hängen (auch wenn sie erst später ins Dokument kommt). */
@@ -457,6 +468,33 @@ export class MapRenderer {
     setTimeout(() => el.remove(), 2200);
   }
 
+  /**
+   * Sichtfläche eines Lichts zwischen den Wänden der Karte (Kartenkoordinaten) – oder null ohne Wände in Reichweite.
+   * Wird je Licht gemerkt und nur neu berechnet, wenn sich Lage, Reichweite oder die Wände ändern.
+   */
+  lightArea(map, li, x, y, total) {
+    const walls = map.walls;
+    if (!walls?.length) return null;
+    this.areas ||= new Map();
+    const key = `${map.id}|${x}|${y}|${total}|${walls.length}|${map.assetId}|${doorState(map)}`;
+    const hit = this.areas.get(li.id);
+    if (hit?.key === key) return hit.poly;
+    const poly = visibilityPolygon(x, y, total, wallsWithDoors(map));
+    this.areas.set(li.id, { key, poly });
+    if (this.areas.size > 200) this.areas.delete(this.areas.keys().next().value);
+    return poly;
+  }
+
+  /** Beschneidet die Zeichenfläche auf die Sichtfläche eines Lichts (ohne Wände: keine Einschränkung). */
+  clipToLight(ctx, map, li, x, y, total) {
+    const poly = this.lightArea(map, li, x, y, total);
+    if (!poly) return;
+    ctx.beginPath();
+    poly.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.closePath();
+    ctx.clip();
+  }
+
   /** Flackernder Lichtschein je Fackel als HTML-Element; Position bei jedem Neuzeichnen abgleichen. */
   syncGlows(map) {
     if (!this.fxLayer) return;
@@ -482,7 +520,15 @@ export class MapRenderer {
       const pos = this.mapToScreen(x, y);
       const r = (feetToPx(map, li.bright ?? 20) + feetToPx(map, li.dim ?? 20)) * this.view.scale;
       const white = !li.color || li.color === '#ffffff';
-      const box = { left: `${pos.x - r}px`, top: `${pos.y - r}px`, width: `${2 * r}px`, height: `${2 * r}px` };
+      // An Wänden endet auch der flackernde Schein: Sichtfläche als Ausschnitt des Elements
+      const area = this.lightArea(map, li, x, y, feetToPx(map, (li.bright ?? 20) + (li.dim ?? 20)));
+      const clipPath = area
+        ? `polygon(${area.map(([px, py]) => {
+            const q = this.mapToScreen(px, py);
+            return `${(q.x - pos.x + r).toFixed(1)}px ${(q.y - pos.y + r).toFixed(1)}px`;
+          }).join(',')})`
+        : 'none';
+      const box = { left: `${pos.x - r}px`, top: `${pos.y - r}px`, width: `${2 * r}px`, height: `${2 * r}px`, clipPath };
       Object.assign(fx.shade.style, box, { backgroundImage: `url(${glowSprite('#000000', 0.38)})` });
       Object.assign(fx.glow.style, box, { backgroundImage: `url(${glowSprite(white ? '#ffd9a8' : li.color, white ? 0.13 : 0.2)})` });
     }
@@ -761,7 +807,23 @@ export class MapRenderer {
     // Reines Animationsbild auf Tisch/Spieler-Display: nur die Bereiche um flackernde Lichter und
     // Pings neu zeichnen (plus die des letzten Bildes, damit nichts stehen bleibt)
     let clip = null;
-    if (!rebuildTop && this.mode !== 'dm' && !this.overlay && !this.screenOverlay && map && img && !this.blackout && this.prevRects) {
+    // Belebte Karte: nur auf starken Anzeigen und nur, wenn die Karte Daten dafür mitbringt
+    let animOn = false;
+    if (this.animWanted && this.highPerf && map?.anim && img && !this.blackout) {
+      if (this.anim) animOn = true;
+      else if (!this.animLoading) {
+        this.animLoading = true;
+        import('./mapanim.js')
+          .then((m) => {
+            this.anim = new m.MapAnim();
+            this.midEl = Object.assign(document.createElement('canvas'), { className: 'mr-top' });
+            this.resize(); // hängt die neuen Ebenen ein, bringt sie auf Größe und zeichnet neu
+          })
+          .catch(() => {});
+      }
+    }
+    this.anim?.sync(animOn ? map : null, this);
+    if (!rebuildTop && !animOn && this.mode !== 'dm' && !this.overlay && !this.screenOverlay && map && img && !this.blackout && this.prevRects) {
       const current = this.animationRects(map, now);
       clip = current.concat(this.prevRects);
       this.prevRects = current;
@@ -810,11 +872,12 @@ export class MapRenderer {
         this.applyTransform(b);
         b.imageSmoothingQuality = 'high';
         this.drawMapImage(b, img, W, H);
+        for (const d of Object.values(map.doors || {})) drawDoor(b, d, { dm: this.dmLook });
         const g = gridOf(map);
         if (g.show && g.size > 4) this.drawGrid(b, map, W, H);
         this.drawDrawings(b, map, 'below');
         for (const aoe of Object.values(map.aoes || {})) this.drawAoe(b, map, aoe);
-        this.drawTokens(b, map);
+        if (!animOn) this.drawTokens(b, map);
         this.lightDirty = true;
         this.syncGlows(map);
       }
@@ -832,8 +895,21 @@ export class MapRenderer {
       }
       ctx.drawImage(this.baseCanvas, 0, 0);
 
+      // Belebte Karte: Spielfiguren und Licht auf die Ebene über den Bäumen
+      let lctx = ctx;
+      if (this.midEl && (animOn || this.midUsed)) {
+        const m = this.midEl.getContext('2d', this.ctxOpts);
+        m.setTransform(1, 0, 0, 1, 0, 0);
+        m.clearRect(0, 0, this.midEl.width, this.midEl.height);
+        this.midUsed = animOn;
+        if (animOn) {
+          this.applyTransform(m);
+          this.drawTokens(m, map);
+          lctx = m;
+        }
+      }
       // 2. Licht (bei flackernden Lichtern in jedem Bild, sonst aus dem Cache)
-      if (lit) animate = this.drawLighting(ctx, map, now) || animate;
+      if (lit) animate = this.drawLighting(lctx, map, now) || animate;
 
       if (!direct) {
         tctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -842,8 +918,12 @@ export class MapRenderer {
         if (this.overlay) this.overlay(tctx, map, now);
         animate = this.drawPings(tctx, map, now) || animate;
       }
-    } else if (rebuild) {
-      this.syncGlows(null);
+    } else {
+      if (rebuild) this.syncGlows(null);
+      if (this.midUsed) {
+        this.midEl.getContext('2d', this.ctxOpts).clearRect(0, 0, this.midEl.width, this.midEl.height);
+        this.midUsed = false;
+      }
     }
     if (this.ruler || this.rulerEl) this.syncRuler();
     if (!(map && img && !this.blackout) && !this.blackout && this.mode === 'dm') {
@@ -1171,10 +1251,13 @@ export class MapRenderer {
       const grad = g.createRadialGradient(x, y, 0, x, y, total);
       grad.addColorStop(0, hexA(li.color, 0.28));
       grad.addColorStop(1, hexA(li.color, 0));
+      g.save();
+      this.clipToLight(g, map, li, x, y, total);
       g.fillStyle = grad;
       g.beginPath();
       g.arc(x, y, total, 0, Math.PI * 2);
       g.fill();
+      g.restore();
     }
   }
 
@@ -1188,8 +1271,22 @@ export class MapRenderer {
     let darkness = 1 - ambient;
     if (this.dmLook) darkness *= 0.5;
     l.fillStyle = `rgba(0,0,10,${darkness})`;
-    l.fillRect(0, 0, lc.width, lc.height);
-    this.applyTransform(l, K);
+    if (map.lighting.indoor && map.zones?.some((z) => !z.out)) {
+      // Nur innen dunkel: draußen ist Tag, in Häusern, Kellern und Höhlen braucht es Licht
+      this.applyTransform(l, K);
+      l.beginPath();
+      for (const z of map.zones) {
+        if (z.out) continue; // Burghof, ummauerte Stadt: unter freiem Himmel
+        const p = z.in || z.pts;
+        l.moveTo(p[0], p[1]);
+        for (let i = 2; i < p.length; i += 2) l.lineTo(p[i], p[i + 1]);
+        l.closePath();
+      }
+      l.fill();
+    } else {
+      l.fillRect(0, 0, lc.width, lc.height);
+      this.applyTransform(l, K);
+    }
     l.globalCompositeOperation = 'destination-out';
     for (const li of lights) {
       const { x, y } = lightPos(map, li);
@@ -1211,10 +1308,14 @@ export class MapRenderer {
       grad.addColorStop(b + (1 - b) * 0.35, 'rgba(0,0,0,0.55)');
       grad.addColorStop(b + (1 - b) * 0.7, 'rgba(0,0,0,0.2)');
       grad.addColorStop(1, 'rgba(0,0,0,0)');
+      l.save();
+      // Sichtfläche mit der unverflackerten Reichweite: so bleibt sie im Zwischenspeicher
+      this.clipToLight(l, map, li, x, y, feetToPx(map, (li.bright ?? 20) + (li.dim ?? 20)));
       l.fillStyle = grad;
       l.beginPath();
       l.arc(x, y, total, 0, Math.PI * 2);
       l.fill();
+      l.restore();
     }
   }
 
@@ -1649,10 +1750,12 @@ export function applyFogOp(m, op, W, H) {
     m.fillRect(op.x, op.y, op.w, op.h);
   } else if (op.s === 'poly' && op.pts?.length >= 6) {
     m.beginPath();
-    m.moveTo(op.pts[0], op.pts[1]);
-    for (let i = 2; i < op.pts.length; i += 2) m.lineTo(op.pts[i], op.pts[i + 1]);
-    m.closePath();
-    m.fill();
+    for (const p of [op.pts, ...(op.holes || [])]) {
+      m.moveTo(p[0], p[1]);
+      for (let i = 2; i < p.length; i += 2) m.lineTo(p[i], p[i + 1]);
+      m.closePath();
+    }
+    m.fill('evenodd');
   } else if (op.s === 'stroke' && op.pts?.length >= 2) {
     m.lineCap = 'round';
     m.lineJoin = 'round';

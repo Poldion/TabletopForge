@@ -329,6 +329,14 @@ const builders = {
             h('span.small.muted', tr('Umgebung')),
             h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: map.lighting?.ambient ?? 0.15, style: { flex: 1 }, oninput: (e) => sync.set(P('lighting'), { enabled: true, ...(map.lighting || {}), ambient: Number(e.target.value) }) }),
           ),
+          // Lichtstimmungen auf einen Klick; gebaute Karten kennen ihre Räume und können nur innen dunkel sein
+          h(
+            'div.row',
+            { style: { marginTop: '6px', flexWrap: 'wrap' } },
+            h('button.small', { onclick: () => sync.set(P('lighting'), { ...(map.lighting || {}), enabled: false }) }, tr('Tag')),
+            [[tr('Dämmerung'), 0.5], [tr('Nacht'), 0.2], [tr('Unter der Erde'), 0.06]].map(([label, ambient]) => h('button.small', { class: map.lighting?.enabled && Math.abs((map.lighting.ambient ?? 0.15) - ambient) < 0.03 ? 'active' : '', onclick: () => sync.set(P('lighting'), { ...(map.lighting || {}), enabled: true, ambient }) }, label)),
+            map.zones?.some((z) => !z.out) ? h('label.inline.small', { title: tr('Draußen bleibt es hell – dunkel ist es nur in Räumen und Höhlen der gebauten Karte') }, h('input', { type: 'checkbox', checked: !!map.lighting?.indoor, onchange: (e) => sync.set(P('lighting'), { ambient: 0.15, ...(map.lighting || {}), enabled: true, indoor: e.target.checked }) }), tr('nur innen dunkel')) : null,
+          ),
           h(
             'div.list',
             Object.values(map.lights || {}).map((l) =>

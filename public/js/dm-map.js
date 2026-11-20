@@ -3,6 +3,7 @@
 import { h, uid, clear, bindInput, byOrder, TOKEN_COLORS, toast, fill } from './util.js';
 import { MapRenderer, gridOf, snapPoint, snapViewCenter, inAoe, feetToPx, lightPos, drawStroke, FOG_STYLES, fogStyleOf } from './maprender.js';
 import { Viewport } from './viewport.js';
+import { doorAt, zoneAt, zoneOp, zoneShown } from './doors.js';
 import { tableCells } from '/shared/calibration.js';
 import { addCreatureToInitiative } from './creatures-view.js';
 import { putOnTable } from './table-view.js';
@@ -23,6 +24,7 @@ const TOOL_GROUPS = [
     ['reveal', 'sun', tr('Aufdecken'), tr('Nebel mit dem Pinsel aufdecken (F)')],
     ['hide', 'cloud', tr('Verdecken'), tr('Nebel mit dem Pinsel wieder verdecken (H)')],
     ['revealRect', 'rect', tr('Rechteck'), tr('Rechteckigen Bereich aufdecken')],
+    ['revealRoom', 'home', tr('Raum'), tr('Ganzen Raum einer gebauten Karte aufdecken – mit Umschalt-Taste wieder verdecken')],
   ]],
   [tr('Setzen'), [
     ['token', 'token', tr('Token'), tr('Spieler, NSC oder Gegner platzieren (K)')],
@@ -270,6 +272,8 @@ export function createMapEditor(sync, cid, hooks = {}) {
     for (const a of Object.values(map.aoes || {})) {
       if (Math.hypot(a.x - x, a.y - y) <= Math.max(14 / renderer.view.scale, gridOf(map).size / 4) || inAoe(map, a, x, y)) return { type: 'aoe', id: a.id };
     }
+    const door = doorAt(map, x, y, 4 / renderer.view.scale);
+    if (door) return { type: 'door', id: door.id };
     return null;
   }
 
@@ -443,6 +447,11 @@ export function createMapEditor(sync, cid, hooks = {}) {
         select(null);
         return false;
       }
+      if (hit.type === 'door') {
+        // Tür: ein Klick öffnet oder schließt sie (Ziehen verschiebt nichts)
+        drag = { door: hit.id, x: e.clientX, y: e.clientY };
+        return true;
+      }
       if (hit.type === 'token' && additive) {
         const next = new Set(picked);
         if (next.has(hit.id)) next.delete(hit.id);
@@ -495,6 +504,20 @@ export function createMapEditor(sync, cid, hooks = {}) {
           startStream('fog', [p.x, p.y]);
           preview = { type: 'brush', x: p.x, y: p.y, r: brushRadius() };
           break;
+        case 'revealRoom': {
+          if (!map.zones?.length) {
+            toast(map.built ? tr('Diese Karte kennt ihre Räume noch nicht – bitte einmal im Kartenbauer öffnen und „Karte übernehmen“') : tr('Räume kennt nur eine Karte aus dem Kartenbauer – hier bitte Pinsel oder Rechteck nehmen'), 4500);
+            break;
+          }
+          const zone = zoneAt(map, p.x, p.y);
+          if (!zone) {
+            toast(tr('Hier ist kein geschlossener Raum – im Freien bitte Pinsel oder Rechteck nehmen'), 3500);
+            break;
+          }
+          if (!map.fog?.enabled) sync.merge(P('fog'), { enabled: true });
+          sync.push(P('fog', 'ops'), [zoneOp(zone, e.shiftKey !== !!opt.roomHide)]);
+          break;
+        }
         case 'revealRect':
           if (!map.fog?.enabled) sync.merge(P('fog'), { enabled: true });
           preview = { type: 'rect', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
@@ -598,6 +621,12 @@ export function createMapEditor(sync, cid, hooks = {}) {
     },
     onToolUp(e, p) {
       const map = M();
+      if (drag?.door && map?.doors?.[drag.door] && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) {
+        const door = map.doors[drag.door];
+        if (door.locked && !door.open) toast(tr('Die Tür ist verschlossen – rechts lässt sie sich aufschließen'), 2500);
+        else setDoor(door, !door.open);
+        select({ type: 'door', id: door.id });
+      }
       // Rahmen gezogen: Position übernehmen und (falls die ganze Karte gezeigt wurde) zum Ausschnitt wechseln
       if (drag?.tv && drag.pending) sync.merge(['display', 'table'], { ...drag.pending, fit: false });
       if (drag?.box && map && preview?.type === 'select') {
@@ -787,6 +816,20 @@ export function createMapEditor(sync, cid, hooks = {}) {
         h('button.small', { onclick: () => sync.set(P('fog', 'ops'), [{ m: 'reveal', s: 'all' }]) }, tr('Alles aufdecken')),
         h('button.small', { onclick: () => confirm(tr('Gesamte Karte wieder verdecken?')) && sync.set(P('fog', 'ops'), []) }, tr('Alles verdecken')),
       );
+    } else if (t === 'revealRoom') {
+      // Ohne Umschalt-Taste (Tablet): Aufdecken oder Verdecken umschalten
+      const reveal = M()?.fog?.doorReveal !== false;
+      const doorBox = h('input', { type: 'checkbox', checked: reveal });
+      doorBox.addEventListener('change', () => sync.merge(P('fog'), { doorReveal: doorBox.checked }));
+      add(
+        h('div.row', { style: { gap: '2px' } },
+          h('button.small', { class: opt.roomHide ? '' : 'active', onclick: () => ((opt.roomHide = false), renderOptions()) }, icon('sun'), tr(' Aufdecken')),
+          h('button.small', { class: opt.roomHide ? 'active' : '', style: opt.roomHide ? { background: '#6b6f7a', borderColor: '#9aa0ad', color: '#fff' } : null, onclick: () => ((opt.roomHide = true), renderOptions()) }, icon('cloud'), tr(' Verdecken')),
+        ),
+        h('label.row', { title: tr('Öffnet die Spielleitung eine Tür, werden die Räume beiderseits aufgedeckt'), style: { gap: '4px', alignItems: 'center' } }, doorBox, h('span.small', tr('Türen decken auf'))),
+        h('button.small', { onclick: () => sync.set(P('fog', 'ops'), [{ m: 'reveal', s: 'all' }]) }, tr('Alles aufdecken')),
+        h('button.small', { onclick: () => confirm(tr('Gesamte Karte wieder verdecken?')) && sync.set(P('fog', 'ops'), []) }, tr('Alles verdecken')),
+      );
     } else if (t === 'token') {
       const name = h('input', { value: opt.token.name, style: { width: '130px' } });
       name.addEventListener('input', () => (opt.token.name = name.value));
@@ -942,9 +985,36 @@ export function createMapEditor(sync, cid, hooks = {}) {
     );
   }
 
+  /** Tür öffnen oder schließen. Geht sie auf und ist der Nebel an, erscheinen die Räume beiderseits. */
+  function setDoor(door, open) {
+    const map = M();
+    sync.set(P('doors', door.id, 'open'), open);
+    if (!open || !map.fog?.enabled || map.fog.doorReveal === false) return;
+    const fresh = (door.z || []).map((id) => id && map.zones?.find((z) => z.id === id)).filter((z) => z && !zoneShown(map, z));
+    if (fresh.length) sync.push(P('fog', 'ops'), fresh.map((z) => zoneOp(z)));
+  }
+
+  /** Tür einer gebauten Karte: öffnen, schließen, abschließen. */
+  function renderDoorInspector(map) {
+    const door = map?.doors?.[selected.id];
+    if (!door) {
+      inspector.classList.add('hidden');
+      return;
+    }
+    inspector.classList.remove('hidden');
+    const set = (k, v) => (k === 'open' ? setDoor(door, v) : sync.set(P('doors', door.id, k), v));
+    clear(inspector);
+    inspector.append(
+      h('div.row', h('strong.grow', door.secret ? tr('Geheimtür') : tr('Tür')), h('button.small', { onclick: () => select(null), title: tr('Schließen') }, icon('x'))),
+      h('div.row', h('button.small.primary', { disabled: door.locked && !door.open, onclick: () => set('open', !door.open) }, door.open ? tr('Tür schließen') : tr('Tür öffnen')), h('label.row', h('input', { type: 'checkbox', checked: !!door.locked, onchange: (e) => set('locked', e.target.checked) }), tr(' verschlossen'))),
+      h('div.muted.small', door.secret ? tr('Am Spieltisch sieht die Geheimtür aus wie Wand, bis sie offen ist.') : tr('Eine geschlossene Tür hält das Licht auf. Ein Klick auf die Tür öffnet und schließt sie.')),
+    );
+  }
+
   function renderInspector() {
     const map = M();
     if (selected?.type === 'tokens') return renderMultiInspector(map);
+    if (selected?.type === 'door') return renderDoorInspector(map);
     const obj = selected && map?.[selected.type === 'token' ? 'tokens' : selected.type === 'light' ? 'lights' : 'aoes']?.[selected.id];
     if (!obj) {
       inspector.classList.add('hidden');
@@ -1079,12 +1149,14 @@ export function createMapEditor(sync, cid, hooks = {}) {
   }
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    // Nur solange die Karte zu sehen ist – sonst löschte Entf im Kartenbauer oder in der Vorbereitung ein hier gewähltes Token
+    if (!renderer.canvas.getClientRects().length) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected?.type === 'tokens') {
       if (!confirm(tr('{size} Tokens löschen?', { size: picked.size }))) return;
       sync.do([...picked].map((id) => ({ t: 'del', p: P('tokens', id) })));
       select(null);
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected && selected.type !== 'door') {
       const coll = selected.type === 'token' ? 'tokens' : selected.type === 'light' ? 'lights' : 'aoes';
       sync.del(P(coll, selected.id));
       select(null);

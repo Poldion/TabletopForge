@@ -44,6 +44,83 @@ lying flat) and a player display, all from one browser.
   there; several: whatever the sessions linked).
 - **Prep mode:** bundle the maps, handouts and lore of a session as quick picks.
 - **Maps:** battle, location and travel/world maps; align the grid via columns/rows or by drawing a rectangle.
+- **Map builder** (Maps → “Build your own map”): put together maps in a hand-drawn style without an image file.
+  - **Templates:** a new map starts empty or from a template – lakeside tavern, crypt, cave, overgrown ruin, riverside
+    village, riverside city, hilltop fortress. The template is only the start; everything can be changed afterwards. In the select tool “Save scene”
+    stores the map as a file and “Load scene” brings it back – in another campaign, too.
+  - **Terrain** is painted with a brush: water (with a sandy rim and shoreline), paths (narrow trails), dirt (soft,
+    trodden ground) and elevations – rock plateaus with an edge and a shadow, in up to three levels as terraces.
+    “Erase” (or Alt) removes it again.
+  - **Rooms** are drawn as rectangles or circles and snap to half squares. Overlapping and adjoining rooms merge into
+    one building; the stone wall follows the combined outline by itself (round towers included). Set the **floor** of
+    each room with one click: planks (three tones), flagstones, cobblestone, dirt. “Open” gives an area without walls
+    (porch, jetty). Interior walls (wood or stone) are drawn from point to point; **doors and windows** are placed with
+    a click on a wall.
+  - **Objects** from the catalogue (about 150 pieces in the groups furniture, supplies, dungeon, buildings, outdoors,
+    nature, ship & harbour, with a **search field** and a “Recently used” row): click, place, rotate with R, mirror
+    with F, resize, duplicate (Ctrl+D), roll a different variant, bring to front or send to back (Page Up/Down). The
+    arrow keys nudge the selection (Shift for fine steps); Alt+click on an object picks it as the template for the
+    next one. Moving a room takes its doors, windows, interior walls and furniture along.
+  - **Table frame and extending:** “Table” in the header shows a frame the size of the game table at the pointer, so
+    you can see what fits on screen at once. “Extend …” adds five squares on one side of the map; on the left and
+    top the content moves along.
+  - **Dungeons and caves:** in the “Dungeon” and “Cave” environments the map is solid rock. Rooms and corridors are
+    drawn as rooms (they merge like buildings); natural passages and caverns are painted in with the **Cave** terrain
+    brush – with a rock rim, the shadow of the wall and rock islands where you leave them standing. The rock wall stops
+    light. Trees become giant mushrooms there. The “Dungeon” catalogue has pillars, sarcophagus, altar, throne, cage,
+    skeleton, traps (pit, spikes, pressure plate, trapdoor), lever, portcullis, spiral staircase, treasure, crystals,
+    stalagmites, a magic circle and more.
+  - **Ruins:** a room marked “Ruin” gets crumbling walls with gaps and loose stones, the floor is overgrown in places,
+    and light falls through the gaps.
+  - **Overview maps** (scale at the top set to “Overview map”): for villages, towns, castles and regions. Trees, bushes
+    and rocks are placed small; the “Buildings” catalogue has houses with thatched, tiled and slate roofs, an L-shaped
+    house, barn, church, windmill, round tower, keep, wall tower, gatehouse, stone bridge, fields, a ship and more. The
+    bright side of a roof always faces the light when you rotate it. The **Castle wall** wall tool draws town and castle
+    walls with battlements and towers at the ends; “Door” on the wall makes a gate. Maps may be up to 80 squares wide
+    or high (3600 squares in total at most).
+  - **Cities and fortresses:** the terrain brush **Street** paints paved streets and – with a large brush – squares.
+    The fill area **Houses** fills a dragged-out area with rows of houses: small town houses in seven roof colours and
+    several shapes, fronts facing the lane, neighbours often in the same colour; streets, paths, water and walls stay
+    clear. Orientation, density and house size of the quarter can be set afterwards, and every house moved
+    individually. With the wall tool you set long **wall runs** point by point: every click is a corner, a click on
+    the start closes the ring, double-click, Enter or Esc finishes. Besides the castle wall (with a tower at every
+    corner) there is the **palisade**. New in the “Buildings” catalogue: town house, row of houses, courtyard house,
+    town hall, great hall, warehouse, market hall, stable, square tower, large round tower, bastion, drawbridge.
+    Paths, dirt and streets now also lie on raised ground – so the castle hill gets its approach road and yard.
+    Walled yards and cities can be revealed with the Room tool but count as outdoors for “dark indoors only”. Maps
+    of 80 × 45 squares with well over a thousand objects stay smooth on a PC; on very large maps a ghost image moves
+    while dragging and the map is redrawn on release.
+  - **Fill:** drag out an area (circle or rectangle) – it fills itself with trees, bushes, rocks or a mix, but only on
+    free ground (not in water, buildings, on paths or cliff edges). The density is adjustable, “Re-roll” distributes
+    anew; afterwards every piece can be clicked and moved individually.
+  - **Environment** at the top: meadow, desert (palms), tundra (conifers), magic forest, shire, town, dungeon, cave – ground, rock,
+    water and trees change with it. Everything casts one shared, hard shadow in a single direction.
+  - **Apply map** creates the map image (70 pixels per square, the grid fits right away) – the game table and the
+    player display show it like any other map. The scene stays saved and can be edited again in the map builder at any
+    time (“Edit in the map builder” on the map). Undo with Ctrl+Z.
+  - **Walls stop light:** on built maps light ends at the walls and falls through doors and windows. Fireplace,
+    campfire, brazier, lantern, wall torch, candles, street lamp and other glowing things become light sources of the
+    map (switch on under Map → “Dynamic lighting”); your own lights are kept when you apply the map again. Dungeons and
+    caves start with lighting switched on.
+  - **Doors during play:** doors are not baked into the map image. A click by the game master on a door (tool
+    “Select”) opens or closes it – on all displays. A closed door blocks light, an open one lets it out. In the panel
+    on the right the door can be locked (lock symbol, game master only). The state is kept even when the map is
+    changed in the map builder and applied again.
+  - **Secret doors** look like wall on the game table; the game master sees them marked with a dashed outline. A
+    click opens them: the passage appears and a piece of wall swings aside. Closed again, it is wall again. Set them
+    in the map builder with the door/window tool.
+  - **Reveal room by room:** built maps know their rooms. The fog tool **Room** reveals the whole room you click in
+    (walls and door frames included); with Shift it hides the room again. Doors, windows and interior walls separate
+    rooms; outdoors keep using the brush or rectangle. With fog switched on, **opening a door** also reveals the rooms
+    on both sides (switch off with “Doors reveal” in the bar of the Room tool, where you can also toggle between
+    revealing and hiding).
+  - **Lighting moods:** under “Fog, light & grid” buttons switch between day, dusk, night and “Underground”. “Dark
+    indoors only” keeps the outdoors bright and darkens only rooms and caves – for the cellar below the tavern or a
+    cave mouth by day.
+  - **Animated map:** on powerful displays (rendering “Smooth” under Screens, e.g. Orange Pi Zero 2W or a PC) the
+    trees sway, waves run to the shore and the water glitters, cloud shadows drift across the map and now and then a
+    bird flies past. Weak devices (Pi Zero 2 W) show the same map without motion. Can be switched off per map
+    (“Animated” in the map builder).
 - **Fog of war:** brush-based or rectangular, stored permanently across sessions.
 - **Game table calibration:** resolution, aspect ratio, diagonal or physical dimensions – one grid square on the TV is
   always exactly 1″ × 1″.

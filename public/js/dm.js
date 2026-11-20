@@ -20,6 +20,7 @@ import { loadBasalt } from './basalt.js';
 import { rules, loadRules, createRulesView } from './rules.js';
 import { createPartyView } from './party-view.js';
 import { createLibraryView } from './library-view.js';
+import { createBuilderView } from './mb-editor.js';
 import { createAdventuresView } from './adventure-view.js';
 import { createCampaignOverview, createAdventureOverview, newAdventure } from './overview-views.js';
 import { createScenesView, createReadyView } from './session-views.js';
@@ -92,6 +93,7 @@ const LEVELS = {
 };
 const LEVEL_OF = Object.fromEntries(Object.entries(LEVELS).flatMap(([lvl, items]) => items.map(([r]) => [r, lvl])));
 LEVEL_OF.play = 'play';
+LEVEL_OF.builder = 'adventure'; // Kartenbauer: gehört zu den Karten des Abenteuers
 // Seiten der Kampagne arbeiten ohne Abenteuer-Filter (Welt und Bestiarium zeigen alles)
 const CAMPAIGN_ROUTES = new Set(LEVELS.campaign.map(([r]) => r));
 // Welt und Bestiarium nutzen die Seiten Lore und Kreaturen – deren interne Links bleiben auf der Kampagnen-Ebene
@@ -175,6 +177,7 @@ prepViews.material = (id) => prepViews.sessions(id, { solo: true });
 prepViews.ready = createReadyView({ sync, cid, go, play });
 prepViews.wrapup = createWrapupView({ sync, cid, go });
 prepViews.rules = () => createRulesView({ page: true });
+prepViews.builder = createBuilderView({ sync, cid, go, play });
 
 // --- Modus: Vorbereiten | Spielen ------------------------------------------------------
 // Vorbereiten = Verwaltung (Sessions, Karten, Lore …) mit Seitenleiste; Spielen = Karte + Panels, ohne Seitenleiste.

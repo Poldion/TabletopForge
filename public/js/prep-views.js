@@ -449,6 +449,31 @@ export function createPrepViews({ sync, cid, go, play, adventure = () => null, s
             },
           }),
           h('div', { style: { marginTop: '8px' } }, pick),
+          h(
+            'button',
+            {
+              style: { marginTop: '8px', width: '100%' },
+              title: tr('Karte aus Gelände, Räumen und Gegenständen selbst zusammenstellen'),
+              onclick: async () => {
+                const title = await prompt2(tr('Name der neuen Karte'), tr('Neue Karte'));
+                if (!title) return;
+                // erst hier laden: der Katalog des Kartenbauers wird nur gebraucht, wenn jemand eine Karte baut
+                const { pickTemplate, reserveTemplate } = await import('./mb-templates.js');
+                const tpl = await pickTemplate();
+                if (tpl === null) return;
+                const m = { ...newMap({ id: null, name: title }, 'battle'), built: true };
+                try {
+                  if (tpl) await reserveTemplate(m.id, tpl);
+                } catch (err) {
+                  toast(err.message, 4000);
+                }
+                sync.set(['maps', m.id], m);
+                go(`builder/${m.id}`);
+              },
+            },
+            icon('pen'),
+            tr(' Karte selbst bauen'),
+          ),
           ai.image
             ? h(
                 'div',
@@ -655,6 +680,7 @@ export function createPrepViews({ sync, cid, go, play, adventure = () => null, s
           h(
             'div.row',
             h('h2.grow', tr('Karte bearbeiten')),
+            m0.built ? h('button', { onclick: () => go(`builder/${id}`) }, icon('pen'), tr(' Im Kartenbauer bearbeiten')) : null,
             h('button.primary', { onclick: () => play({ mapId: id }) }, icon('play'), tr(' Im Spiel öffnen')),
             h(
               'button.danger',
@@ -665,6 +691,7 @@ export function createPrepViews({ sync, cid, go, play, adventure = () => null, s
                   for (const s of Object.values(S().sessions)) {
                     if (s.mapIds?.includes(id)) ops.push({ t: 'set', p: ['sessions', s.id, 'mapIds'], v: s.mapIds.filter((x) => x !== id) });
                   }
+                  if (M().built) api('DELETE', `/api/campaigns/${cid}/scenes/${id}`).catch(() => {});
                   sync.do(ops);
                   go('maps');
                 },

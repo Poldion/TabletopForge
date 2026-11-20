@@ -280,6 +280,40 @@ app.get('/files/:id/:file', async (req, res) => {
   });
 });
 
+// --- Kartenbauer: Szenen ------------------------------------------------------
+// Die Szene einer gebauten Karte (Gelände, Räume, Gegenstände) liegt als eigene Datei neben der Kampagne – nicht im
+// laufend abgeglichenen Zustand: Spieltisch und Spieler-Display brauchen nur das fertige Kartenbild.
+
+const isSceneId = (id) => /^[a-z0-9]{6,32}$/i.test(id);
+const sceneFile = (cid, mapId) => path.join(store.campaignDir(cid), 'scenes', `${mapId}.json`);
+
+app.get('/api/campaigns/:id/scenes/:mapId', (req, res) => {
+  if (!campaignOr404(req, res)) return;
+  const file = isSceneId(req.params.mapId) ? sceneFile(req.params.id, req.params.mapId) : null;
+  if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'Szene nicht gefunden' });
+  res.type('json').send(fs.readFileSync(file));
+});
+
+app.put('/api/campaigns/:id/scenes/:mapId', (req, res) => {
+  const st = campaignOr404(req, res);
+  if (!st) return;
+  const scene = req.body;
+  if (!isSceneId(req.params.mapId) || !st.maps[req.params.mapId]) return res.status(404).json({ error: 'Karte nicht gefunden' });
+  if (!scene || typeof scene !== 'object' || Array.isArray(scene) || !Number.isInteger(scene.cols) || !Number.isInteger(scene.rows)) return res.status(400).json({ error: 'Ungültige Szene' });
+  const file = sceneFile(st.id, req.params.mapId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(scene));
+  fs.renameSync(tmp, file);
+  res.status(204).end();
+});
+
+app.delete('/api/campaigns/:id/scenes/:mapId', (req, res) => {
+  if (!campaignOr404(req, res)) return;
+  if (isSceneId(req.params.mapId)) fs.rmSync(sceneFile(req.params.id, req.params.mapId), { force: true });
+  res.status(204).end();
+});
+
 // --- SRD-Monster über Open5e (frei lizenzierte 5e-Daten) ---------------------
 
 const OPEN5E = 'https://api.open5e.com/v1/monsters/';

@@ -28,6 +28,7 @@ Werkzeugen für alles Spontane. Danach die **Nachbereitung** mit Recap und offen
 | **Kampagnen** | Mehrere Kampagnen, streng getrennt, gegliedert in Abenteuer und Sessions; Mediathek mit allen Karten und Bildern |
 | **Sessions** | Ablauf in Szenen, „Bereit?“-Prüfung, Spielen nach Drehbuch mit Stegreif-Werkzeugen (Strg+K), Nachbereitung mit Recap; offene Szenen wandern in die nächste Session |
 | **Karten** | Kampf-, Orts- und Weltkarten, Raster per Spalten/Zeilen oder Rechteck ausrichten, fliegender Wechsel |
+| **Kartenbauer** | Karten im gezeichneten Stil selbst bauen: Gelände malen, Räume aufziehen (verschmelzen zu Gebäuden), Türen, Fenster, Flächen mit Bäumen füllen; Dungeons, Höhlen und Ruinen; Übersichtskarten für ganze Städte und Festungen (Häuserviertel als Füllbereich, Straßen, Mauerzüge, Palisaden); Vorlagen; rund 150 durchsuchbare Gegenstände, acht Umgebungen; Wände halten Licht auf, Türen gehen im Spiel auf und zu, Geheimtüren, Nebel raumweise aufdecken; auf starken Anzeigen wiegen sich Bäume und bewegt sich das Wasser |
 | **Spieltisch** | Kalibrierung über Auflösung, Diagonale oder Maße – ein Feld ist auf dem TV immer genau 1″ × 1″ |
 | **Nebel des Krieges** | Pinsel oder Rechteck, dauerhaft über Sessions hinweg gespeichert |
 | **Taktik** | Verdeckt platzierte Gegner, Licht und Fackeln, Zaubereffekte und -bereiche (Kreis, Kegel, Würfel, Linie), Lineal |

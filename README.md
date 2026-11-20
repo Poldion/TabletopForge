@@ -28,6 +28,7 @@ improvised. Afterwards there is a **wrap-up** with a recap, and open scenes move
 | **Campaigns** | Several strictly separated campaigns, organised into adventures and sessions; a library with all maps and images |
 | **Sessions** | Scene-based run sheet, "Ready?" check, script-guided play with improvisation tools (Ctrl+K), wrap-up with recap; open scenes move to the next session |
 | **Maps** | Battle, location and world maps; align the grid by columns/rows or a rectangle; switch on the fly |
+| **Map builder** | Build maps in a hand-drawn style yourself: paint terrain, draw rooms (they merge into buildings), doors, windows, fill areas with trees; dungeons, caves and ruins; overview maps for whole cities and fortresses (house quarters as fill areas, streets, wall runs, palisades); templates; about 150 searchable objects, eight environments; walls stop light, doors open and close during play, secret doors, reveal fog room by room; on powerful displays trees sway and the water moves |
 | **Game table** | Calibration via resolution, diagonal or dimensions – one cell is always exactly 1″ × 1″ on the TV |
 | **Fog of war** | Brush or rectangle, saved across sessions |
 | **Tactics** | Hidden enemies, light and torches, spell effects and areas (circle, cone, cube, line), ruler |

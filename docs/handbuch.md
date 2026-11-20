@@ -41,6 +41,83 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
   verknüpft haben).
 - **Vorbereitung (Prep-Mode):** Karten, Handouts und Lore einer Session als Schnellauswahl bündeln
 - **Karten:** Kampf-, Orts- und Reise-/Weltkarten, Raster über Spalten/Zeilen oder per Rechteck ausrichten
+- **Kartenbauer** (Karten → „Karte selbst bauen“): Karten im gezeichneten Stil selbst zusammenstellen, ohne Bilddatei.
+  - **Vorlagen:** Eine neue Karte beginnt leer oder mit einer Vorlage – Taverne am See, Gruft, Höhle, Ruine im Grünen,
+    Dorf am Fluss, Stadt am Fluss, Festung auf dem Hügel. Die Vorlage ist nur der Anfang; alles lässt sich danach ändern. Im Auswahl-Werkzeug sichert
+    „Szene sichern“ die Karte als Datei, „Szene laden“ holt sie zurück – auch in eine andere Kampagne.
+  - **Gelände** mit dem Pinsel malen: Wasser (mit Sandsaum und Uferlinie), Wege (schmale Trampelpfade), Erde (weiche,
+    festgetretene Flächen) und Erhöhungen – Felsplateaus mit Kante und Schatten, in bis zu drei Stufen als Terrassen.
+    „Radieren“ (oder Alt) nimmt wieder weg.
+  - **Räume** als Rechteck oder Kreis aufziehen; sie rasten auf halbe Felder ein. Überlappende und angrenzende Räume
+    verschmelzen zu einem Gebäude, die Steinwand läuft von selbst um den gemeinsamen Umriss (runde Türme inklusive).
+    **Boden** je Raum mit einem Klick: Dielen (drei Töne), Steinplatten, Kopfstein, Erde. „Offen“ ergibt eine Fläche
+    ohne Wände (Veranda, Steg). Innenwände (Holz oder Stein) zieht man von Punkt zu Punkt, **Türen, Fenster und
+    Geheimtüren** setzt man per Klick auf eine Wand. Wer einen Raum verschiebt, nimmt dessen Türen, Fenster,
+    Innenwände und Einrichtung mit.
+  - **Gegenstände** aus dem Katalog (rund 150 Stück in den Gruppen Möbel, Vorräte, Dungeon, Gebäude, Draußen, Natur,
+    Schiff & Hafen, mit **Suchfeld** und der Reihe „Zuletzt benutzt“): anklicken, platzieren, mit R drehen, mit F
+    spiegeln, in der Größe ändern, verdoppeln (Strg+D), andere Variante würfeln, nach vorn oder hinten legen
+    (Bild auf/ab). Die Pfeiltasten schieben die Auswahl (mit Umschalt in feinen Schritten); Alt+Klick auf einen
+    Gegenstand nimmt ihn als Vorlage für den nächsten.
+  - **Tischrahmen und Anbauen:** „Tisch“ in der Kopfzeile zeigt am Mauszeiger einen Rahmen in der Größe des
+    Spieltischs – so sieht man, was auf einmal aufs Bild passt. „Anbauen …“ erweitert die Karte an einer Seite um
+    fünf Felder; links und oben wandert der Inhalt mit.
+  - **Dungeons und Höhlen:** In den Umgebungen „Dungeon“ und „Höhle“ ist die Karte massiver Fels. Räume und Gänge
+    zieht man als Räume auf (sie verschmelzen wie bei Gebäuden); natürliche Gänge und Kavernen malt man mit dem
+    Geländepinsel **Höhle** hinein – mit Felsrand, Schatten der Wand und Felsinseln, wo man sie stehen lässt. Die
+    Felswand hält Licht auf. Bäume werden dort zu Riesenpilzen. Im Katalog „Dungeon“: Säulen, Sarkophag, Altar, Thron,
+    Käfig, Skelett, Fallen (Grube, Stacheln, Druckplatte, Falltür), Hebel, Fallgitter, Wendeltreppe, Schatz, Kristalle,
+    Tropfsteine, magischer Kreis und mehr.
+  - **Ruinen:** Ein Raum mit „Ruine“ bekommt verfallene Mauern mit Lücken und losen Steinen, der Boden ist stellenweise
+    überwuchert, und das Licht fällt durch die Lücken.
+  - **Übersichtskarten** (Maßstab oben auf „Übersichtskarte“): für Dörfer, Städte, Burgen und Landstriche. Bäume,
+    Büsche und Felsen werden klein gesetzt; im Katalog „Gebäude“ stehen Häuser mit Stroh-, Ziegel- und Schieferdach,
+    Winkelhaus, Scheune, Kirche, Windmühle, Rundturm, Bergfried, Mauerturm, Torhaus, Steinbrücke, Felder, Schiff u. a.
+    Die helle Dachseite zeigt beim Drehen immer zum Licht. Mit dem Wandwerkzeug **Burgmauer** zieht man Stadt- und
+    Burgmauern mit Zinnen und Türmen an den Enden; „Tür“ auf der Mauer ergibt ein Tor. Karten dürfen bis 80 Felder
+    breit bzw. hoch sein (zusammen höchstens 3600 Felder).
+  - **Städte und Festungen:** Der Geländepinsel **Straße** malt gepflasterte Straßen und – mit großem Pinsel –
+    Plätze. Der Füllbereich **Häuser** füllt eine aufgezogene Fläche mit Häuserzeilen: kleine Stadthäuser in sieben
+    Dachtönen und mehreren Formen, die Front zur Gasse, Nachbarn oft im selben Ton; Straßen, Wege, Wasser und Mauern
+    bleiben frei. Ausrichtung, Dichte und Hausgröße des Viertels lassen sich danach einstellen, jedes Haus einzeln
+    verschieben. Im Wandwerkzeug setzt man lange **Mauerzüge** Punkt für Punkt: jeder Klick eine Ecke, ein Klick auf
+    den Anfang schließt den Ring, Doppelklick, Enter oder Esc beendet. Neben der Burgmauer (mit Turm an jeder Ecke)
+    gibt es die **Palisade**. Im Katalog „Gebäude“ neu: Stadthaus, Häuserzeile, Haus mit Innenhof, Rathaus, Große
+    Halle, Lagerhaus, Markthalle, Stall, eckiger Turm, großer Rundturm, Bastion, Zugbrücke. Wege, Erde und Straßen
+    liegen jetzt auch auf Erhöhungen – so bekommt der Burgberg Zufahrt und Hof. Ummauerte Höfe und Städte lassen sich
+    mit dem Raum-Werkzeug aufdecken, gelten bei „nur innen dunkel“ aber als draußen. Auch Karten mit 80 × 45 Feldern
+    und weit über tausend Gegenständen bleiben am PC flüssig; auf sehr großen Karten bewegt sich beim Ziehen ein
+    Geisterbild, und erst beim Loslassen wird neu gezeichnet.
+  - **Füllen:** eine Fläche aufziehen (Kreis oder Rechteck) – sie füllt sich von selbst mit Bäumen, Büschen, Felsen
+    oder einer Mischung, aber nur auf freiem Boden (nicht in Wasser, Gebäuden, auf Wegen oder Felskanten). Dichte
+    einstellbar, „Neu würfeln“ verteilt neu; danach lässt sich jedes Stück einzeln anklicken und verschieben.
+  - **Umgebung** oben wählbar: Wiese, Wüste (Palmen), Tundra (Nadelbäume), magischer Wald, Auenland, Stadt, Dungeon, Höhle – Boden,
+    Fels, Wasser und Bäume wechseln mit. Alles wirft einen gemeinsamen, harten Schatten in eine Richtung.
+  - **Karte übernehmen** erzeugt das Kartenbild (70 Pixel je Feld, Raster passt sofort) – Spieltisch und
+    Spieler-Display zeigen es wie jede andere Karte. Die Szene bleibt gespeichert und lässt sich jederzeit im
+    Kartenbauer weiterbearbeiten („Im Kartenbauer bearbeiten“ bei der Karte). Rückgängig mit Strg+Z.
+  - **Wände halten Licht auf:** Bei gebauten Karten endet das Licht an den Wänden und fällt durch Türen und Fenster.
+    Kamin, Lagerfeuer, Feuerschale, Laterne, Wandfackel, Kerzen, Straßenlaterne und andere leuchtende Dinge werden zu
+    Lichtquellen der Karte (einschalten unter Karte → „Dynamische Beleuchtung“); eigene Lichter bleiben beim erneuten
+    Übernehmen erhalten. Dungeon und Höhle starten gleich mit eingeschalteter Beleuchtung.
+  - **Türen im Spiel:** Türen stehen nicht fest im Kartenbild. Ein Klick der Spielleitung auf eine Tür (Werkzeug
+    „Auswahl“) öffnet oder schließt sie – auf allen Anzeigen. Eine geschlossene Tür hält das Licht auf, durch die
+    offene fällt es hinaus. Rechts lässt sich die Tür abschließen (Schloss-Zeichen, nur für die Spielleitung).
+    Der Zustand bleibt erhalten, auch wenn die Karte im Kartenbauer geändert und neu übernommen wird.
+  - **Geheimtüren** sehen am Spieltisch aus wie Wand; die Spielleitung sieht sie gestrichelt markiert. Ein Klick
+    öffnet sie: Der Durchgang erscheint, ein Stück Wand schwenkt zur Seite. Wieder geschlossen ist sie wieder Wand.
+  - **Raumweise aufdecken:** Gebaute Karten kennen ihre Räume. Das Nebel-Werkzeug **Raum** deckt mit einem Klick
+    den ganzen Raum auf, in dem man klickt (Wände und Türrahmen inklusive); mit Umschalt verdeckt es ihn wieder.
+    Türen, Fenster und Innenwände trennen Räume; das Freie deckt man weiter mit Pinsel oder Rechteck auf.
+    Ist der Nebel an, deckt auch das **Öffnen einer Tür** die Räume beiderseits auf (abschaltbar mit „Türen decken
+    auf“ in der Leiste des Raum-Werkzeugs; dort lässt sich auch zwischen Aufdecken und Verdecken umschalten).
+  - **Lichtstimmungen:** Unter „Nebel, Licht & Raster“ schalten Knöpfe zwischen Tag, Dämmerung, Nacht und „Unter der
+    Erde“. „Nur innen dunkel“ lässt es draußen hell und verdunkelt nur Räume und Höhlen – etwa für den Keller unter
+    der Taverne oder den Höhleneingang am Tag.
+  - **Belebte Karte:** Auf starken Anzeigen (Darstellung „Flüssig“ unter Bildschirme, z. B. Orange Pi Zero 2W oder ein
+    PC) wiegen sich die Bäume, auf dem Wasser laufen Wellen ans Ufer und glitzert es, Wolkenschatten ziehen über die
+    Karte und ab und zu fliegt ein Vogel vorbei. Schwache Geräte (Pi Zero 2 W) zeigen dieselbe Karte unbewegt. Je Karte
+    abschaltbar („Belebt“ im Kartenbauer).
 - **Nebel des Krieges:** pinselbasiert oder rechteckig, dauerhaft gespeichert über Sessions hinweg
 - **Spieltisch-Kalibrierung:** Auflösung, Bildformat, Diagonale oder physische Maße – ein Rasterfeld ist auf dem TV immer exakt 1″ × 1″
 - **Encounter:** Gegner/NSCs vorab verdeckt platzieren und mit einem Tipp aufdecken
