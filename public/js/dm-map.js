@@ -4,6 +4,7 @@ import { h, uid, clear, bindInput, byOrder, TOKEN_COLORS, toast, fill } from './
 import { MapRenderer, gridOf, snapPoint, snapViewCenter, inAoe, feetToPx, lightPos, drawStroke, FOG_STYLES, fogStyleOf } from './maprender.js';
 import { Viewport } from './viewport.js';
 import { doorAt, zoneAt, zoneOp, zoneShown, labelAt } from './doors.js';
+import { floorMap, floorPath, upperCount, lowerCount, shownFloor, floorList, floorLabel, hasFloors, tokenFloor } from './floors.js';
 import { tableCells } from '/shared/calibration.js';
 import { addCreatureToInitiative } from './creatures-view.js';
 import { putOnTable } from './table-view.js';
@@ -112,8 +113,9 @@ export function createMapEditor(sync, cid, hooks = {}) {
 
   const canvas = h('canvas', { style: { position: 'absolute', inset: 0, width: '100%', height: '100%' } });
   const renderer = new MapRenderer(canvas, { mode: 'dm', campaignId: cid, getState: S });
-  const M = () => S().maps[mapId];
-  const P = (...k) => ['maps', mapId, ...k];
+  // Karte und Pfade folgen dem gezeigten Stockwerk: im Obergeschoss gelten dessen Türen, Räume, Lichter und Nebel
+  const M = () => floorMap(S().maps[mapId]);
+  const P = (...k) => floorPath(S().maps[mapId], mapId, k);
 
   /** Von den verbundenen Tischanzeigen gemeldete Ausschnitte (in Feldern). */
   function tvViews() {
@@ -410,6 +412,8 @@ export function createMapEditor(sync, cid, hooks = {}) {
       hidden: !!opt.token.hidden,
       assetId: opt.token.assetId || null,
       creatureId: opt.token.creatureId || null,
+      // Figuren gehören zu dem Stockwerk, auf dem sie gesetzt werden
+      ...(shownFloor(S().maps[mapId]) ? { f: shownFloor(S().maps[mapId]) } : {}),
       x: p.x,
       y: p.y,
       hp: opt.token.hp ?? null,
@@ -972,6 +976,12 @@ export function createMapEditor(sync, cid, hooks = {}) {
     inspector.append(
       h('div.row', h('strong.grow', icon('token'), tr(' {length} Tokens ausgewählt', { length: tokens.length })), h('button.small', { onclick: () => select(null), title: tr('Auswahl aufheben') }, icon('x'))),
       h('div.small.muted', { style: { margin: '4px 0 8px' } }, tokens.map((t) => t.name).join(', ')),
+      floorSelect(shownFloor(S().maps[mapId]), (f) => {
+        // die ganze Gruppe wechselt das Stockwerk (z. B. die Treppe hinauf)
+        setAll('f', f);
+        select(null);
+        toast(tr('{length} Figuren stehen jetzt im Stockwerk „{floor}“', { length: tokens.length, floor: floorNameOf(S().maps[mapId], f) }), 3000);
+      }),
       h(
         'div.row',
         { style: { gap: '4px' } },
@@ -1101,6 +1111,12 @@ export function createMapEditor(sync, cid, hooks = {}) {
         h('div.row', h('strong.grow', icon('token'), tr(' Token')), h('button.small', { onclick: () => select(null), title: tr('Schließen') }, icon('x'))),
         input('name', { placeholder: tr('Name') }),
         h('div.grid2', kind, size),
+        floorSelect(tokenFloor(S().maps[mapId], obj), (f) => {
+          // die Figur wechselt das Stockwerk und verschwindet damit aus dieser Ansicht
+          sync.set(OP('f'), f);
+          select(null);
+          toast(tr('{name} steht jetzt im Stockwerk „{floor}“', { name: obj.name, floor: floorNameOf(S().maps[mapId], f) }), 3000);
+        }),
         h('div.grid2', h('div', h('label', tr('TP')), input('hp', { type: 'number' }, numOrNull)), h('div', h('label', tr('TP max')), input('maxHp', { type: 'number' }, numOrNull))),
         swatchRow(() => M()?.tokens?.[obj.id]?.color, (c) => sync.set(OP('color'), c)),
         h(
@@ -1170,12 +1186,50 @@ export function createMapEditor(sync, cid, hooks = {}) {
 
   // --- Öffentliche API ---------------------------------------------------------
 
-  const el = h('div.map-area', canvas, ...renderer.layers, toolbar, optionsBar, inspector);
+  // Stockwerk-Schalter: nur bei Karten mit weiteren Stockwerken. Ein Obergeschoss verdeckt, was darunter liegt, erst
+  // dann, wenn die Spielleitung es einblendet – etwa wenn die Gruppe die Treppe hinaufgeht.
+  const floorBar = h('div.map-floors.hidden');
+  let floorSig = '';
+  const floorNameOf = (raw, f) => floorLabel(f, upperCount(raw), lowerCount(raw), tr);
+  function syncFloors() {
+    const raw = mapId ? S().maps[mapId] : null;
+    const list = floorList(raw);
+    const cur = shownFloor(raw);
+    const sig = `${mapId}|${list.join()}|${cur}`;
+    if (sig === floorSig) return;
+    floorSig = sig;
+    floorBar.classList.toggle('hidden', list.length < 2);
+    fill(
+      floorBar,
+      list.map((f) =>
+        h(
+          'button.small',
+          {
+            type: 'button',
+            class: f === cur ? 'active' : '',
+            title: f > 0 ? tr('Dieses Stockwerk zeigen – auch auf dem Spieltisch. Was darunter liegt, scheint abgedunkelt durch.') : tr('Dieses Stockwerk zeigen – auch auf dem Spieltisch'),
+            onclick: () => (select(null), sync.set(['maps', mapId, 'floor'], f)),
+          },
+          floorNameOf(raw, f),
+        ),
+      ),
+    );
+  }
+  /** Auswahl „Stockwerk“ für Figuren: move(f) versetzt sie. Liefert null, wenn die Karte nur ein Erdgeschoss hat. */
+  function floorSelect(current, move) {
+    const raw = S().maps[mapId];
+    if (!hasFloors(raw)) return null;
+    const sel = h('select', { title: tr('Stockwerk der Figur – sie ist nur dort zu sehen') }, floorList(raw).map((f) => h('option', { value: f, selected: f === current }, floorNameOf(raw, f))));
+    sel.addEventListener('change', () => move(Number(sel.value)));
+    return sel;
+  }
+  const el = h('div.map-area', canvas, ...renderer.layers, toolbar, optionsBar, inspector, floorBar);
 
   function setMap(id) {
     if (mapId) views.set(mapId, { ...renderer.view });
     mapId = id || null;
     select(null);
+    syncFloors();
     renderer.setMap(mapId);
     const v = views.get(mapId);
     renderer.autoFit = null;
@@ -1229,6 +1283,7 @@ export function createMapEditor(sync, cid, hooks = {}) {
       toast(tr('Tippe auf die Karte, um „{name}“ zu platzieren', { name: preset.name }), 3000);
     },
     refresh(changed) {
+      syncFloors();
       renderer.requestRender();
       if ((changed.has('maps') || changed.has('*')) && selected) renderInspector();
       if (changed.has('assets') && opt.tool === 'token') renderOptions();

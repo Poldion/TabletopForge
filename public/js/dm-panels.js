@@ -1,4 +1,5 @@
 // Seitenpanels der Spielleitung. Jedes Panel liefert { el, refresh(changed) }.
+import { floorMap, floorPath } from './floors.js';
 import { h, uid, clear, bindInput, byOrder, sortBy, markdown, fileUrl, toast, uploadFiles, prompt2 } from './util.js';
 import { MAP_KINDS, isHandout, characterImageIds } from './components.js';
 import { sketchPad } from './sketch.js';
@@ -69,7 +70,8 @@ const builders = {
   // --- Karte: alles zur aktuellen Karte an einem Ort ---------------------------
   map({ sync, cid, currentMapId }) {
     const S = () => sync.state;
-    const M = () => S().maps[currentMapId()];
+    // wie in der Kartenansicht: Nebel, Lichter und Türen gehören zum gezeigten Stockwerk
+    const M = () => floorMap(S().maps[currentMapId()]);
     const editing = new Set(); // Textblöcke im Bearbeitungsmodus
     const openKey = 'dm:mapSections';
     let open;
@@ -184,7 +186,7 @@ const builders = {
       const map = M();
       if (!map) return h('p.muted.small', tr('Keine Karte geöffnet. Wähle oben eine Karte aus.'));
       const st = S();
-      const P = (...k) => ['maps', map.id, ...k];
+      const P = (...k) => floorPath(st.maps[map.id], map.id, k);
       const d = st.display;
       const onTable = d.table.mapId === map.id;
       const tokens = sortBy(Object.values(map.tokens || {}), (t) => `${t.kind}|${t.name}`);

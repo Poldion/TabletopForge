@@ -462,9 +462,12 @@ body.display {
 body.display.show-cursor {
   cursor: default;
 }
+/* absolute statt fixed: eine fest stehende Fläche legt der Browser auf eine eigene Grafikebene – auf dem Kiosk kostet
+   das in jedem Bild Zeit (siehe maprender.js, „lean“) */
 .display-canvas {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100vw;
   height: 100vh;
   display: block;

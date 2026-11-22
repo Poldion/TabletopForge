@@ -311,7 +311,7 @@ No updates over the network. Differences from the Raspberry Pi OS variant:
 | --- | --- |
 | SD card | partition 1: system (ext4, fixed size), partition 2: FAT `KIOSK` with `kiosk.json`, `cmdline.txt`, diagnostics |
 | Overlay | own initramfs script `build/armbian/kiosk-overlay`, active after the initial setup (original under `/media/root-ro`); can be switched off with `kiosk.overlay=0` in `extraargs` of `/boot/armbianEnv.txt` |
-| HDMI mode | the agent writes `video=HDMI-A-1:…` into `cmdline.txt` on `KIOSK`, the Armbian boot script reads it |
+| HDMI mode | the agent writes `video=HDMI-A-1:…` into `cmdline.txt` on `KIOSK`, the Armbian boot script reads it; the mode is selected when the browser starts via `CAGE_MODE` (patch in `buildroot/patches/cage`) – without it the screen would stay at its preferred mode |
 | Network | NetworkManager instead of systemd-networkd/netplan; zram via `armbian-zram-config` |
 
 ## Passing on images (licenses)

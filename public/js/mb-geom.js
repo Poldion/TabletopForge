@@ -736,6 +736,10 @@ export function zonesFromSegments(segs, W, H, g = 10, cell = CELL, minCells = 0.
 // --- Szenen aus Vorlagen und Dateien ------------------------------------------------------------------------------------
 
 const LISTS = ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels'];
+/** Was ein Obergeschoss (Eintrag in scene.uppers) enthält – Gelände, Größe und Umgebung gehören dem Erdgeschoss. */
+export const UPPER_LISTS = ['rooms', 'walls', 'openings', 'objects', 'labels'];
+/** Ein Untergeschoss (Eintrag in scene.lowers) liegt im Fels: dazu kommt Höhlenboden für Gänge und Kavernen. */
+export const LOWER_LISTS = [...UPPER_LISTS, 'cave'];
 
 /**
  * Fremde Szene prüfen und bereinigen: Listen ergänzen, Größe begrenzen, unbekannte Gegenstände weglassen
@@ -750,6 +754,26 @@ export function cleanScene(raw, known = () => true) {
   if (scene.cols * scene.rows > 3600) scene.rows = Math.floor(3600 / scene.cols);
   for (const k of LISTS) scene[k] = Array.isArray(scene[k]) ? scene[k].filter((x) => x && typeof x === 'object') : [];
   scene.objects = scene.objects.filter((o) => known(o.t) && Number.isFinite(o.x) && Number.isFinite(o.y));
+  // Obergeschosse von unten nach oben (höchstens vier), Untergeschosse von oben nach unten (höchstens drei); ein
+  // einzelnes „upper“ älterer Stände zählt als erstes Obergeschoss
+  const storeys = (raws, lists, max) => {
+    const out = raws.slice(0, max).map((u) => {
+      const st = {};
+      for (const k of lists) st[k] = Array.isArray(u?.[k]) ? u[k].filter((x) => x && typeof x === 'object') : [];
+      st.objects = st.objects.filter((o) => known(o.t) && Number.isFinite(o.x) && Number.isFinite(o.y));
+      return st;
+    });
+    // leere Stockwerke am äußeren Ende fallen weg
+    while (out.length && !lists.some((k) => out[out.length - 1][k].length)) out.pop();
+    return out;
+  };
+  const uppers = storeys([...(scene.upper && typeof scene.upper === 'object' ? [scene.upper] : []), ...(Array.isArray(scene.uppers) ? scene.uppers : [])], UPPER_LISTS, 4);
+  const lowers = storeys(Array.isArray(scene.lowers) ? scene.lowers : [], LOWER_LISTS, 3);
+  delete scene.upper;
+  if (uppers.length) scene.uppers = uppers;
+  else delete scene.uppers;
+  if (lowers.length) scene.lowers = lowers;
+  else delete scene.lowers;
   scene.seed = Number.isFinite(scene.seed) ? scene.seed : 1;
   delete scene.meta;
   return scene;
@@ -780,6 +804,24 @@ export function freshIds(scene, uid, random = Math.random) {
     if (o.fill) {
       if (fills.has(o.fill)) o.fill = fills.get(o.fill);
       else delete o.fill;
+    }
+  }
+  for (const floor of [...(scene.uppers || []), ...(scene.lowers || [])]) {
+    // weiteres Stockwerk: eigene Räume und Möbel, keine Füllbereiche
+    const up = new Map();
+    for (const r of floor.rooms || []) {
+      const id = uid();
+      up.set(r.id, id);
+      r.id = id;
+    }
+    for (const k of ['walls', 'openings', 'labels']) for (const x of floor[k] || []) x.id = uid();
+    for (const o of floor.objects || []) {
+      o.id = uid();
+      delete o.fill;
+      if (o.theme) {
+        if (up.has(o.theme)) o.theme = up.get(o.theme);
+        else delete o.theme;
+      }
     }
   }
   scene.seed = Math.floor(random() * 1e9);

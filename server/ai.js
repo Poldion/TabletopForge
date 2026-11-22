@@ -136,7 +136,7 @@ export async function testImage({ url, apiKey, provider } = {}) {
  * Text erzeugen. messages: [{ role: 'user'|'assistant', content }]; system: Anweisung.
  * Gibt den Text der Antwort zurück (ohne „Gedanken“-Block mancher Modelle).
  */
-export async function chat({ system, messages, json = false }) {
+export async function chat({ system, messages, json = false, long = false }) {
   if (!textOn()) throw new Error('Sprachmodell nicht eingerichtet');
   const body = {
     model: config.text.model,
@@ -146,7 +146,7 @@ export async function chat({ system, messages, json = false }) {
     // Antwort als JSON-Objekt (z.B. Zufallsbegegnungen); OpenAI-kompatible Server inkl. Ollama verstehen das
     ...(json ? { response_format: { type: 'json_object' } } : {}),
   };
-  const r = await call(`${textBase(config.text.url)}/chat/completions`, { key: config.text.apiKey, body, timeout: 180000 });
+  const r = await call(`${textBase(config.text.url)}/chat/completions`, { key: config.text.apiKey, body, timeout: long ? 420000 : 180000 }); // long: große Entwürfe auf langsamen Rechnern
   const j = await r.json();
   const text = String(j.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (!text) throw new Error('Leere Antwort des Sprachmodells');

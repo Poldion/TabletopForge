@@ -1616,6 +1616,66 @@ input.cm-ini-in {
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* Spielansicht: Stockwerk-Schalter einer Karte mit Obergeschoss */
+.map-floors {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(20, 18, 14, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  z-index: 3;
+}
+.map-floors.hidden {
+  display: none;
+}
+/* Hinweis, solange das Sprachmodell arbeitet */
+.mb-ai-busy {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(20, 18, 14, 0.92);
+  color: var(--accent);
+  animation: mb-ai-pulse 1.6s ease-in-out infinite;
+}
+@keyframes mb-ai-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+/* Stockwerk-Schalter über der Zeichenfläche */
+.mb-floors {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+.mb-floors button {
+  background: rgba(20, 18, 14, 0.82);
+}
+.mb-floors button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Ausführungen eines Gegenstands: kleinere Kacheln */
+.mb-palette.mb-var {
+  grid-template-columns: repeat(4, 1fr);
+  margin: 2px 0 6px;
+}
+.mb-palette.mb-var img {
+  height: 34px;
+}
 @media (max-width: 900px) {
   .mb-body {
     grid-template-columns: 58px 1fr;

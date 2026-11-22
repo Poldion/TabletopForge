@@ -321,7 +321,7 @@ gesperrt). Ohne Updates über das Netz. Unterschiede zur Raspberry-Pi-OS-Variant
 | --- | --- |
 | SD-Karte | Partition 1: System (ext4, feste Größe), Partition 2: FAT `KIOSK` mit `kiosk.json`, `cmdline.txt`, Diagnose |
 | Overlay | eigenes initramfs-Skript `build/armbian/kiosk-overlay`, aktiv nach der Ersteinrichtung (Original unter `/media/root-ro`); mit `kiosk.overlay=0` in `extraargs` von `/boot/armbianEnv.txt` abschaltbar |
-| HDMI-Modus | der Agent schreibt `video=HDMI-A-1:…` in `cmdline.txt` auf `KIOSK`, das Armbian-Startskript liest es ein |
+| HDMI-Modus | der Agent schreibt `video=HDMI-A-1:…` in `cmdline.txt` auf `KIOSK`, das Armbian-Startskript liest es ein; ausgewählt wird der Modus beim Start des Browsers über `CAGE_MODE` (Patch in `buildroot/patches/cage`) – ohne ihn bliebe es beim bevorzugten Modus des Bildschirms |
 | Netzwerk | NetworkManager statt systemd-networkd/netplan; zram über `armbian-zram-config` |
 
 ## Images weitergeben (Lizenzen)

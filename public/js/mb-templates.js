@@ -1,6 +1,7 @@
 // Kartenbauer: Schnellstart-Vorlagen und das Sichern/Laden einer Szene als Datei.
 // Die Vorlagen sind gewöhnliche Szenen (public/mb-templates/<id>.json) – nach dem Laden frei bearbeitbar.
-import { h, uid } from './util.js';
+import { h, uid, prompt2 } from './util.js';
+import { ai } from './ai.js';
 import { tr } from './i18n.js';
 import { freshIds, cleanScene } from './mb-geom.js';
 import { CATALOG } from './mb-assets.js';
@@ -39,29 +40,47 @@ export function prepare(raw) {
 
 /** Vorlage für eine neue Karte vormerken; der Kartenbauer holt sie beim Öffnen ab. */
 export async function reserveTemplate(mapId, id) {
-  pending.set(mapId, await loadTemplate(id));
+  // „ai:<Wunsch>“: der Kartenbauer lässt die Karte beim Öffnen vom Sprachmodell entwerfen
+  if (id.startsWith('ai:')) wishes.set(mapId, id.slice(3));
+  else pending.set(mapId, await loadTemplate(id));
 }
+// Wunsch für eine Karte, die das Sprachmodell entwerfen soll (Karte → Beschreibung)
+const wishes = new Map();
+export const takeWish = (mapId) => {
+  const w = wishes.get(mapId);
+  wishes.delete(mapId);
+  return w || null;
+};
 
-/** Auswahl: leere Karte oder eine Vorlage. Liefert '' (leer), die Kennung der Vorlage oder null (abgebrochen). */
+/**
+ * Auswahl: leere Karte, eine Vorlage oder (mit eingerichtetem Sprachmodell) ein Entwurf der KI. Liefert '' (leer), die
+ * Kennung der Vorlage, 'ai:<Wunsch>' oder null (abgebrochen).
+ */
 export function pickTemplate() {
   return new Promise((resolve) => {
     const card = (id, label, hint, img) =>
-      h('button.mb-tpl', { type: 'button', onclick: () => dlg.close(`pick:${id}`) }, img ? h('img', { src: img, alt: '', loading: 'lazy' }) : h('div.mb-tpl-empty', '+'), h('strong', label), h('span.small.muted', hint));
+      h('button.mb-tpl', { type: 'button', onclick: () => dlg.close(`pick:${id}`) }, img ? h('img', { src: img, alt: '', loading: 'lazy' }) : h('div.mb-tpl-empty', id === 'ai' ? '✦' : '+'), h('strong', label), h('span.small.muted', hint));
     const dlg = h(
       'dialog.modal.mb-tpl-dialog',
       h('h3', tr('Womit beginnen?')),
-      h('div.mb-tpls', card('', tr('Leere Karte'), tr('Wiese, 28 × 16 Felder – alles selbst bauen')), TEMPLATES.map((t) => card(t.id, t.label, t.hint, `/mb-templates/${t.id}.webp`))),
+      h('div.mb-tpls', card('', tr('Leere Karte'), tr('Wiese, 28 × 16 Felder – alles selbst bauen')), ai.text ? card('ai', tr('Von der KI entwerfen lassen'), tr('Beschreibe, was die Karte zeigen soll – Räume, Einrichtung und Gelände entstehen als Entwurf zum Weiterbauen')) : null, TEMPLATES.map((t) => card(t.id, t.label, t.hint, `/mb-templates/${t.id}.webp`))),
       h('p.small.muted', tr('Eine Vorlage ist nur der Anfang: Umgebung, Räume und Einrichtung lassen sich danach frei ändern.')),
       h('div.row.end', h('button', { type: 'button', onclick: () => dlg.close('cancel') }, tr('Abbrechen'))),
     );
-    dlg.addEventListener('close', () => {
-      resolve(dlg.returnValue.startsWith('pick:') ? dlg.returnValue.slice(5) : null);
+    dlg.addEventListener('close', async () => {
+      const pick = dlg.returnValue.startsWith('pick:') ? dlg.returnValue.slice(5) : null;
       dlg.remove();
+      if (pick !== 'ai') return resolve(pick);
+      const wish = await askWish();
+      resolve(wish ? `ai:${wish}` : null);
     });
     document.body.append(dlg);
     dlg.showModal();
   });
 }
+
+/** Fragt, was die KI bauen soll. Liefert die Beschreibung oder null. */
+export const askWish = () => prompt2(tr('Was soll die Karte zeigen? (z. B. „Wachturm an einer Furt, daneben ein Lager“)'));
 
 /** Szene als Datei herunterladen. */
 export function downloadScene(scene, name) {

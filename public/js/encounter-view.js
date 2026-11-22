@@ -1,5 +1,6 @@
 // Encounter-Planer im Bereich „Kreaturen“: Gegner aus der Kartei zusammenstellen, Schwierigkeit für die Gruppe
 // berechnen (5e-Regeln, encounter.js) und den Encounter mit einem Klick auf die Karte und in den Kampf bringen.
+import { shownFloor } from './floors.js';
 import { h, uid, bindInput, sortBy, toast, TOKEN_COLORS } from './util.js';
 import { icon } from './icons.js';
 import { evaluate, crToXp, parseCr, DIFFICULTIES } from './encounter.js';
@@ -88,7 +89,7 @@ export function startEncounter(sync, enc, { onlyCombat = false } = {}) {
         tokenOps.push({
           t: 'set',
           p: ['maps', mapId, 'tokens', id],
-          v: { ...preset, id, name, color: preset.kind === 'npc' ? TOKEN_COLORS[4] : TOKEN_COLORS[0], hidden: true, x: p.x, y: p.y, showName: false, dead: false },
+          v: { ...preset, id, name, color: preset.kind === 'npc' ? TOKEN_COLORS[4] : TOKEN_COLORS[0], hidden: true, x: p.x, y: p.y, showName: false, dead: false, ...(shownFloor(map) ? { f: shownFloor(map) } : {}) },
         });
         // Token gibt es erst nach den Ops – der Kampf-Eintrag verweist schon darauf
         Combat.addCombatant(tx, { name, kind: preset.kind, tokenId: id, creatureId: it.creature.id, hp: preset.hp, maxHp: preset.maxHp });

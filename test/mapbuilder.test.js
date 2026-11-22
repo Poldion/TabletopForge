@@ -616,3 +616,203 @@ test('Radierte Straßenstücke zählen nicht mehr als Straße; in den Höfen ein
     assert.ok(!houses.some((o) => Math.hypot(o.x - t.x, o.y - t.y) < 20), 'Baum steht in einem Haus');
   }
 });
+
+test('Obergeschosse: werden beim Prüfen einer fremden Szene mitgenommen und bekommen eigene Kennungen', async () => {
+  const { cleanScene, freshIds } = await import('../public/js/mb-geom.js');
+  const raw = {
+    cols: 20, rows: 12, biome: 'meadow', seed: 3,
+    rooms: [{ id: 'a', k: 'rect', x: 0, y: 0, w: 280, h: 210 }],
+    objects: [{ id: 'o1', t: 'bed', x: 50, y: 50, theme: 'a' }],
+    uppers: [
+      {
+        rooms: [{ id: 'u', k: 'rect', x: 0, y: 0, w: 140, h: 140 }],
+        objects: [{ id: 'o2', t: 'chest', x: 40, y: 40, theme: 'u', fill: 'weg' }, { id: 'o3', t: 'gibtsnicht', x: 1, y: 1 }, null],
+        walls: 'kaputt',
+        water: [{ pts: [[0, 0]], r: 40 }],
+      },
+      { rooms: [] },
+      { rooms: [{ id: 'u', k: 'circle', cx: 70, cy: 70, r: 70 }], objects: [{ id: 'o2', t: 'bed', x: 60, y: 60, theme: 'u' }] },
+      { rooms: [] },
+      'unsinn',
+    ],
+  };
+  const s = cleanScene(raw, (t) => t !== 'gibtsnicht');
+  // die leeren Stockwerke ganz oben fallen weg, das leere dazwischen bleibt (sonst rutschte das dritte nach unten)
+  assert.equal(s.uppers.length, 3);
+  assert.deepEqual(Object.keys(s.uppers[0]).sort(), ['labels', 'objects', 'openings', 'rooms', 'walls']);
+  assert.equal(s.uppers[0].objects.length, 1);
+  assert.deepEqual(s.uppers[0].walls, []);
+  let n = 0;
+  freshIds(s, () => `n${++n}`, () => 0.5);
+  assert.equal(s.uppers[0].objects[0].theme, s.uppers[0].rooms[0].id);
+  assert.equal(s.uppers[0].objects[0].fill, undefined);
+  assert.equal(s.uppers[2].objects[0].theme, s.uppers[2].rooms[0].id);
+  assert.equal(s.objects[0].theme, s.rooms[0].id);
+  // alle Kennungen verschieden, auch über die Stockwerke hinweg
+  const ids = [...s.rooms, ...s.objects, ...s.uppers.flatMap((u) => [...u.rooms, ...u.objects])].map((x) => x.id);
+  assert.equal(new Set(ids).size, ids.length);
+  // ein einzelnes „upper“ älterer Stände zählt als erstes Obergeschoss; nur Leeres fällt ganz weg
+  const old = cleanScene({ cols: 10, rows: 10, upper: { rooms: [{ id: 'x', k: 'rect', x: 0, y: 0, w: 70, h: 70 }] } });
+  assert.equal(old.upper, undefined);
+  assert.equal(old.uppers.length, 1);
+  assert.equal(cleanScene({ cols: 10, rows: 10, uppers: [{ rooms: [], objects: [] }] }).uppers, undefined);
+  assert.equal(cleanScene({ cols: 10, rows: 10, upper: 'x', uppers: 7 }).uppers, undefined);
+  // Untergeschosse: dazu Höhlenboden; leere am unteren Ende fallen weg
+  const deep = cleanScene({ cols: 10, rows: 10, lowers: [{ rooms: [{ id: 'k', k: 'rect', x: 0, y: 0, w: 70, h: 70 }], objects: [{ id: 'f', t: 'barrel', x: 5, y: 5, theme: 'k' }] }, { cave: [{ pts: [[1, 1]], r: 60 }] }, { rooms: [] }] });
+  assert.equal(deep.lowers.length, 2);
+  assert.deepEqual(Object.keys(deep.lowers[0]).sort(), ['cave', 'labels', 'objects', 'openings', 'rooms', 'walls']);
+  assert.equal(deep.lowers[1].cave.length, 1);
+  let m = 0;
+  freshIds(deep, () => `d${++m}`, () => 0.5);
+  assert.equal(deep.lowers[0].objects[0].theme, deep.lowers[0].rooms[0].id);
+  assert.equal(cleanScene({ cols: 10, rows: 10, lowers: [{}] }).lowers, undefined);
+});
+
+test('Bauplan → Szene: Räume im Raster, Trennwand und Tür zwischen Nachbarn, jeder Raum erreichbar', async () => {
+  const { planToScene } = await import('../public/js/mb-plan.js');
+  const { nearestWall, buildingOutline } = await import('../public/js/mb-geom.js');
+  let n = 0;
+  const o = { known: (t) => ['well', 'tree', 'bed'].includes(t), sized: (t) => t === 'tree', floors: ['wood', 'stone'], themes: ['tavern', 'kitchen'], uid: () => `i${++n}`, seed: 5 };
+  const plan = {
+    biome: 'meadow', cols: 24, rows: 16,
+    rooms: [
+      { id: 'hall', x: 4, y: 3, w: 8, h: 6, floor: 'wood', theme: 'tavern' },
+      { id: 'kitchen', x: 12, y: 3, w: 4, h: 6, floor: 'stone', theme: 'kitchen' },
+      { id: 'store', x: 12.2, y: 9, w: 4, h: 3, theme: 'gibtsnicht', furniture: [{ t: 'bed', n: 2, at: 'wall' }, { t: 'drache', n: 1 }] },
+      { id: 'shed', x: 19, y: 11, w: 3, h: 3 },
+    ],
+    doors: [{ room: 'hall', side: 's', pos: 0.5 }, { between: ['hall', 'kitchen'] }, { room: 'hall', side: 'x' }, { room: 'nix', side: 'n' }],
+    windows: [{ room: 'hall', side: 'n', pos: 0.3 }, { room: 'hall', side: 'e', pos: 0.5 }],
+    water: [{ points: [[0, 14], [10, 15], [24, 14]], width: 2 }],
+    paths: [{ points: [[8, 9], [8, 16]] }, { points: [[1, 1]] }],
+    areas: [{ x: 0, y: 0, w: 4, h: 5, kind: 'trees' }, { x: 18, y: 0, w: 5, h: 4, kind: 'houses' }],
+    objects: [{ t: 'well', x: 18, y: 8 }, { t: 'tree', x: 2, y: 9 }, { t: 'ufo', x: 3, y: 3 }, { t: 'well', x: 99, y: 99 }],
+    labels: [{ text: 'Zum Eber', x: 8, y: 2 }, { text: '' }],
+  };
+  const { scene, rooms } = planToScene(plan, o);
+  assert.equal(scene.cols, 24);
+  assert.equal(scene.rooms.length, 4);
+  // auf halbe Felder gerastet
+  assert.ok(scene.rooms.every((r) => r.x % 35 === 0 && r.y % 35 === 0 && r.w % 35 === 0));
+  // Trennwände: Halle–Küche (senkrecht), Küche–Lager (waagerecht)
+  assert.equal(scene.walls.length, 2);
+  assert.ok(scene.walls.some((w) => w.x1 === w.x2 && w.x1 === 840 && w.y1 === 210 && w.y2 === 630));
+  // jede Tür und jedes Fenster sitzt auf einer Wand
+  const outline = buildingOutline(scene.rooms);
+  for (const d of scene.openings) assert.ok(nearestWall(outline, scene.walls, d.x, d.y).d < 4, `Öffnung ${d.k} bei ${d.x},${d.y} sitzt nicht auf einer Wand`);
+  const doors = scene.openings.filter((d) => d.k === 'door');
+  // Halle nach draußen, Halle–Küche, nachgebessert: Küche–Lager und der einzeln stehende Schuppen
+  assert.equal(doors.length, 4);
+  assert.ok(doors.some((d) => d.y === 630 && d.x > 280 && d.x < 840 && d.a === 0));
+  assert.ok(doors.some((d) => d.x === 840 && d.a === 1.571));
+  // das Fenster in der Wand zur Küche fällt weg (dort ist innen), das nach Norden bleibt
+  assert.equal(scene.openings.filter((d) => d.k === 'window').length, 1);
+  // Einrichtung: Themen und die eigene Liste (Unbekanntes fällt heraus)
+  assert.deepEqual(rooms.map((r) => [r.theme, !!r.def]), [['tavern', false], ['kitchen', false], [null, true]]);
+  assert.deepEqual(rooms[2].def.wall, [['bed', 0, { fix: 2 }]]);
+  assert.equal(scene.water.length, 1);
+  assert.equal(scene.paths.length, 1);
+  // Häuser nur auf Übersichtskarten
+  assert.deepEqual(scene.fills.map((f) => f.kind), ['trees']);
+  assert.deepEqual(scene.objects.map((q) => q.t), ['well', 'tree']);
+  assert.equal(scene.labels.length, 1);
+  // Unsinn stört nicht
+  assert.equal(planToScene(null, o).scene.rooms.length, 0);
+  assert.equal(planToScene({ rooms: 'x', doors: [null, 3], cols: 'breit', biome: 'mond' }, o).scene.biome, 'meadow');
+});
+
+test('Bauplan unter der Erde: Gang nach draußen im Dungeon, Kavernen mit Gängen in der Höhle', async () => {
+  const { planToScene } = await import('../public/js/mb-plan.js');
+  let n = 0;
+  const o = { known: () => true, floors: ['wood', 'stone'], themes: ['crypt'], uid: () => `i${++n}`, seed: 2 };
+  const d = planToScene({ biome: 'dungeon', cols: 30, rows: 20, rooms: [{ id: 'a', x: 4, y: 4, w: 6, h: 5 }, { id: 'gang', x: 10, y: 5, w: 6, h: 2 }, { id: 'b', x: 16, y: 3, w: 6, h: 6 }, { id: 'c', x: 22, y: 14, w: 4, h: 4 }], doors: [{ room: 'a', side: 'w' }], windows: [{ room: 'a', side: 'n' }], water: [{ points: [[1, 1]], width: 4 }] }, o).scene;
+  assert.equal(d.rooms.length, 4);
+  assert.ok(d.rooms.every((r) => r.floor === 'stone'));
+  assert.equal(d.walls.length, 2);
+  assert.equal(d.openings.filter((q) => q.k === 'window').length, 0);
+  assert.equal(d.water.length, 0);
+  // Tür nach draußen bekommt einen Gang im Fels; der abgelegene Raum c auch
+  assert.ok(d.cave.length >= 2);
+  assert.ok(d.openings.length >= 4);
+  const c = planToScene({ biome: 'cave', rooms: [{ id: 'a', x: 2, y: 2, w: 8, h: 5 }, { id: 'b', x: 16, y: 3, w: 5, h: 5 }, { id: 'c', x: 8, y: 12, w: 6, h: 4 }], links: [['a', 'b']] }, o).scene;
+  assert.equal(c.rooms.length, 0);
+  // drei Kavernen, ein gewünschter Gang, ein nachgebesserter zur dritten
+  assert.equal(c.cave.length, 5);
+  assert.equal(c.openings.length, 0);
+});
+
+test('Stockwerke: gezeigt wird das gewählte; Änderungen und Figuren gehören zum jeweiligen Stockwerk', async () => {
+  const { floorMap, floorPath, hasFloors, upperCount, lowerCount, shownFloor, floorList, floorLabel, tokenFloor } = await import('../public/js/floors.js');
+  const map = {
+    id: 'm', assetId: 'unten', width: 700, grid: { size: 70 }, anim: { trees: [] },
+    tokens: { a: { id: 'a', x: 1 }, b: { id: 'b', f: 1 }, c: { id: 'c', f: -1 }, d: { id: 'd', f: 7 } },
+    doors: { a: { id: 'a' } }, walls: [[0, 0, 1, 1]], fog: { enabled: true, ops: [1] }, lighting: { enabled: false },
+  };
+  // ohne weitere Stockwerke: die Karte selbst, alle Figuren
+  assert.equal(floorMap(map), map);
+  assert.equal(floorMap(null), null);
+  assert.equal(hasFloors(map), false);
+  map.floor = 1;
+  assert.equal(floorMap(map), map, 'ohne Obergeschoss bleibt es beim Erdgeschoss');
+  assert.deepEqual(floorPath(map, 'm', ['doors', 'a']), ['maps', 'm', 'doors', 'a']);
+  map.floor = 0;
+  map.uppers = [
+    { assetId: 'oben1', doors: { b: { id: 'b' } }, walls: [], fog: { enabled: false, ops: [] }, lighting: { enabled: false } },
+    { assetId: 'oben2', doors: {}, walls: [[1, 1, 2, 2]] },
+  ];
+  map.lowers = [{ assetId: 'keller', doors: { k: { id: 'k' } }, lighting: { enabled: true, ambient: 0.12 }, fog: { enabled: true, ops: [] } }];
+  assert.deepEqual([upperCount(map), lowerCount(map)], [2, 1]);
+  assert.deepEqual(floorList(map), [-1, 0, 1, 2]);
+  const t = (k, o) => `${k}${o?.n ?? ''}`;
+  assert.deepEqual(floorList(map).map((f) => floorLabel(f, 2, 1, t)), ['Untergeschoss', 'Erdgeschoss', '{n}. Obergeschoss1', '{n}. Obergeschoss2']);
+  assert.equal(floorLabel(-2, 1, 3, t), '{n}. Untergeschoss2');
+  assert.equal(floorLabel(1, 1, 0, t), 'Obergeschoss');
+  // Erdgeschoss: eigene Daten, nur die Figuren des Erdgeschosses
+  const v = floorMap(map);
+  assert.notEqual(v, map);
+  assert.equal(v.assetId, 'unten');
+  assert.equal(v.anim, map.anim);
+  assert.deepEqual(Object.keys(v.tokens), ['a']);
+  assert.deepEqual(floorPath(map, 'm', ['fog', 'ops']), ['maps', 'm', 'fog', 'ops']);
+  // erstes Obergeschoss
+  map.floor = 1;
+  assert.equal(floorMap(map), v, 'dieselbe Sicht, solange es dieselbe Karte ist');
+  assert.equal(v.assetId, 'oben1');
+  assert.deepEqual(Object.keys(v.doors), ['b']);
+  assert.deepEqual(v.fog, { enabled: false, ops: [] });
+  assert.equal(v.zones, undefined);
+  assert.equal(v.anim, null);
+  assert.deepEqual(Object.keys(v.tokens), ['b']);
+  // geteilt: Raster und Kennung
+  assert.equal(v.id, 'm');
+  assert.equal(v.grid.size, 70);
+  // die Sicht liest frisch: der Zustand wird an Ort und Stelle geändert
+  map.uppers[0].doors.c = { id: 'c' };
+  assert.deepEqual(Object.keys(v.doors), ['b', 'c']);
+  map.tokens.a.f = 1;
+  assert.deepEqual(Object.keys(v.tokens), ['a', 'b']);
+  assert.deepEqual(floorPath(map, 'm', ['doors', 'b', 'open']), ['maps', 'm', 'uppers', 0, 'doors', 'b', 'open']);
+  assert.deepEqual(floorPath(map, 'm', ['lighting']), ['maps', 'm', 'uppers', 0, 'lighting']);
+  assert.deepEqual(floorPath(map, 'm', ['tokens', 'a']), ['maps', 'm', 'tokens', 'a']);
+  assert.deepEqual(floorPath(map, 'm', ['grid']), ['maps', 'm', 'grid']);
+  // zweites Obergeschoss: ohne eigenen Nebel ein leerer, ohne eigene Beleuchtung die des Erdgeschosses; eine Figur mit
+  // einem Stockwerk, das es nicht gibt, steht im obersten
+  map.floor = 2;
+  assert.equal(v.assetId, 'oben2');
+  assert.deepEqual(v.fog.ops, []);
+  assert.equal(v.lighting, map.lighting);
+  assert.equal(tokenFloor(map, map.tokens.d), 2);
+  assert.deepEqual(Object.keys(v.tokens), ['d']);
+  assert.deepEqual(floorPath(map, 'm', ['fog', 'ops']), ['maps', 'm', 'uppers', 1, 'fog', 'ops']);
+  map.floor = 9;
+  assert.equal(shownFloor(map), 2);
+  // Untergeschoss
+  map.floor = -1;
+  assert.equal(v.assetId, 'keller');
+  assert.deepEqual(Object.keys(v.doors), ['k']);
+  assert.equal(v.lighting.enabled, true);
+  assert.deepEqual(Object.keys(v.tokens), ['c']);
+  assert.deepEqual(floorPath(map, 'm', ['doors', 'k']), ['maps', 'm', 'lowers', 0, 'doors', 'k']);
+  map.floor = -5;
+  assert.equal(shownFloor(map), -1);
+});

@@ -107,6 +107,28 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     der Schalter „Mehrfach“). Die Auswahl lässt sich gemeinsam ziehen, mit den Pfeiltasten schieben, verdoppeln,
     löschen und mit Strg+C / Strg+V kopieren – auch in eine andere Karte. Räume nehmen Türen, Innenwände und
     Einrichtung mit.
+  - **Gegenstände setzen:** Viele Gegenstände gibt es in mehreren Ausführungen (Bettwäsche, Fässer, Bäume). Beim
+    Setzen wechselt die Ausführung von selbst; wer immer dieselbe will, klickt sie unter „Ausführung“ an. Unter
+    „Drehung beim Setzen“ lässt sich jedes neue Stück leicht schief, in 90°-Schritten oder beliebig gedreht setzen,
+    auf Wunsch auch zufällig gespiegelt – so wirken Tische, Kisten und Fässer nicht wie aufgereiht.
+  - **Stockwerke:** Über der Zeichenfläche legt „+ Obergeschoss“ ein Stockwerk über dem Erdgeschoss an, „+“ weitere
+    darüber (bis zu vier); „+ Untergeschoss“ baut nach unten (bis zu drei). In einem Obergeschoss baust du Räume,
+    Wände, Türen und Möbel – ein Turmzimmer, eine Empore, einen Dachboden. Was darunter nicht überbaut ist, bleibt
+    sichtbar, aber abgedunkelt – je tiefer, desto dunkler. Ein Untergeschoss liegt für sich im Fels: Keller, Gruft
+    oder Gänge; der Gelände-Pinsel malt dort Höhlenboden. Ein gestrichelter Umriss zeigt, wo das Stockwerk darüber
+    liegt. Gelände gehört sonst zum Erdgeschoss; ein leeres äußerstes Stockwerk verschwindet von selbst.
+    Im Spiel zeigt die Karte zunächst das Erdgeschoss, unverdeckt. Unten in der Kartenansicht der Spielleitung stehen
+    alle Stockwerke zur Auswahl: Nimmt die Gruppe die Treppe, blendest du das nächste ein – auch auf dem Spieltisch.
+    Jedes Stockwerk hat seine eigenen Türen, Lichter, Namen, seinen eigenen Nebel und seine eigene Beleuchtung (ein
+    Keller beginnt dunkel). **Figuren gehören zu einem Stockwerk** und sind nur dort zu sehen: Neue Figuren stehen
+    auf dem gezeigten Stockwerk; im Inspektor einer Figur (oder mehrerer ausgewählter) versetzt die Auswahl
+    „Stockwerk“ sie nach oben oder unten.
+  - **Mit KI bauen** (nur mit eingerichtetem Sprachmodell unter „KI-Dienste“): „Mit KI einrichten …“ am Raum nimmt
+    eine Beschreibung in eigenen Worten („Alchemistenlabor nach einer Explosion“) und wählt passende Möbel aus dem
+    Katalog. „Karte mit KI entwerfen …“ (oder „Von der KI entwerfen lassen“ bei einer neuen Karte) baut aus einer
+    Beschreibung einen ganzen Entwurf: Räume mit Türen und Fenstern, Einrichtung, Wasser, Wege, Baumgruppen und
+    Ortsnamen. Die KI liefert nur den Plan – gebaut wird nach den Regeln des Kartenbauers, und alles lässt sich
+    danach frei ändern. Je nach Rechner dauert ein Entwurf ein bis drei Minuten.
   - **Füllen:** eine Fläche aufziehen (Kreis oder Rechteck) – sie füllt sich von selbst mit Bäumen, Büschen, Felsen
     oder einer Mischung, aber nur auf freiem Boden (nicht in Wasser, Gebäuden, auf Wegen oder Felskanten). Dichte
     einstellbar, „Neu würfeln“ verteilt neu; danach lässt sich jedes Stück einzeln anklicken und verschieben.
@@ -133,13 +155,20 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     auf“ in der Leiste des Raum-Werkzeugs; dort lässt sich auch zwischen Aufdecken und Verdecken umschalten).
   - **Lichtstimmungen:** Unter „Nebel, Licht & Raster“ schalten Knöpfe zwischen Tag, Dämmerung, Nacht und „Unter der
     Erde“. „Nur innen dunkel“ lässt es draußen hell und verdunkelt nur Räume und Höhlen – etwa für den Keller unter
-    der Taverne oder den Höhleneingang am Tag. Durch Fenster, die ins Freie gehen, fällt dann Tageslicht in den Raum.
+    der Taverne oder den Höhleneingang am Tag. Durch Fenster, die ins Freie gehen, fällt dann Tageslicht in den Raum
+    und streut dort: Der ganze Raum wird heller, am Fenster am meisten.
     Welche Bereiche als draußen gelten, lässt sich nachbessern: Im Raum-Werkzeug „Hof“ wählen und den Bereich
     anklicken (Innenhof, Garten) – nützlich vor allem bei eingelesenen Karten.
   - **Belebte Karte:** Auf starken Anzeigen (Darstellung „Flüssig“ unter Bildschirme, z. B. Orange Pi Zero 2W oder ein
-    PC) wiegen sich die Bäume, auf dem Wasser laufen Wellen ans Ufer und glitzert es, Wolkenschatten ziehen über die
-    Karte und ab und zu fliegt ein Vogel vorbei. Schwache Geräte (Pi Zero 2 W) zeigen dieselbe Karte unbewegt. Je Karte
-    abschaltbar („Belebt“ im Kartenbauer).
+    PC) biegen sich die Bäume im Wind – die Böen laufen als Welle über die Karte –, auf dem Wasser laufen Wellen ans
+    Ufer und glitzert es, Wolkenschatten ziehen über die Karte und ab und zu fliegt ein Vogel vorbei. Schwache Geräte
+    (Pi Zero 2 W) zeigen dieselbe Karte unbewegt. Je Karte abschaltbar („Belebt“ im Kartenbauer). Zu sehen ist die
+    Bewegung auf Spieltisch und Spieler-Display, nicht in der Ansicht der Spielleitung.
+    Kiosk-Geräte (Einplatinenrechner) bekommen eine schlanke Fassung: weniger wiegende Kronen, keine Wolkenschatten,
+    Fackeln ohne flackernden Schein – dafür läuft die Karte dort um ein Mehrfaches flüssiger. Den größten Einfluss
+    auf die Bildrate hat die Auflösung des Kiosk: Auf dem Orange Pi Zero 2W schafft die Tischansicht mit Figuren und
+    Nebel etwa 27 Bilder pro Sekunde in 1080p, 38 in 1600 × 900 und 57 in 720p (Bildschirm-Modus in der
+    Kiosk-Verwaltung; wirksam ab dem Kiosk-Image mit dieser Version).
 - **Karten mit Wänden einlesen:** Dateien im Universal-VTT-Format (`.dd2vtt`, `.uvtt`, `.df2vtt`), wie sie viele
   Kartenzeichner und Kartenpakete mitbringen, lassen sich bei „Neue Karte“ wie ein Bild hochladen. Das Kartenbild wird
   herausgelöst; Raster, Wände, Türen und Lichtquellen kommen mit. Türen öffnet und schließt die Spielleitung per

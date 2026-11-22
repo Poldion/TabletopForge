@@ -74,10 +74,11 @@ const count = (per10, o, area, density) => (o.fix ? o.fix : Math.max(o.min || 0,
  *   size(t) → [Breite, Tiefe] des Gegenstands, known(t) → gibt es ihn?, openings: Türen und Fenster der Szene,
  *   isWall(x, y) → steht dort wirklich eine Wand?, taken: Grundflächen dessen, was schon im Raum steht,
  *   density (Standard 1).
+ * themeKey: Name eines Themas oder eine eigene Regeltabelle { wall, corner, center, rug }.
  * Liefert [{ t, x, y, rot, v }] – gleiche Eingaben, gleiches Ergebnis.
  */
 export function furnish(room, themeKey, seed, ctx) {
-  const theme = THEMES[themeKey];
+  const theme = themeKey && typeof themeKey === 'object' ? themeKey : THEMES[themeKey];
   if (!theme) return [];
   const { R, rnd } = rng(seed >>> 0);
   const density = ctx.density ?? 1;

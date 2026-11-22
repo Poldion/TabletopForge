@@ -1,0 +1,48 @@
+cage: gewünschten Bildschirmmodus aus der Umgebung übernehmen
+
+cage nimmt immer den Modus, den der Bildschirm bevorzugt (meist 1920x1080).
+Ein Kiosk mit schwachem Grafikchip braucht aber oft eine kleinere Auflösung:
+der Browser legt jedes Bild aus mehreren bildschirmfüllenden Flächen zusammen,
+und die Zahl der Bildpunkte bestimmt, wie viele Bilder pro Sekunde er schafft
+(Orange Pi Zero 2W, Tischansicht mit Figuren und Nebel: 27 Bilder/s in 1080p,
+38 in 1600x900, 57 in 720p). Mit CAGE_MODE=BREITExHÖHE[@HZ] wählt cage den
+passenden Modus aus denen, die der Bildschirm anbietet; fehlt er, bleibt es
+beim bevorzugten.
+
+--- a/output.c
++++ b/output.c
+@@ -12,6 +12,7 @@
+ #include "config.h"
+ 
+ #include <assert.h>
++#include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <wayland-server-core.h>
+@@ -273,6 +274,26 @@
+ 	wlr_output_state_set_enabled(&state, true);
+ 	if (!wl_list_empty(&wlr_output->modes)) {
+ 		struct wlr_output_mode *preferred_mode = wlr_output_preferred_mode(wlr_output);
++		/* Kiosk: gewünschter Modus aus der Umgebung (CAGE_MODE=BREITExHÖHE[@HZ]) statt des bevorzugten */
++		const char *want = getenv("CAGE_MODE");
++		int want_w = 0, want_h = 0, want_hz = 60;
++		if (want && sscanf(want, "%dx%d@%d", &want_w, &want_h, &want_hz) >= 2) {
++			struct wlr_output_mode *m, *best = NULL;
++			wl_list_for_each (m, &wlr_output->modes, link) {
++				if (m->width != want_w || m->height != want_h) {
++					continue;
++				}
++				if (!best || abs(m->refresh - want_hz * 1000) < abs(best->refresh - want_hz * 1000)) {
++					best = m;
++				}
++			}
++			if (best) {
++				wlr_log(WLR_INFO, "Using mode %dx%d@%d from CAGE_MODE", best->width, best->height, best->refresh);
++				preferred_mode = best;
++			} else {
++				wlr_log(WLR_ERROR, "Mode %s from CAGE_MODE is not offered by output %s", want, wlr_output->name);
++			}
++		}
+ 		if (preferred_mode) {
+ 			wlr_output_state_set_mode(&state, preferred_mode);
+ 		}

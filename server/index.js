@@ -573,7 +573,7 @@ app.post('/api/ai/text', async (req, res) => {
     .filter((m) => m.content.trim());
   if (!messages.length) return res.status(400).json({ error: 'Kein Text angegeben' });
   try {
-    res.json({ text: await ai.chat({ system: String(b.system || '').slice(0, 8000), messages, json: b.json === true }) });
+    res.json({ text: await ai.chat({ system: String(b.system || '').slice(0, 8000), messages, json: b.json === true, long: b.long === true }) });
   } catch (err) {
     res.status(502).json({ error: `KI-Dienst: ${err.message}` });
   }

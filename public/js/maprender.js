@@ -5,6 +5,7 @@ import { tr } from './i18n.js';
 import { dist } from './units-ui.js';
 import { spellEffect } from './spellfx.js';
 import { visibilityPolygon } from './visibility.js';
+import { floorMap } from './floors.js';
 import { wallsWithDoors, doorState, drawDoor, drawLabel } from './doors.js';
 
 // Wie viele Karten der Spieltisch mit ihren vorbereiteten Kacheln behält (je etwa ein bis zwei Bildschirme groß)
@@ -45,7 +46,7 @@ export function snapViewCenter(map, cx, cy, extW, extH) {
   return { cx: left + extW / 2, cy: top + extH / 2 };
 }
 
-const DAY_ROOM = 0.26; // Grundhelligkeit eines Raums mit Fenster ins Freie bei „nur innen dunkel“
+const DAY_ROOM = 0.4; // Grundhelligkeit eines Raums mit Fenster ins Freie bei „nur innen dunkel“
 
 export const feetToPx = (map, feet) => {
   const g = gridOf(map);
@@ -105,7 +106,16 @@ export class MapRenderer {
     // sammeln sich sonst Texturen im knappen Grafikspeicher an – bei Kartenwechseln bis er überläuft.
     this.software = !!opts.software;
     this.ctxOpts = this.software ? { willReadFrequently: true } : undefined;
-    this.ctx = canvas.getContext('2d', this.ctxOpts);
+    // lean: Anzeige mit schwachem Grafikchip (Kiosk auf einem Einplatinenrechner). Dort kostet jede Fläche, die der
+    // Browser über die Karte legt, in jedem Bild Zeit – gemessen rund 13 ms je bildschirmfüllender Ebene in 1080p,
+    // sobald sich irgendetwas bewegt. Deshalb dort:
+    //  - das Kartenbild (mit Raster, Türen, Namen) auf einer CPU-Zeichenfläche: die legt der Browser in den
+    //    Seitenhintergrund statt auf eine eigene Ebene, und sie wird nur neu gezeichnet, wenn sich daran etwas ändert;
+    //  - Figuren, Dunkelheit und Nebel zusammen auf einer einzigen Ebene darüber, die ohne Inhalt ganz verschwindet;
+    //  - Belebung in schlanker Fassung und Fackeln ohne flackernden Schein.
+    this.lean = !!opts.lean && opts.mode !== 'dm';
+    this.baseOpts = this.lean ? { willReadFrequently: true } : this.ctxOpts;
+    this.ctx = canvas.getContext('2d', this.baseOpts);
     this.mode = opts.mode;
     this.campaignId = opts.campaignId;
     this.getState = opts.getState;
@@ -164,6 +174,11 @@ export class MapRenderer {
     this.resize();
   }
 
+  /** Ebene zeigen oder ganz ausblenden (ausgeblendet belastet sie den Grafikchip nicht). */
+  showLayer(el, on) {
+    if (el && (el.style.display === 'none') === on) el.style.display = on ? '' : 'none';
+  }
+
   /** Darstellung für den DM (halbe Dunkelheit, durchsichtiger Nebel, verdeckte Tokens sichtbar …)? */
   get dmLook() {
     return this.mode === 'dm' && !this.tableLook;
@@ -179,8 +194,9 @@ export class MapRenderer {
     this.customFogAlpha = v;
   }
 
+  /** Die Karte, wie sie gerade gezeigt wird (im Obergeschoss mit dessen Bild, Wänden, Türen, Nebel …). */
   get map() {
-    return this.getState()?.maps?.[this.mapId] || null;
+    return floorMap(this.getState()?.maps?.[this.mapId] || null);
   }
 
   get image() {
@@ -502,7 +518,8 @@ export class MapRenderer {
     if (!this.fxLayer) return;
     this.attachFx();
     const seen = new Set();
-    const lights = map && !this.blackout && map.lighting?.enabled ? Object.values(map.lights || {}) : [];
+    // schlanke Fassung: kein flackernder Schein – je Fackel wären das zwei große halbdurchsichtige Flächen
+    const lights = map && !this.blackout && !this.lean && map.lighting?.enabled ? Object.values(map.lights || {}) : [];
     for (const li of lights) {
       if (li.on === false || !li.flicker) continue;
       seen.add(li.id);
@@ -586,6 +603,10 @@ export class MapRenderer {
       tctx.clearRect(0, 0, this.topEl.width, this.topEl.height);
     }
     this.applyTransform(tctx);
+    if (this.lean) {
+      this.drawTokens(tctx, map);
+      if (map.lighting?.enabled) this.drawLighting(tctx, map, performance.now());
+    }
     this.drawDrawings(tctx, map, 'above');
     if (map.fog?.enabled) this.drawFog(tctx, map, W, H);
     tctx.restore();
@@ -661,14 +682,21 @@ export class MapRenderer {
   }
 
   /** Passt eine Hilfsfläche an die Größe der Zeichenfläche an (Faktor k, z.B. 0.5 = halbe Auflösung). */
-  sizeLayer(c, k = 1) {
+  sizeLayer(c, k = 1, opts = this.ctxOpts) {
     const w = Math.max(1, Math.round(this.canvas.width * k));
     const h = Math.max(1, Math.round(this.canvas.height * k));
     if (c.width !== w || c.height !== h) {
       c.width = w;
       c.height = h;
     }
-    return c.getContext('2d', this.ctxOpts);
+    return c.getContext('2d', opts);
+  }
+
+  /** Woran man erkennt, ob das Kartenbild der schlanken Fassung neu gezeichnet werden muss (alles, was darauf liegt). */
+  baseKeyOf(map, img) {
+    const v = this.view;
+    const below = Object.values(map.drawings || {}).filter((d) => (d.layer || 'above') === 'below' && d.vis !== 'dm').map((d) => `${d.id}:${JSON.stringify(d).length}`).join();
+    return [img.src, decodedImages.has(img) ? 1 : 0, this.canvas.width, this.canvas.height, v.cx, v.cy, v.scale, v.rotation, v.aspect, JSON.stringify(map.doors || 0), JSON.stringify(gridOf(map)), JSON.stringify(map.labels || 0), JSON.stringify(map.aoes || 0), below].join('|');
   }
 
   /**
@@ -818,7 +846,7 @@ export class MapRenderer {
         import('./mapanim.js')
           .then((m) => {
             this.anim = new m.MapAnim();
-            this.midEl = Object.assign(document.createElement('canvas'), { className: 'mr-top' });
+            if (!this.lean) this.midEl = Object.assign(document.createElement('canvas'), { className: 'mr-top' });
             this.resize(); // hängt die neuen Ebenen ein, bringt sie auf Größe und zeichnet neu
           })
           .catch(() => {});
@@ -844,8 +872,15 @@ export class MapRenderer {
       for (const r of clip) ctx.rect(r[0], r[1], r[2], r[3]);
       ctx.clip();
     }
-    ctx.fillStyle = this.dmLook ? '#0d0c0a' : '#000';
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Schlanke Fassung: Auf der Hauptfläche liegt nur das Kartenbild. Bleibt es gleich (eine Figur zieht, Nebel wird
+    // aufgedeckt), wird sie gar nicht angefasst – sonst müsste der Browser sie jedes Mal neu in den Grafikspeicher laden.
+    const baseKey = this.lean && map && img && !this.blackout ? this.baseKeyOf(map, img) : null;
+    const keepMain = baseKey !== null && baseKey === this.baseSig && this.mainHasBase && !clip;
+    if (!keepMain) {
+      ctx.fillStyle = this.dmLook ? '#0d0c0a' : '#000';
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      this.mainHasBase = false;
+    }
     // Obere Ebene: eigene Canvas über dem Schein (Nebel verdeckt ihn). Tisch/Spieler-Display zeichnen dort nur
     // bei Änderungen direkt hinein; die DM-Ansicht legt jedes Mal den Cache plus Werkzeug-Overlay darüber.
     const direct = !!this.topEl && this.mode !== 'dm';
@@ -866,21 +901,26 @@ export class MapRenderer {
       const { W, H } = this.mapSize(map, img);
       const lit = !!map.lighting?.enabled;
 
+      // Schlanke Fassung: Figuren und Dunkelheit liegen mit auf der oberen Ebene (eine statt zwei Flächen über der Karte)
+      const onTop = this.lean && direct;
       // 1. Untere Ebene (Karte bis Tokens) – nur bei Änderungen neu zeichnen
       if (rebuild) {
-        const b = this.sizeLayer(this.baseCanvas);
-        b.setTransform(1, 0, 0, 1, 0, 0);
-        b.clearRect(0, 0, this.baseCanvas.width, this.baseCanvas.height);
-        this.applyTransform(b);
-        b.imageSmoothingQuality = 'high';
-        this.drawMapImage(b, img, W, H);
-        for (const d of Object.values(map.doors || {})) drawDoor(b, d, { dm: this.dmLook });
-        const g = gridOf(map);
-        if (g.show && g.size > 4) this.drawGrid(b, map, W, H);
-        this.drawDrawings(b, map, 'below');
-        for (const l of Object.values(map.labels || {})) drawLabel(b, l, { dm: this.dmLook });
-        for (const aoe of Object.values(map.aoes || {})) this.drawAoe(b, map, aoe);
-        if (!animOn) this.drawTokens(b, map);
+        if (baseKey === null || baseKey !== this.baseSig) {
+          this.baseSig = baseKey;
+          const b = this.sizeLayer(this.baseCanvas, 1, this.baseOpts);
+          b.setTransform(1, 0, 0, 1, 0, 0);
+          b.clearRect(0, 0, this.baseCanvas.width, this.baseCanvas.height);
+          this.applyTransform(b);
+          b.imageSmoothingQuality = 'high';
+          this.drawMapImage(b, img, W, H);
+          for (const d of Object.values(map.doors || {})) drawDoor(b, d, { dm: this.dmLook });
+          const g = gridOf(map);
+          if (g.show && g.size > 4) this.drawGrid(b, map, W, H);
+          this.drawDrawings(b, map, 'below');
+          for (const l of Object.values(map.labels || {})) drawLabel(b, l, { dm: this.dmLook });
+          for (const aoe of Object.values(map.aoes || {})) this.drawAoe(b, map, aoe);
+          if (!animOn && !onTop) this.drawTokens(b, map);
+        }
         this.lightDirty = true;
         this.syncGlows(map);
       }
@@ -892,11 +932,18 @@ export class MapRenderer {
           t.clearRect(0, 0, this.topCanvas.width, this.topCanvas.height);
         }
         this.applyTransform(t);
+        if (onTop) {
+          this.drawTokens(t, map);
+          if (lit) this.drawLighting(t, map, now);
+        }
         if (lit && this.dmLook) this.drawLightMarkers(t, map);
         this.drawDrawings(t, map, 'above');
         if (map.fog?.enabled) this.drawFog(t, map, W, H);
       }
-      ctx.drawImage(this.baseCanvas, 0, 0);
+      if (!keepMain) {
+        ctx.drawImage(this.baseCanvas, 0, 0);
+        this.mainHasBase = baseKey !== null;
+      }
 
       // Belebte Karte: Spielfiguren und Licht auf die Ebene über den Bäumen
       let lctx = ctx;
@@ -912,7 +959,7 @@ export class MapRenderer {
         }
       }
       // 2. Licht (bei flackernden Lichtern in jedem Bild, sonst aus dem Cache)
-      if (lit) animate = this.drawLighting(lctx, map, now) || animate;
+      if (lit && !onTop) animate = this.drawLighting(lctx, map, now) || animate;
 
       if (!direct) {
         tctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -921,7 +968,17 @@ export class MapRenderer {
         if (this.overlay) this.overlay(tctx, map, now);
         animate = this.drawPings(tctx, map, now) || animate;
       }
+      // Ebenen ohne Inhalt ausblenden: eine leere, bildschirmfüllende Zeichenfläche kostet den Grafikchip in jedem
+      // Bild so viel wie eine volle
+      if (this.mode !== 'dm') {
+        this.showLayer(this.midEl, animOn && (lit || Object.keys(map.tokens || {}).length > 0));
+        this.showLayer(this.topEl, !!(map.fog?.enabled || this.fogFading || this.overlay || this.screenOverlay || (onTop && (lit || Object.keys(map.tokens || {}).length > 0)) || Object.values(map.drawings || {}).some((d) => (d.layer || 'above') === 'above' && d.vis !== 'dm')));
+      }
     } else {
+      if (this.mode !== 'dm') {
+        this.showLayer(this.midEl, false);
+        this.showLayer(this.topEl, !!(this.overlay || this.screenOverlay));
+      }
       if (rebuild) this.syncGlows(null);
       if (this.midUsed) {
         this.midEl.getContext('2d', this.ctxOpts).clearRect(0, 0, this.midEl.width, this.midEl.height);
@@ -1247,7 +1304,7 @@ export class MapRenderer {
     g.globalCompositeOperation = 'lighter';
     for (const li of lights) {
       if (!li.color || li.color === '#ffffff') continue;
-      if (this.fxLayer && li.flicker) continue; // flackernder Schein kommt als HTML-Element
+      if (this.fxLayer && !this.lean && li.flicker) continue; // flackernder Schein kommt als HTML-Element
       this.hasGlow = true;
       const { x, y } = lightPos(map, li);
       const total = feetToPx(map, (li.bright ?? 20) + (li.dim ?? 20));
@@ -1308,11 +1365,37 @@ export class MapRenderer {
     }
     l.globalCompositeOperation = 'destination-out';
     // Nur innen dunkel heißt: draußen ist Tag – dann fällt durch jedes Fenster ins Freie Tageslicht in den Raum
-    // – weich, weil es über die ganze Fensterbreite kommt: fünf schwache Lichter nebeneinander
+    // – weich, weil es vom ganzen Himmel kommt: mehrere schwache Lichter nebeneinander, breiter als das Fenster.
+    // So hat der Lichtfleck keinen scharfen Rand, sondern läuft zu den Seiten aus.
     const day = [];
     if (map.lighting.indoor && map.windows?.length) {
+      // Streulicht: im Raum verteilt sich das Tageslicht – vom Fenster aus wird es weich heller, auch neben dem
+      // Lichtfleck. Begrenzt auf den Raum hinter dem Fenster.
+      const cell = gridOf(map).size;
+      for (const [x, y, , , zid] of map.windows) {
+        const zone = zid && map.zones?.find((q) => q.id === zid);
+        const p = zone && (zone.in || zone.pts);
+        if (!p) continue;
+        l.save();
+        l.beginPath();
+        l.moveTo(p[0], p[1]);
+        for (let i = 2; i < p.length; i += 2) l.lineTo(p[i], p[i + 1]);
+        l.closePath();
+        l.clip();
+        const R = cell * 7.5;
+        const glow = l.createRadialGradient(x, y, cell * 0.4, x, y, R);
+        glow.addColorStop(0, 'rgba(0,0,0,0.6)');
+        glow.addColorStop(0.35, 'rgba(0,0,0,0.36)');
+        glow.addColorStop(0.7, 'rgba(0,0,0,0.12)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        l.fillStyle = glow;
+        l.beginPath();
+        l.arc(x, y, R, 0, Math.PI * 2);
+        l.fill();
+        l.restore();
+      }
       // bei sehr vielen Fenstern (Stadthäuser auf einer großen Karte) je Fenster nur drei – das spart Rechenzeit
-      const [offs, step, part] = map.windows.length > 40 ? [[-1, 0, 1], 0.3, 0.45] : [[-2, -1, 0, 1, 2], 0.2, 0.3];
+      const [offs, step, part] = map.windows.length > 40 ? [[-1, 0, 1], 0.45, 0.4] : [[-3, -2, -1, 0, 1, 2, 3], 0.3, 0.2];
       map.windows.forEach(([x, y, a = 0, w = 56], i) => {
         for (const k of offs) day.push({ id: `win${i}.${k}`, x: x + Math.cos(a) * w * step * k, y: y + Math.sin(a) * w * step * k, bright: 6, dim: 12, part });
       });

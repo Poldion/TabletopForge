@@ -15,8 +15,10 @@ function style() {
 .mr-world{position:absolute;left:0;top:0;overflow:hidden;transform-origin:0 0}
 .mr-world>*{position:absolute}
 .mr-tree{will-change:transform;transform-origin:50% 56%}
-@keyframes mr-sway1{from{transform:rotate(-1.6deg) translate(-2px,0)}to{transform:rotate(1.7deg) translate(2px,1px)}}
-@keyframes mr-sway2{from{transform:rotate(1.3deg) translate(1px,-1px) scale(1.012)}to{transform:rotate(-1.5deg) translate(-2px,1px) scale(.99)}}
+/* Wind: eine Böe drückt die Krone zur Seite, sie federt zurück und pendelt aus. Zwei Fassungen, damit Nachbarn nicht
+   im Gleichschritt wippen; die Böe läuft über die Verzögerung als Welle über die Karte. */
+@keyframes mr-wind1{0%,100%{transform:rotate(0deg) translate(0,0)}18%{transform:rotate(3.2deg) translate(5px,1px) scale(1.012)}34%{transform:rotate(1.2deg) translate(2px,0)}50%{transform:rotate(2.6deg) translate(4px,1px) scale(1.008)}68%{transform:rotate(-1.1deg) translate(-2px,0)}84%{transform:rotate(.6deg) translate(1px,0)}}
+@keyframes mr-wind2{0%,100%{transform:rotate(.3deg) translate(0,0)}16%{transform:rotate(2.6deg) translate(4px,2px) scale(1.01)}30%{transform:rotate(3.4deg) translate(5px,1px) scale(1.014)}46%{transform:rotate(.8deg) translate(1px,0)}62%{transform:rotate(2deg) translate(3px,1px)}80%{transform:rotate(-1.3deg) translate(-2px,-1px) scale(.992)}}
 .mr-blob{will-change:transform;border-radius:50%;background:radial-gradient(closest-side,rgba(6,34,44,.2),rgba(6,34,44,.1) 55%,transparent);animation:mr-blob 19s ease-in-out infinite alternate}
 @keyframes mr-blob{from{transform:translate(-9%,-5%) scale(.92)}to{transform:translate(10%,6%) scale(1.08)}}
 .mr-glint{width:26px;height:26px;margin:-13px;will-change:opacity;animation:mr-glint 3.1s ease-in-out infinite alternate;background:radial-gradient(circle at 20% 30%,rgba(225,250,245,.95) 0 1.3px,transparent 1.9px),radial-gradient(circle at 70% 22%,rgba(225,250,245,.8) 0 1px,transparent 1.6px),radial-gradient(circle at 52% 74%,rgba(225,250,245,.9) 0 1.4px,transparent 2px)}
@@ -52,14 +54,17 @@ export class MapAnim {
     this.birdTimer = 0;
   }
 
-  /** An Karte und Ansicht anpassen; map = null blendet die Ebene aus. r: MapRenderer (Ansicht und Größe). */
+  /**
+   * An Karte und Ansicht anpassen; map = null blendet die Ebene aus. r: MapRenderer (Ansicht und Größe). r.lean:
+   * schlanke Fassung für Geräte mit schwachem Grafikchip (siehe build).
+   */
   sync(map, r) {
     if (!map?.anim) {
       if (this.key) this.clear();
       return;
     }
-    const key = `${map.id}|${map.assetId}`;
-    if (key !== this.key) this.build(map, key);
+    const key = `${map.id}|${map.assetId}|${r.lean ? 'lean' : 'full'}`;
+    if (key !== this.key) this.build(map, key, !!r.lean);
     const { cx, cy, scale, rotation, aspect = 1 } = r.view;
     this.world.style.transform = `translate(${r.width / 2}px,${r.height / 2}px) rotate(${rotation || 0}deg) scale(${scale},${scale * aspect}) translate(${-cx}px,${-cy}px)`;
     // Was nicht im Bild ist, braucht keine eigene Ebene im Grafikspeicher
@@ -83,11 +88,17 @@ export class MapAnim {
     clearTimeout(this.birdTimer);
   }
 
-  build(map, key) {
+  /**
+   * Ebene aufbauen. lean: nur, was den Grafikchip wenig kostet – jedes bewegte Element ist dort eine eigene Fläche,
+   * die der Browser in jedem Bild neu über die Karte legt. Große halbdurchsichtige Flächen (Wolkenschatten, dunkle
+   * Zonen im Wasser) sind am teuersten und entfallen; es wiegt sich nur eine Auswahl der Kronen.
+   */
+  build(map, key, lean = false) {
     this.clear();
     this.key = key;
     this.el.style.display = '';
     const a = map.anim;
+    const pick = (list, max) => (list.length > max ? list.filter((_, k) => Math.floor((k * max) / list.length) !== Math.floor(((k - 1) * max) / list.length)) : list);
     const B = BIOMES[a.biome] || BIOMES.meadow;
     const add = (el, x, y, rad) => {
       this.world.appendChild(el);
@@ -107,22 +118,26 @@ export class MapAnim {
     this.world.style.height = `${H}px`;
     this.world.style.setProperty('--foam', B.foam);
     const w = a.water || {};
-    (w.blobs || []).forEach(([x, y, rad], i) => add(div('mr-blob', `left:${x - rad}px;top:${y - rad}px;width:${2 * rad}px;height:${2 * rad}px;animation-duration:${14 + (i % 7) * 2}s;animation-delay:${-(i * 3.7) % 20}s`), x, y, rad * 1.3));
-    (w.glints || []).forEach(([x, y], i) => add(div('mr-glint', `left:${x}px;top:${y}px;animation-duration:${2.3 + (i % 5) * 0.6}s;animation-delay:${-(i * 1.3) % 5}s`), x, y, 20));
-    (w.waves || []).forEach(([x, y, deg], i) => {
+    (lean ? [] : w.blobs || []).forEach(([x, y, rad], i) => add(div('mr-blob', `left:${x - rad}px;top:${y - rad}px;width:${2 * rad}px;height:${2 * rad}px;animation-duration:${14 + (i % 7) * 2}s;animation-delay:${-(i * 3.7) % 20}s`), x, y, rad * 1.3));
+    pick(w.glints || [], lean ? 50 : 1e9).forEach(([x, y], i) => add(div('mr-glint', `left:${x}px;top:${y}px;animation-duration:${2.3 + (i % 5) * 0.6}s;animation-delay:${-(i * 1.3) % 5}s`), x, y, 20));
+    pick(w.waves || [], lean ? 50 : 1e9).forEach(([x, y, deg], i) => {
       const el = div('mr-wave', `left:${x}px;top:${y}px;transform:rotate(${deg - 90}deg)`);
       el.appendChild(document.createElement('i')).style.cssText = `animation-duration:${4.2 + (i % 6) * 0.5}s;animation-delay:${-(i * 1.9) % 7}s`;
       add(el, x, y, 40);
     });
-    (a.trees || []).forEach(([x, y, d, seed]) => {
+    pick(a.trees || [], lean ? 24 : 1e9).forEach(([x, y, d, seed]) => {
       const im = document.createElement('img');
       im.className = 'mr-tree';
       im.alt = '';
       im.src = dataUrl(canopy(d, seed, B.trees[seed % B.trees.length], B.tree));
-      im.style.cssText = `left:${x - d / 2}px;top:${y - d / 2}px;width:${d}px;height:${d}px;animation:mr-sway${1 + (seed % 2)} ${(3.4 + (seed % 30) / 10).toFixed(1)}s ease-in-out ${(-(seed % 50) / 10).toFixed(1)}s infinite alternate`;
+      // Die Böe läuft von links oben nach rechts unten über die Karte: je weiter ein Baum in Windrichtung steht,
+      // desto später erfasst sie ihn. Dauer und Einsatz streuen leicht, damit es nicht mechanisch wirkt.
+      const dur = 5.2 + (seed % 9) * 0.18;
+      const delay = -(((x * 0.8 + y * 0.45) / 520 + (seed % 7) * 0.09) % dur);
+      im.style.cssText = `left:${x - d / 2}px;top:${y - d / 2}px;width:${d}px;height:${d}px;animation:mr-wind${1 + (seed % 2)} ${dur.toFixed(2)}s ease-in-out ${delay.toFixed(2)}s infinite`;
       add(im, x, y, d / 2);
     });
-    if (a.clouds !== false) {
+    if (a.clouds !== false && !lean) {
       for (const delay of [0, 0.5]) {
         const cl = div('mr-cloud', '');
         this.world.appendChild(cl);

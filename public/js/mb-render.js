@@ -1917,8 +1917,13 @@ export class SceneRenderer {
   }
 
   /** Alles zusammensetzen. hide: IDs von Gegenständen, die fehlen sollen (z. B. der gerade gezogene). */
-  compose(scene, { hide, noDoors } = {}) {
-    this.renderTerrain(scene);
+  /**
+   * Szene zum Kartenbild zusammensetzen. under = { img, dim } zeichnet ein Obergeschoss: statt des Geländes liegt das
+   * fertige Bild des Erdgeschosses (img) darunter, dessen Räume (Pfad dim) abgedunkelt werden – so liest man, dass
+   * sie tiefer liegen. Der Schatten des Obergeschosses fällt nur auf diese tieferen Räume.
+   */
+  compose(scene, { hide, noDoors, under } = {}) {
+    if (!under) this.renderTerrain(scene);
     this.renderBuild(scene);
     const { W, H } = sceneSize(scene);
     const B = biomeOf(scene);
@@ -1930,8 +1935,14 @@ export class SceneRenderer {
     }
     const c = this.out.getContext('2d');
     c.globalCompositeOperation = 'source-over';
-    c.drawImage(this.terrain.water, 0, 0);
-    c.drawImage(this.terrain.ground, 0, 0);
+    if (under) {
+      c.drawImage(under.img, 0, 0);
+      c.fillStyle = 'rgba(12,10,18,.44)';
+      c.fill(under.dim);
+    } else {
+      c.drawImage(this.terrain.water, 0, 0);
+      c.drawImage(this.terrain.ground, 0, 0);
+    }
     c.drawImage(this.build.floors, 0, 0);
     const list = [];
     for (const o of scene.objects || []) {
@@ -1953,7 +1964,7 @@ export class SceneRenderer {
     }
     // Steine im Wasser: heller Hof und unterbrochene Ringe
     for (const [o, sp] of list) {
-      if (o.t !== 'rock' || !this.isWater(o.x, o.y)) continue;
+      if (under || o.t !== 'rock' || !this.isWater(o.x, o.y)) continue;
       const P = rng(hashStr(o.id));
       const r = sp.w * 0.42;
       soft(c, o.x, o.y, r * 1.9, rgb(B.foam), 0.3, 0.5);
@@ -1972,7 +1983,7 @@ export class SceneRenderer {
     const s = this.sh.getContext('2d');
     s.globalCompositeOperation = 'source-over';
     s.clearRect(0, 0, W, H);
-    s.drawImage(this.terrain.shadow, 0, 0);
+    if (!under) s.drawImage(this.terrain.shadow, 0, 0);
     s.drawImage(this.build.shadow, 0, 0);
     for (const [o, sp] of list) {
       if (!sp.shadow) continue;
@@ -1986,6 +1997,12 @@ export class SceneRenderer {
         s.restore();
         if (k >= sp.shadow) break;
       }
+    }
+    if (under) {
+      // nur auf die tieferen Räume – draußen liegt der Hausschatten schon im Bild des Erdgeschosses
+      s.globalCompositeOperation = 'destination-in';
+      s.fillStyle = '#000';
+      s.fill(under.dim);
     }
     s.globalCompositeOperation = 'source-in';
     s.fillStyle = B.shadow;

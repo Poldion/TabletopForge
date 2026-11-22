@@ -3,6 +3,35 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.59.0] – 2026-11-23
+
+### Added
+
+- **Storeys** in the map builder: build up to four upper floors (tower room, gallery, attic) and up to three
+  basements (cellar, crypt, tunnels in the rock) on one map. During play the map shows the ground floor uncovered;
+  the game master picks a storey from a switch when the party takes the stairs. On an upper floor, what lies below
+  shows through darkened. Each storey has its own doors, lights, names, fog and lighting, and tokens belong to a
+  storey – they are only visible there and can be moved up or down in the inspector.
+- **Building with AI** (with a language model configured): furnish a room from a description in your own words, or
+  have a whole map drafted – rooms with doors and windows, furnishing, water, paths, trees and place names. The model
+  delivers a plan; the map builder builds it by its own rules.
+- **Placement options** for objects: keep one variant or change it with every placement, pick a variant from a strip
+  of previews, rotate each new piece slightly, in 90° steps or freely, and mirror it at random.
+
+### Changed
+
+- **Much smoother table display on kiosk devices.** On single-board computers every full-screen layer the browser
+  stacks over the map costs time in each frame. The table display now keeps the map image out of the layer stack,
+  puts tokens, darkness and fog on a single layer that disappears when empty, and uses a lean version of the animated
+  map. Measured on an Orange Pi Zero 2W with tokens, fog and lighting: 7 → 27 frames per second at 1080p, 16 → 57
+  at 720p.
+- **Kiosk image (Orange Pi):** the configured display mode now takes effect under the kiosk compositor – before, the
+  screen always ran at its preferred mode (1080p). Needs the kiosk image of this version.
+- Animated maps: the trees now bend in gusts of wind that travel across the map.
+- Daylight through windows scatters in the room: with “dark indoors only” a room with windows is lit softly from
+  the windows instead of showing a sharp cone of light (apply the map once more for existing maps).
+- Trees in built maps cast a longer shadow.
+
 ## [0.58.0] – 2026-11-22
 
 ### Added

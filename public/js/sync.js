@@ -170,7 +170,7 @@ export class Sync {
   notify(keys, ops = null) {
     keys.forEach((k) => this.pendingKeys.add(k));
     // Betrifft alles seit dem letzten Melden nur den Nebel einer Karte? (Tisch zeichnet dann nur die Nebelebene neu)
-    const fogOnly = !!ops && ops.every((o) => o.p[0] === 'maps' && o.p[2] === 'fog');
+    const fogOnly = !!ops && ops.every((o) => o.p[0] === 'maps' && (o.p[2] === 'fog' || ((o.p[2] === 'uppers' || o.p[2] === 'lowers') && o.p[4] === 'fog')));
     this.pendingFogOnly = (this.pendingFogOnly ?? true) && fogOnly;
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {

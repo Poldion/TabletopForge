@@ -4,12 +4,15 @@
 import { h, fill, api, toast, uid, uploadFiles, debounce, prompt2 } from './util.js';
 import { icon } from './icons.js';
 import { tr } from './i18n.js';
-import { CELL, newScene, thin, roomAt, inRoom, buildingOutline, nearestWall, wallSegments, roomZones, isTimberWall, scatter, scatterHouses, cutStreets, inRects, ringAround, ringOutsides, shapeBox } from './mb-geom.js';
-import { BIOMES, CATALOG, CATEGORIES, biomeOf, previewUrl, sprite } from './mb-assets.js';
+import { CELL, newScene, thin, roomAt, inRoom, buildingOutline, nearestWall, wallSegments, roomZones, isTimberWall, scatter, scatterHouses, cutStreets, inRects, UPPER_LISTS, LOWER_LISTS, ringAround, ringOutsides, shapeBox } from './mb-geom.js';
+import { BIOMES, CATALOG, CATEGORIES, biomeOf, previewUrl, variantsOf, sprite } from './mb-assets.js';
 import { SceneRenderer, sceneSize, FLOORS, floorSwatch } from './mb-render.js';
 import { tableCells } from '/shared/calibration.js';
 import { sealDoor, zoneAt, drawLabel, labelAt, labelBox } from './doors.js';
-import { takeTemplate, downloadScene, uploadScene } from './mb-templates.js';
+import { takeTemplate, takeWish, askWish, downloadScene, uploadScene } from './mb-templates.js';
+import { planToScene, themeFromPlan } from './mb-plan.js';
+import { ai } from './ai.js';
+import { floorLabel } from './floors.js';
 import { THEMES, furnish } from './mb-themes.js';
 
 const HALF = CELL / 2;
@@ -49,9 +52,15 @@ export function createBuilderView({ sync, cid, go, play }) {
       setTimeout(() => go('maps'));
       return { el, refresh() {} };
     }
+    let floor = 0; // 0 Erdgeschoss, 1 = erstes Obergeschoss, 2 = zweites …, −1 = erstes Untergeschoss, −2 …
+    const MAX_UP = 4; // so viele Obergeschosse höchstens
+    const MAX_DOWN = 3; // und so viele Untergeschosse
     const url = `/api/campaigns/${cid}/scenes/${mapId}`;
     const renderer = new SceneRenderer();
-    let scene = null;
+    const upRenderers = []; // je Obergeschoss einer: zeichnet es über das Bild des Stockwerks darunter
+    const lowRenderers = []; // je Untergeschoss einer: Räume und Gänge im Fels
+    let root = null; // die ganze Szene, wie sie gespeichert wird (Erdgeschoss, darin uppers und lowers)
+    let scene = null; // das Stockwerk, an dem gerade gebaut wird: root oder ein Eintrag aus root.uppers / root.lowers
     let tool = 'select';
     let sel = null; // { type: 'object'|'room'|'wall'|'opening'|'fill', id }
     let drag = null;
@@ -59,7 +68,24 @@ export function createBuilderView({ sync, cid, go, play }) {
     let multi = []; // Mehrfachauswahl: [{ type, id }] (ab zwei Elementen; sonst gilt sel)
     let hover = null; // Mausposition in Kartenkoordinaten
     let baked = true; // entspricht das Kartenbild dem Stand der Szene?
-    const opt = { terrain: 'water', r: TERRAIN.water.r, erase: false, lvl: 1, room: 'rect', open: false, ruin: false, timber: false, search: '', floor: 'wood', wall: 'wood', opening: 'door', obj: 'tableRound', rot: 0, fill: 'trees', density: 1, fillShape: 'ellipse', labelSize: 'm', labelKind: 'place' };
+    const opt = { terrain: 'water', r: TERRAIN.water.r, erase: false, lvl: 1, room: 'rect', open: false, ruin: false, timber: false, search: '', floor: 'wood', wall: 'wood', opening: 'door', obj: 'tableRound', rot: 0, vary: true, rotMode: 'off', flipRand: false, fill: 'trees', density: 1, fillShape: 'ellipse', labelSize: 'm', labelKind: 'place' };
+    // Setz-Optionen des Gegenstand-Werkzeugs: je Gerät gemerkt
+    const PLACE = 'mb:place';
+    try {
+      const p = JSON.parse(localStorage.getItem(PLACE) || '{}');
+      if (typeof p.vary === 'boolean') opt.vary = p.vary;
+      if (['off', 'slight', 'quarter', 'free'].includes(p.rotMode)) opt.rotMode = p.rotMode;
+      if (typeof p.flipRand === 'boolean') opt.flipRand = p.flipRand;
+    } catch {
+      /* ohne Speicher gelten die Vorgaben */
+    }
+    const savePlace = () => {
+      try {
+        localStorage.setItem(PLACE, JSON.stringify({ vary: opt.vary, rotMode: opt.rotMode, flipRand: opt.flipRand }));
+      } catch {
+        /* dann eben nicht */
+      }
+    };
     const view = { k: 0.4, tx: 0, ty: 0 };
     const history = [];
     let hIndex = -1;
@@ -84,6 +110,24 @@ export function createBuilderView({ sync, cid, go, play }) {
       renderSide();
     });
     const zoomOf = () => SCALES[scene?.scale] || 1;
+    // Stockwerk-Schalter: liegt über der Zeichenfläche, damit die Kopfzeile nicht überläuft
+    const floorBar = h('div.mb-floors');
+    stage.append(floorBar);
+    const floorName = (f) => floorLabel(f, root?.uppers?.length || 0, root?.lowers?.length || 0, tr);
+    function renderFloors() {
+      const nUp = root?.uppers?.length || 0;
+      const nDown = root?.lowers?.length || 0;
+      const tip = (f) =>
+        f < 0
+          ? tr('Untergeschoss: Keller, Gruft oder Gänge unter dem Gebäude – Räume im Fels, dazu Höhlenboden mit dem Gelände-Pinsel. Im Spiel blendest du es ein, wenn die Gruppe hinabsteigt.')
+          : tr('Stockwerk: In einem Obergeschoss baust du Räume über dem Stockwerk darunter (Turmzimmer, Empore, Dachboden). Was darunter liegt, scheint abgedunkelt durch. Im Spiel zeigt die Karte das Erdgeschoss; die Obergeschosse blendest du dort ein, wenn die Gruppe hinaufgeht.');
+      const list = Array.from({ length: nDown + nUp + 1 }, (_, i) => i - nDown);
+      fill(floorBar, [
+        nDown < MAX_DOWN ? h('button.small', { type: 'button', title: nDown ? tr('Ein weiteres Stockwerk darunter anlegen') : tr('Untergeschoss anlegen: Keller und Gänge unter dem Erdgeschoss bauen'), onclick: () => setFloor(-nDown - 1) }, nDown ? '+' : `+ ${tr('Untergeschoss')}`) : null,
+        ...list.map((f) => h('button.small', { type: 'button', class: f === floor ? 'active' : '', title: tip(f), onclick: () => setFloor(f) }, floorName(f))),
+        nUp < MAX_UP ? h('button.small', { type: 'button', title: nUp ? tr('Ein weiteres Stockwerk darüber anlegen') : tr('Obergeschoss anlegen: Räume über dem Erdgeschoss bauen'), onclick: () => setFloor(nUp + 1) }, nUp ? '+' : `+ ${tr('Obergeschoss')}`) : null,
+      ]);
+    }
     // Anbauen: Links und oben wandert der ganze Inhalt mit, damit nichts neu gesetzt werden muss
     const grow = h('select', { title: tr('Karte an einer Seite um fünf Felder erweitern – der Inhalt bleibt, wo er ist') }, h('option', { value: '' }, tr('Anbauen …')), h('option', { value: 'l' }, tr('links')), h('option', { value: 't' }, tr('oben')), h('option', { value: 'r' }, tr('rechts')), h('option', { value: 'b' }, tr('unten')));
     grow.addEventListener('change', () => {
@@ -141,7 +185,7 @@ export function createBuilderView({ sync, cid, go, play }) {
     // --- Szene, Verlauf, Speichern ---------------------------------------------------------------------------------
     const save = debounce(async () => {
       try {
-        await api('PUT', url, scene);
+        await api('PUT', url, root);
         status.textContent = baked ? tr('Gespeichert') : tr('Gespeichert · Kartenbild noch nicht übernommen');
       } catch (err) {
         status.textContent = tr('Speichern fehlgeschlagen: {message}', { message: err.message });
@@ -150,7 +194,7 @@ export function createBuilderView({ sync, cid, go, play }) {
     /** Änderung abschließen: in den Verlauf, speichern, neu zeichnen. */
     function commit() {
       history.splice(hIndex + 1);
-      history.push(JSON.stringify(scene));
+      history.push(JSON.stringify(root));
       if (history.length > 60) history.shift();
       hIndex = history.length - 1;
       touched();
@@ -166,7 +210,8 @@ export function createBuilderView({ sync, cid, go, play }) {
     function undo(dir) {
       if (hIndex + dir < 0 || hIndex + dir >= history.length) return;
       hIndex += dir;
-      scene = JSON.parse(history[hIndex]);
+      root = JSON.parse(history[hIndex]);
+      link();
       chain = null; // ein angefangener Mauerzug hinge sonst an einem Punkt, den es nicht mehr gibt
       multi = multi.filter((g) => find(g));
       if (multi.length < 2) multi = [];
@@ -177,23 +222,118 @@ export function createBuilderView({ sync, cid, go, play }) {
     }
     const listOf = (type) => ({ object: scene.objects, room: scene.rooms, wall: scene.walls, opening: scene.openings, fill: scene.fills, label: scene.labels })[type];
     const find = (s) => (s ? listOf(s.type).find((x) => x.id === s.id) : null);
+    /**
+     * Nach dem Laden oder Zurückholen der Szene: Listen ergänzen und die weiteren Stockwerke anbinden. Größe, Umgebung
+     * und Maßstab gehören dem Erdgeschoss – die anderen Stockwerke lesen sie von dort (nicht mitgespeichert). Ein
+     * Untergeschoss liegt immer im Fels (Umgebung „Dungeon“, Kampfmaßstab, unbewegt).
+     */
+    function link() {
+      for (const k of ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels']) root[k] ||= [];
+      // ein einzelnes „upper“ aus einem früheren Stand zählt als erstes Obergeschoss
+      if (root.upper && typeof root.upper === 'object') root.uppers = [root.upper, ...(Array.isArray(root.uppers) ? root.uppers : [])];
+      delete root.upper;
+      for (const [key, max] of [['uppers', MAX_UP], ['lowers', MAX_DOWN]]) {
+        if (!Array.isArray(root[key]) || !root[key].length) delete root[key];
+        else root[key] = root[key].slice(0, max).map((u) => (u && typeof u === 'object' ? u : {}));
+      }
+      const fixed = (st, k, value) => Object.defineProperty(st, k, { value, enumerable: false, configurable: true });
+      const fromRoot = (st, k, get = () => root[k]) => Object.defineProperty(st, k, { get, set: (v) => (root[k] = v), enumerable: false, configurable: true });
+      for (const up of root.uppers || []) {
+        for (const k of UPPER_LISTS) up[k] = Array.isArray(up[k]) ? up[k] : [];
+        for (const k of ['cols', 'rows', 'biome', 'seed', 'scale', 'still']) fromRoot(up, k);
+        fixed(up, 'fills', []);
+      }
+      (root.lowers || []).forEach((low, i) => {
+        for (const k of LOWER_LISTS) low[k] = Array.isArray(low[k]) ? low[k] : [];
+        for (const k of ['cols', 'rows']) fromRoot(low, k);
+        fromRoot(low, 'biome', () => 'dungeon');
+        fromRoot(low, 'scale', () => undefined);
+        fromRoot(low, 'still', () => true);
+        fromRoot(low, 'seed', () => ((root.seed | 0) + 7919 * (i + 1)) | 0);
+        for (const k of ['fills', 'water', 'paths', 'roads', 'dirt', 'high']) fixed(low, k, []);
+      });
+      floor = Math.max(-(root.lowers?.length || 0), Math.min(root.uppers?.length || 0, floor));
+      scene = floor > 0 ? root.uppers[floor - 1] : floor < 0 ? root.lowers[-floor - 1] : root;
+      renderFloors();
+      for (const b of toolbar.children) b.disabled = (floor > 0 && b.dataset.tool === 'terrain') || (floor !== 0 && b.dataset.tool === 'fill');
+    }
+    const emptyFloor = (u, lists) => !lists.some((k) => u[k].length);
+    /**
+     * Stockwerk wechseln. Ein neues Stockwerk entsteht beim ersten Betreten (f = eins über dem obersten bzw. eins unter
+     * dem untersten); leere Stockwerke am äußeren Ende verschwinden wieder, sobald man sie verlässt.
+     */
+    function setFloor(f) {
+      if (!root) return;
+      root.uppers ||= [];
+      root.lowers ||= [];
+      if (f === root.uppers.length + 1 && f <= MAX_UP) root.uppers.push(Object.fromEntries(UPPER_LISTS.map((k) => [k, []])));
+      if (f === -root.lowers.length - 1 && -f <= MAX_DOWN) root.lowers.push(Object.fromEntries(LOWER_LISTS.map((k) => [k, []])));
+      floor = Math.max(-root.lowers.length, Math.min(root.uppers.length, f));
+      while (root.uppers.length > Math.max(floor, 0) && emptyFloor(root.uppers[root.uppers.length - 1], UPPER_LISTS)) root.uppers.pop();
+      while (root.lowers.length > Math.max(-floor, 0) && emptyFloor(root.lowers[root.lowers.length - 1], LOWER_LISTS)) root.lowers.pop();
+      link();
+      sel = null;
+      multi = [];
+      chain = null;
+      // im Untergeschoss malt der Gelände-Pinsel nur Höhlenboden
+      if (floor < 0) (opt.terrain = 'cave'), (opt.r = TERRAIN.cave.r), (opt.erase = false);
+      if ((floor > 0 && tool === 'terrain') || (floor !== 0 && tool === 'fill')) setTool('select');
+      renderSide();
+      recompose();
+    }
+    /** Renderer des Untergeschosses i (1 = erstes); entsteht beim ersten Gebrauch. */
+    function lowR(i) {
+      if (!lowRenderers[i - 1]) {
+        lowRenderers[i - 1] = new SceneRenderer();
+        lowRenderers[i - 1].onLoad = onSprites;
+      }
+      return lowRenderers[i - 1];
+    }
+    /** Der Renderer des Stockwerks, an dem gebaut wird. */
+    const viewR = () => (floor > 0 ? upR(floor) : floor < 0 ? lowR(-floor) : renderer);
+    /** Renderer des Obergeschosses i (1 = erstes); entsteht beim ersten Gebrauch. */
+    function upR(i) {
+      if (!upRenderers[i - 1]) {
+        upRenderers[i - 1] = new SceneRenderer();
+        upRenderers[i - 1].onLoad = onSprites;
+      }
+      return upRenderers[i - 1];
+    }
+    /**
+     * Was unter dem Obergeschoss i liegt: das Bild des Stockwerks darunter und die Fläche aller Räume darunter (wird
+     * abgedunkelt – je tiefer, desto dunkler, weil jedes Stockwerk noch einmal abdunkelt).
+     */
+    function underOf(i) {
+      const dim = new Path2D();
+      for (const sc of [root, ...root.uppers.slice(0, i - 1)]) {
+        for (const r of sc.rooms) {
+          if (r.k === 'circle') (dim.moveTo(r.cx + r.r + 8, r.cy), dim.arc(r.cx, r.cy, r.r + 8, 0, 7));
+          else dim.rect(r.x - 8, r.y - 8, r.w + 16, r.h + 16);
+        }
+      }
+      return { img: i > 1 ? upR(i - 1).out : renderer.out, dim };
+    }
     function syncTop() {
-      cols.value = scene.cols;
-      rows.value = scene.rows;
-      biome.value = scene.biome;
-      alive.checked = !scene.still;
-      scale.value = scene.scale || 'battle';
+      // die Kopfzeile zeigt immer die Werte der Karte (des Erdgeschosses), auch wenn an einem anderen Stockwerk gebaut wird
+      cols.value = root.cols;
+      rows.value = root.rows;
+      biome.value = root.biome;
+      alive.checked = !root.still;
+      scale.value = root.scale || 'battle';
     }
     /** Verschiebt den gesamten Inhalt der Karte. */
     function shiftScene(dx, dy) {
-      for (const key of ['water', 'paths', 'roads', 'dirt', 'high', 'cave']) for (const st of scene[key]) if (st.pts) st.pts = st.pts.map(([x, y]) => [x + dx, y + dy]);
-      for (const r of scene.rooms) {
-        if (r.k === 'circle') Object.assign(r, { cx: r.cx + dx, cy: r.cy + dy });
-        else Object.assign(r, { x: r.x + dx, y: r.y + dy });
+      for (const key of ['water', 'paths', 'roads', 'dirt', 'high', 'cave']) for (const st of root[key]) if (st.pts) st.pts = st.pts.map(([x, y]) => [x + dx, y + dy]);
+      for (const low of root.lowers || []) for (const st of low.cave) if (st.pts) st.pts = st.pts.map(([x, y]) => [x + dx, y + dy]);
+      for (const sc of [root, ...(root.uppers || []), ...(root.lowers || [])]) {
+        for (const r of sc.rooms) {
+          if (r.k === 'circle') Object.assign(r, { cx: r.cx + dx, cy: r.cy + dy });
+          else Object.assign(r, { x: r.x + dx, y: r.y + dy });
+        }
+        for (const w of sc.walls) Object.assign(w, { x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy });
+        for (const o of [...sc.openings, ...sc.objects, ...(sc.labels || [])]) Object.assign(o, { x: o.x + dx, y: o.y + dy });
       }
-      for (const w of scene.walls) Object.assign(w, { x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy });
-      for (const o of [...scene.openings, ...scene.objects, ...(scene.labels || [])]) Object.assign(o, { x: o.x + dx, y: o.y + dy });
-      for (const f of scene.fills) {
+      for (const f of root.fills) {
         const sh = f.shape;
         if (sh.k === 'rect') Object.assign(sh, { x: sh.x + dx, y: sh.y + dy });
         else Object.assign(sh, { cx: sh.cx + dx, cy: sh.cy + dy });
@@ -230,15 +370,37 @@ export function createBuilderView({ sync, cid, go, play }) {
     // ein Geisterbild bewegt und erst beim Loslassen neu zusammengesetzt
     let slow = false;
     let ghost = null;
+    let lowKey = null; // Stand der Stockwerke unter dem, an dem gebaut wird (deren Bilder liegen fertig bereit)
+    /** Kartenbild des Stockwerks, an dem gebaut wird. */
+    function composeView(o = {}) {
+      if (!floor) {
+        lowKey = null;
+        return renderer.compose(root, o);
+      }
+      // Untergeschoss: für sich im Fels, nichts scheint durch
+      if (floor < 0) return lowR(-floor).compose(scene, o);
+      // Die Stockwerke darunter nur neu zusammensetzen, wenn sich dort etwas geändert hat (z. B. durch Rückgängig)
+      const key = JSON.stringify(root, (k, v) => (k === 'uppers' ? v.slice(0, floor - 1) : v));
+      if (key !== lowKey) {
+        renderer.compose(root);
+        for (let i = 1; i < floor; i++) upR(i).compose(root.uppers[i - 1], { under: underOf(i) });
+        lowKey = key;
+      }
+      return upR(floor).compose(root.uppers[floor - 1], { ...o, under: underOf(floor) });
+    }
     function recompose(hide) {
       if (!scene) return;
       const t0 = performance.now();
-      renderer.compose(scene, { hide });
+      composeView({ hide });
       slow = performance.now() - t0 > 90;
       composed = true;
       draw();
     }
-    renderer.onLoad = () => el.isConnected && recompose();
+    function onSprites() {
+      lowKey = null;
+      if (el.isConnected) recompose();
+    }
+    renderer.onLoad = onSprites;
     let raf = 0;
     function draw() {
       if (raf) return;
@@ -271,7 +433,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       c.fillRect(0, 0, cw, ch);
       c.imageSmoothingEnabled = true;
       c.imageSmoothingQuality = view.k < 0.6 ? 'high' : 'medium';
-      c.drawImage(renderer.out, view.tx, view.ty, W * view.k, H * view.k);
+      c.drawImage(viewR().out, view.tx, view.ty, W * view.k, H * view.k);
       c.setTransform(dpr * view.k, 0, 0, dpr * view.k, dpr * view.tx, dpr * view.ty);
       const px = 1 / view.k; // ein Bildschirmpixel in Kartenmaß
       // Raster nur beim Bauen
@@ -286,6 +448,21 @@ export function createBuilderView({ sync, cid, go, play }) {
       c.strokeStyle = 'rgba(0,0,0,.6)';
       c.lineWidth = px;
       c.strokeRect(0, 0, W, H);
+      const above = floor + 1 > 0 ? root.uppers?.[floor] : floor + 1 < 0 ? root.lowers?.[-floor - 2] : root;
+      if (above?.rooms.length && above !== scene) {
+        // ein gestrichelter Umriss zeigt, wo das nächste Stockwerk darüber liegt
+        c.save();
+        c.setLineDash([9 * px, 7 * px]);
+        c.strokeStyle = 'rgba(255,213,74,.6)';
+        c.lineWidth = 1.6 * px;
+        c.beginPath();
+        for (const r of above.rooms) {
+          if (r.k === 'circle') (c.moveTo(r.cx + r.r, r.cy), c.arc(r.cx, r.cy, r.r, 0, 7));
+          else c.rect(r.x, r.y, r.w, r.h);
+        }
+        c.stroke();
+        c.restore();
+      }
       if (showTv && sync.settings?.table) {
         // Rahmen in Tischgröße, an Feldgrenzen ausgerichtet; ohne Mauszeiger in der Kartenmitte
         const cells = Object.values(S().display.table.views || {}).find((v) => v?.w > 0 && v?.h > 0) || tableCells(sync.settings.table);
@@ -408,13 +585,14 @@ export function createBuilderView({ sync, cid, go, play }) {
         c.arc(hover[0], hover[1], opt.r, 0, 7);
         c.stroke();
       } else if (hover && tool === 'object') {
-        const o = { t: opt.obj, ...mounted(opt.obj, hover[0], hover[1], opt.rot), s: CATALOG[opt.obj].size ? zoomOf() : 1, v: ghostV };
+        const o = { ...ghostObj(hover[0], hover[1]), s: CATALOG[opt.obj].size ? zoomOf() : 1 };
         const sp = sprite(o, biomeOf(scene), 1);
         if (sp?.img) {
           c.save();
           c.globalAlpha = 0.75;
           c.translate(o.x, o.y);
           c.rotate((o.rot * Math.PI) / 180);
+          if (o.flip) c.scale(-1, 1);
           c.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
           c.restore();
         } else sp?.promise.then(draw);
@@ -529,6 +707,16 @@ export function createBuilderView({ sync, cid, go, play }) {
       return [(e.clientX - r.left - view.tx) / view.k, (e.clientY - r.top - view.ty) / view.k];
     };
     let ghostV = 7;
+    let ghostRot = 0; // zufällige Drehung des nächsten Stücks, zusätzlich zur eingestellten
+    let ghostFlip = false;
+    /** Das nächste Stück vorbereiten: Variante, Drehung und Spiegelung nach den Setz-Optionen. */
+    function nextGhost() {
+      if (opt.vary) ghostV = Math.floor(Math.random() * 1e6);
+      ghostRot = opt.rotMode === 'free' ? Math.floor(Math.random() * 360) : opt.rotMode === 'quarter' ? Math.floor(Math.random() * 4) * 90 : opt.rotMode === 'slight' ? Math.round(Math.random() * 24 - 12) : 0;
+      ghostFlip = !!opt.flipRand && Math.random() < 0.5;
+    }
+    /** Das Stück, das als Nächstes gesetzt wird – so, wie es die Vorschau am Mauszeiger zeigt. */
+    const ghostObj = (x, y) => ({ t: opt.obj, ...mounted(opt.obj, x, y, (opt.rot + ghostRot + 360) % 360), v: ghostV, ...(ghostFlip && !CATALOG[opt.obj].lit ? { flip: true } : {}) });
     let spaceDown = false;
     const pointers = new Map();
     let pinch = null;
@@ -657,6 +845,10 @@ export function createBuilderView({ sync, cid, go, play }) {
         if (src) {
           opt.obj = src.t;
           opt.rot = src.rot || 0;
+          // das nächste Stück gleicht der Vorlage genau; danach gelten wieder die Setz-Optionen
+          ghostV = src.v | 0;
+          ghostRot = 0;
+          ghostFlip = !!src.flip;
           setTool('object');
           renderSide();
           return null;
@@ -803,8 +995,8 @@ export function createBuilderView({ sync, cid, go, play }) {
       if (tool === 'object') {
         const def = CATALOG[opt.obj];
         used(opt.obj);
-        scene.objects.push({ id: uid(), t: opt.obj, ...mounted(opt.obj, Math.round(x), Math.round(y), opt.rot), s: def.size ? Math.round((0.8 + Math.random() * 0.5) * zoomOf() * 100) / 100 : 1, v: ghostV });
-        ghostV = Math.floor(Math.random() * 1e6);
+        scene.objects.push({ id: uid(), ...ghostObj(Math.round(x), Math.round(y)), s: def.size ? Math.round((0.8 + Math.random() * 0.5) * zoomOf() * 100) / 100 : 1 });
+        nextGhost();
         commit();
         return null;
       }
@@ -843,7 +1035,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       return null;
     }
     /** Inhalt eines Füllbereichs (neu) erzeugen – nur auf freiem Boden. */
-    function refill(f) {
+    function refill(f, quiet = false) {
       scene.objects = scene.objects.filter((o) => o.fill !== f.id);
       renderer.compose(scene); // Gelände und Gebäude aktuell, damit das Streuen weiß, wo Platz ist
       // Wo schon etwas steht (Häuser, Möbel, andere Bäume), bleibt frei
@@ -862,7 +1054,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       const made = f.kind === 'houses' ? scatterHouses(f, free, [...cutStreets(scene.roads || []), ...cutStreets(scene.paths || [])], { tree: z }) : scatter(f, CELL * z, free);
       if (f.kind !== 'houses') for (const o of made) o.s = Math.round(o.s * z * 100) / 100;
       scene.objects.push(...made);
-      if (!made.length) toast(tr('Hier ist kein freier Boden zum Füllen.'));
+      if (!made.length && !quiet) toast(tr('Hier ist kein freier Boden zum Füllen.'));
     }
 
     function startSelect(x, y, e) {
@@ -1030,10 +1222,15 @@ export function createBuilderView({ sync, cid, go, play }) {
      * Raum nach einem Thema einrichten (oder mit theme = '' wieder leeren). Die erzeugten Stücke gehören zum Raum:
      * „Neu würfeln“ ersetzt sie, alles andere im Raum bleibt stehen und wird umstellt.
      */
-    function furnishRoom(room, theme, reroll = true) {
+    /**
+     * Raum einrichten. theme: Name eines Themas, 'custom' (eigene Regeltabelle in room.themeDef, z. B. von der KI) oder
+     * leer (Einrichtung entfernen). quiet: ohne Meldung und ohne eigenen Schritt im Verlauf.
+     */
+    function furnishRoom(room, theme, reroll = true, quiet = false) {
       scene.objects = scene.objects.filter((o) => o.theme !== room.id);
       room.theme = theme || undefined;
-      if (!theme) return commit();
+      if (theme !== 'custom') (delete room.themeDef, delete room.themeName);
+      if (!theme) return quiet ? null : commit();
       if (reroll || !room.themeSeed) room.themeSeed = Math.floor(Math.random() * 1e9);
       const B = biomeOf(scene);
       const box = (t) => {
@@ -1045,7 +1242,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         const [w, h2] = box(o.t);
         return { x: o.x, y: o.y, hw: w / 2 + 4, hh: h2 / 2 + 4, rot: o.rot || 0 };
       });
-      const made = furnish(room, theme, room.themeSeed, {
+      const made = furnish(room, theme === 'custom' ? room.themeDef : theme, room.themeSeed, {
         size: box,
         known: (t) => !!CATALOG[t] && !CATALOG[t].size,
         openings: scene.openings,
@@ -1054,8 +1251,79 @@ export function createBuilderView({ sync, cid, go, play }) {
         taken,
       });
       for (const o of made) scene.objects.push({ id: uid(), s: 1, ...o, theme: room.id });
+      if (quiet) return made.length;
       if (!made.length) toast(tr('Der Raum ist zu klein oder zu voll für diese Einrichtung.'));
       commit();
+      return made.length;
+    }
+
+    // --- Sprachmodell: Räume einrichten, ganze Karten entwerfen ---------------------------------------------------------
+    let aiBusy = false;
+    /** Führt eine Anfrage an das Sprachmodell aus; währenddessen steht in der Statuszeile, was geschieht. */
+    async function withAi(label, run) {
+      if (aiBusy) return toast(tr('Die KI arbeitet noch.'));
+      aiBusy = true;
+      status.textContent = label;
+      const note = h('div.mb-ai-busy', icon('sparkles'), ` ${label}`);
+      stage.append(note);
+      try {
+        await run(await import('./mb-ai.js'));
+      } catch (err) {
+        toast(err.message || String(err), 6000);
+      } finally {
+        aiBusy = false;
+        note.remove();
+        if (status.textContent === label) status.textContent = '';
+      }
+    }
+    /** Einen Raum nach einer Beschreibung von der KI einrichten lassen. */
+    async function aiFurnish(room) {
+      const wish = await prompt2(tr('Was ist das für ein Raum? (z. B. „Alchemistenlabor nach einer Explosion“)'), room.themeName || '');
+      if (!wish) return;
+      await withAi(tr('Die KI richtet den Raum ein …'), async ({ aiFurniture }) => {
+        const size = room.k === 'circle' ? [Math.round((2 * room.r) / CELL), Math.round((2 * room.r) / CELL)] : [Math.round(room.w / CELL), Math.round(room.h / CELL)];
+        const def = themeFromPlan(await aiFurniture(wish, size), (t) => !!CATALOG[t] && !CATALOG[t].size);
+        if (!def) throw new Error(tr('Die KI hat nichts Passendes aus dem Katalog gewählt – bitte noch einmal versuchen.'));
+        // der Raum kann inzwischen gelöscht oder das Stockwerk gewechselt sein
+        if (!scene.rooms.includes(room)) return;
+        room.themeDef = def;
+        room.themeName = wish.slice(0, 80);
+        furnishRoom(room, 'custom');
+        renderSide();
+      });
+    }
+    /** Bauplan der KI als Szene übernehmen: Räume und Gelände anlegen, Füllbereiche füllen, Räume einrichten. */
+    function applyPlan(plan) {
+      const made = planToScene(plan, { known: (t) => !!CATALOG[t], sized: (t) => !!CATALOG[t]?.size, floors: FLOORS, themes: Object.keys(THEMES), uid, seed: Math.floor(Math.random() * 1e9), natureScale: plan.scale === 'overview' ? SCALES.overview : 1 });
+      root = made.scene;
+      floor = 0;
+      link();
+      sel = null;
+      multi = [];
+      chain = null;
+      syncTop();
+      for (const f of root.fills) refill(f, true);
+      for (const t of made.rooms) {
+        const room = root.rooms.find((r) => r.id === t.id);
+        if (!room) continue;
+        if (t.def) (room.themeDef = t.def), (room.themeName = t.name || tr('KI-Entwurf'));
+        furnishRoom(room, t.def ? 'custom' : t.theme, true, true);
+      }
+      commit();
+      fit();
+      renderSide();
+      return made;
+    }
+    /** Ganze Karte von der KI entwerfen lassen (ersetzt den Inhalt; mit Strg+Z rückgängig). */
+    async function aiMap(wish) {
+      wish ||= await askWish();
+      if (!wish) return;
+      await withAi(tr('Die KI entwirft die Karte …'), async ({ aiPlan }) => {
+        const plan = await aiPlan(wish);
+        const made = applyPlan(plan);
+        if (!made.scene.rooms.length && !made.scene.cave.length && !made.scene.objects.length && !made.scene.fills.length) toast(tr('Der Entwurf der KI war leer – bitte noch einmal versuchen oder genauer beschreiben.'), 6000);
+        else if (plan.name && /^(Neue Karte|New map)$/i.test(S().maps[mapId]?.name || '')) sync.set(['maps', mapId, 'name'], String(plan.name).slice(0, 60));
+      });
     }
     /** Auswahl setzen: kein, ein oder mehrere Elemente. */
     function setSelection(group) {
@@ -1120,7 +1388,8 @@ export function createBuilderView({ sync, cid, go, play }) {
     function insert(data, dx, dy) {
       const group = [];
       const fills = new Map();
-      for (const f of data.fills || []) {
+      // Füllbereiche gibt es nur im Erdgeschoss; ihr Inhalt kommt oben als einzelne Stücke an
+      for (const f of floor ? [] : data.fills || []) {
         const id = uid();
         fills.set(f.id, id);
         const sh = f.shape;
@@ -1327,6 +1596,7 @@ export function createBuilderView({ sync, cid, go, play }) {
 
     // --- Seitenleiste: Einstellungen des Werkzeugs bzw. der Auswahl ---------------------------------------------------
     function setTool(t) {
+      if ((floor > 0 && t === 'terrain') || (floor !== 0 && t === 'fill')) return toast(tr('Gelände und Füllbereiche gehören zum Erdgeschoss.'));
       tool = t;
       chain = null;
       if (t !== 'select') (sel = null), (multi = []);
@@ -1363,14 +1633,16 @@ export function createBuilderView({ sync, cid, go, play }) {
           );
           out.push(
             h('div.row', { style: { flexWrap: 'wrap', gap: '6px', marginBottom: '10px' } },
-              h('button.small', { title: tr('Die Szene als Datei sichern – zum Aufbewahren oder für eine andere Kampagne'), onclick: () => downloadScene(scene, S().maps[mapId]?.name) }, icon('download'), tr(' Szene sichern')),
+              h('button.small', { title: tr('Die Szene als Datei sichern – zum Aufbewahren oder für eine andere Kampagne'), onclick: () => downloadScene(root, S().maps[mapId]?.name) }, icon('download'), tr(' Szene sichern')),
               h('button.small', {
                 title: tr('Eine gesicherte Szene laden – sie ersetzt den Inhalt dieser Karte (mit Strg+Z rückgängig)'),
                 onclick: async () => {
                   try {
                     const loaded = await uploadScene();
                     if (!loaded) return;
-                    scene = loaded;
+                    root = loaded;
+                    floor = 0;
+                    link();
                     sel = null;
                     syncTop();
                     commit();
@@ -1381,6 +1653,7 @@ export function createBuilderView({ sync, cid, go, play }) {
                   }
                 },
               }, icon('upload'), tr(' Szene laden')),
+              ai.text && !floor ? h('button.small', { title: tr('Beschreibe, was die Karte zeigen soll – das Sprachmodell entwirft Räume, Einrichtung und Gelände. Der Entwurf ersetzt den Inhalt dieser Karte (mit Strg+Z rückgängig).'), onclick: () => aiMap() }, icon('sparkles'), tr(' Karte mit KI entwerfen …')) : null,
             ),
           );
         }
@@ -1404,15 +1677,18 @@ export function createBuilderView({ sync, cid, go, play }) {
           const timber = h('input', { type: 'checkbox', checked: !!it.timber });
           timber.addEventListener('change', () => ((it.timber = timber.checked || undefined), commit()));
           const theme = h('select', { title: tr('Stellt passende Möbel an Wände, in Ecken und in die Mitte – Türen bleiben frei') }, h('option', { value: '' }, tr('– leer lassen –')), Object.keys(THEMES).map((k) => h('option', { value: k }, THEME_LABEL[k])));
+          if (it.theme === 'custom') theme.append(h('option', { value: 'custom' }, `✦ ${it.themeName || tr('KI-Entwurf')}`));
           theme.value = it.theme || '';
           theme.addEventListener('change', () => (furnishRoom(it, theme.value), renderSide()));
           out.push(title(tr('Raum')), hint(tr('Ziehen verschiebt, die Griffe ändern die Größe.')), floorPicker(() => it.floor, (f) => ((it.floor = f), commit())),
             h('label.small.muted', tr('Einrichten als')),
             theme,
+            ai.text ? h('button.small', { title: tr('Beschreibe den Raum in eigenen Worten – das Sprachmodell wählt passende Möbel aus dem Katalog, gestellt werden sie nach den üblichen Regeln'), onclick: () => aiFurnish(it) }, icon('sparkles'), tr(' Mit KI einrichten …')) : null,
             it.theme ? h('div.row', h('button.small', { onclick: () => furnishRoom(it, it.theme) }, icon('d20'), tr(' Neu würfeln')), h('button.small', { title: tr('Die Möbel behalten und einzeln weiterbearbeiten'), onclick: () => ((scene.objects.forEach((o) => o.theme === it.id && delete o.theme)), delete it.theme, commit(), renderSide()) }, tr('Auflösen'))) : null, h('label.inline', open, tr('Offen (ohne Wände, z. B. Veranda oder Steg)')), h('label.inline', ruin, tr('Ruine (verfallene Mauern, überwucherter Boden)')), h('label.inline', timber, tr('Holzwände (Blockhaus, Scheune, Hütte)')), h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Raum löschen')));
         } else if (sel.type === 'wall') {
           out.push(title(tr('Wand')), choice([['wood', tr('Holz')], ['stone', tr('Stein')], ['rampart', tr('Burgmauer')], ['palisade', tr('Palisade')]], () => it.kind || 'wood', (v) => ((it.kind = v), commit())),
-            it.kind === 'rampart' || it.kind === 'palisade'
+            // der Graben ist Gelände: nur im Erdgeschoss
+            !floor && (it.kind === 'rampart' || it.kind === 'palisade')
               ? h('button.small', {
                   title: tr('Malt einen Wassergraben rund um den geschlossenen Mauerring – wie mit dem Wasserpinsel, also danach frei änderbar'),
                   onclick: () => {
@@ -1467,7 +1743,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         const def = TERRAIN[opt.terrain];
         out.push(
           title(tr('Gelände malen')),
-          choice(Object.entries(TERRAIN).map(([k, t]) => [k, t.label]), () => opt.terrain, (v) => ((opt.terrain = v), (opt.r = TERRAIN[v].r))),
+          choice(Object.entries(TERRAIN).filter(([k]) => floor >= 0 || k === 'cave').map(([k, t]) => [k, t.label]), () => opt.terrain, (v) => ((opt.terrain = v), (opt.r = TERRAIN[v].r))),
           opt.terrain === 'high' ? h('div', h('label.small.muted', tr('Höhenstufe')), choice([[1, '1'], [2, '2'], [3, '3']], () => opt.lvl, (v) => (opt.lvl = v))) : null,
           h('label.small.muted', tr('Pinselgröße')),
           size,
@@ -1496,7 +1772,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         const renderList = () => {
           const q = opt.search.trim().toLowerCase();
           const groups = [];
-          const button = ([t, d]) => h('button', { class: opt.obj === t ? 'active' : '', title: d.label, onclick: () => ((opt.obj = t), renderList(), draw()) }, h('img', { src: previewUrl(t, B), alt: '', loading: 'lazy' }), h('span', d.label));
+          const button = ([t, d]) => h('button', { class: opt.obj === t ? 'active' : '', title: d.label, onclick: () => ((opt.obj = t), renderList(), renderVariants(), draw()) }, h('img', { src: previewUrl(t, B), alt: '', loading: 'lazy' }), h('span', d.label));
           if (!q && recent.length) groups.push(h('div.small.muted', tr('Zuletzt benutzt')), h('div.mb-palette', recent.map((t) => button([t, CATALOG[t]]))));
           // Auf Übersichtskarten stehen die Gebäude vorn
           const cats = Object.entries(CATEGORIES).sort(([a], [b]) => (scene.scale ? (b === 'building') - (a === 'building') : 0));
@@ -1508,8 +1784,31 @@ export function createBuilderView({ sync, cid, go, play }) {
           fill(list, groups.length ? groups : h('p.small.muted', tr('Nichts gefunden.')));
         };
         search.addEventListener('input', () => ((opt.search = search.value), renderList()));
+        // Setz-Optionen: Ausführung wechseln oder festhalten, zufällig drehen und spiegeln
+        const vary = h('input', { type: 'checkbox', checked: opt.vary });
+        vary.addEventListener('change', () => ((opt.vary = vary.checked), savePlace(), renderVariants()));
+        const flipR = h('input', { type: 'checkbox', checked: opt.flipRand });
+        flipR.addEventListener('change', () => ((opt.flipRand = flipR.checked), savePlace(), nextGhost(), draw()));
+        const variants = h('div');
+        const renderVariants = () => {
+          const def = CATALOG[opt.obj];
+          const vs = variantsOf(opt.obj, B);
+          const same = (v) => !opt.vary && (def.size ? v % 18 === ghostV % 18 : v === ghostV);
+          fill(variants, vs.length ? [h('div.small.muted', tr('Ausführung')), h('div.mb-palette.mb-var', vs.map((q) => h('button', { class: same(q.v) ? 'active' : '', title: tr('Immer diese Ausführung setzen'), onclick: () => ((ghostV = q.v), (opt.vary = false), (vary.checked = false), savePlace(), renderVariants(), draw()) }, h('img', { src: q.url, alt: '' }))))] : []);
+        };
         renderList();
-        out.push(title(tr('Gegenstand setzen')), hint(tr('Auswählen und auf die Karte klicken. R dreht vor dem Setzen.')), search, list);
+        renderVariants();
+        out.push(
+          title(tr('Gegenstand setzen')),
+          hint(tr('Auswählen und auf die Karte klicken. R dreht vor dem Setzen.')),
+          h('label.inline.small', { title: tr('Gibt es einen Gegenstand in mehreren Ausführungen, kommt nach jedem Setzen eine andere. Aus: es bleibt bei der gewählten.') }, vary, tr('Ausführung nach jedem Setzen wechseln')),
+          variants,
+          h('div.small.muted', tr('Drehung beim Setzen')),
+          choice([['off', tr('Fest')], ['slight', tr('Leicht schief')], ['quarter', tr('In 90°-Schritten')], ['free', tr('Beliebig')]], () => opt.rotMode, (v) => ((opt.rotMode = v), savePlace(), nextGhost())),
+          h('label.inline.small', { title: tr('Jedes zweite Stück wird gespiegelt gesetzt (nicht bei Dächern und Türmen)') }, flipR, tr('Zufällig spiegeln')),
+          search,
+          list,
+        );
       } else if (tool === 'label') {
         out.push(title(tr('Namen setzen')), choice([['place', tr('Ort')], ['area', tr('Viertel')]], () => opt.labelKind, (v) => (opt.labelKind = v)), choice([['s', tr('Klein')], ['m', tr('Mittel')], ['l', tr('Groß')], ['xl', tr('Sehr groß')]], () => opt.labelSize, (v) => (opt.labelSize = v)), hint(tr('Auf die Karte klicken und den Namen eingeben – für Orte (Rathaus, Zum Eber) oder ganze Viertel und Landstriche (große, gesperrte Schrift). Im Spiel entscheidest du, welche Namen die Spieler sehen.')));
       } else if (tool === 'fill') {
@@ -1522,112 +1821,185 @@ export function createBuilderView({ sync, cid, go, play }) {
 
     // --- Kartenbild übernehmen -----------------------------------------------------------------------------------------
     let baking = false;
+    /**
+     * Was das Spiel über ein Stockwerk wissen muss: Lichter, Wände, Räume, Türen, Fenster und Namen. map: die Karte,
+     * deren Zustand (Türen offen/zu, sichtbare Namen, eigene Lichter) erhalten bleibt.
+     */
+    function playData(sc, map, W, H, loops, isCave) {
+          // Feuerstellen und Laternen leuchten: als Lichtquellen der Karte übernehmen (eigene Lichter der Spielleitung bleiben)
+          const lights = Object.fromEntries(Object.entries(map.lights || {}).filter(([k]) => !k.startsWith('mb')));
+          for (const o of sc.objects) {
+            const l = CATALOG[o.t]?.light;
+            if (!l) continue;
+            // Lichtpunkt des Gegenstands (bei der Wandfackel ein Stück vor der Wand), mitgedreht
+            const [ax, ay] = CATALOG[o.t].lightAt || [0, 0];
+            const ra = ((o.rot || 0) * Math.PI) / 180;
+            const fx = o.flip ? -ax : ax;
+            lights[`mb${o.id}`] = { id: `mb${o.id}`, x: Math.round(o.x + fx * Math.cos(ra) - ay * Math.sin(ra)), y: Math.round(o.y + fx * Math.sin(ra) + ay * Math.cos(ra)), on: true, seed: (o.v % 97) / 10, ...l };
+          }
+          // Türen: Zustand (offen/zu, verschlossen) bleibt über das erneute Übernehmen hinweg erhalten
+          const walls = wallSegments(sc.rooms, sc.walls, sc.openings, loops);
+          const zones = roomZones(sc.rooms, sc.walls, loops, W, H);
+          // Unter freiem Himmel: Flächen, die nur von Mauerzügen umschlossen sind (Burghof, ummauerte Stadt). Sie lassen
+          // sich aufdecken wie Räume, gelten für „nur innen dunkel“ aber als draußen.
+          for (const z of zones) {
+            const xs = z.in.filter((_, k) => k % 2 === 0);
+            const ys = z.in.filter((_, k) => k % 2 === 1);
+            const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+            let inside = 0;
+            let roofed = 0;
+            for (let k = 0; k < 400 && inside < 16; k++) {
+              const px = x0 + ((k * 0.618034) % 1) * (x1 - x0);
+              const py = y0 + ((k * 0.414214) % 1) * (y1 - y0);
+              if (!zoneAt({ zones: [{ id: z.id, pts: z.in, holes: z.holes }] }, px, py)) continue;
+              inside++;
+              const room = roomAt(sc.rooms, px, py);
+              if ((room && !room.open && !room.ruin) || isCave(px, py)) roofed++;
+            }
+            if (inside && roofed * 2 < inside) z.out = true;
+          }
+          // Was die Spielleitung im Spiel von Hand als Hof oder Innenraum eingestuft hat, bleibt so
+          for (const pz of map.zones || []) {
+            if (!pz.man || !pz.at) continue;
+            const z = zoneAt({ zones }, pz.at[0], pz.at[1]);
+            if (!z) continue;
+            if (pz.out) z.out = true;
+            else delete z.out;
+            z.man = 1;
+            z.at = pz.at;
+          }
+          const outline = buildingOutline(sc.rooms);
+          const doors = {};
+          let orphans = 0;
+          for (const o of sc.openings) {
+            if (o.k === 'window') continue;
+            // Eine Tür, die an keiner Wand mehr liegt, würde mitten im Raum das Licht sperren
+            if ((nearestWall(outline, sc.walls, o.x, o.y)?.d ?? 99) > 8) {
+              orphans++;
+              continue;
+            }
+            const prev = map.doors?.[o.id];
+            const inner = sc.walls.find((w) => (nearestWall({ segs: [w], arcs: [] }, [], o.x, o.y)?.d ?? 99) < 8);
+            const d = { id: o.id, x: o.x, y: o.y, a: o.a, w: o.w, open: !!prev?.open, locked: prev ? !!prev.locked : !!o.locked, secret: o.k === 'secret', gate: o.k === 'gate', found: !!prev?.found, wall: inner ? inner.kind || 'wood' : isTimberWall(sc.rooms, o.x, o.y) ? 'timber' : 'stone' };
+            d.seg = sealDoor(d, walls);
+            if (d.gate && inner) {
+              // Tor im Mauerring: die Flügel schwenken in den Hof
+              const n = ringOutsides(sc.walls.filter((w) => w.kind === inner.kind)).get(inner);
+              if (n) d.sw = n[0] * Math.sin(o.a) - n[1] * Math.cos(o.a) > 0 ? 1 : -1;
+            }
+            // Räume beiderseits der Tür (null = draußen): geht sie auf, werden sie aufgedeckt
+            d.z = [-1, 1].map((sgn) => zoneAt({ zones }, o.x - Math.sin(o.a) * 26 * sgn, o.y + Math.cos(o.a) * 26 * sgn)?.id || null);
+            doors[o.id] = d;
+          }
+          if (orphans) toast(tr('{n} Türen liegen an keiner Wand und fehlen deshalb im Spiel.', { n: orphans }), 5000);
+          // Tageslicht: Fenster, die ins Freie gehen. Gemerkt werden ein Punkt knapp vor dem Fenster, seine Richtung und
+          // Breite und der Raum dahinter – von dort fällt bei „nur innen dunkel“ das Licht in den Raum.
+          const windows = [];
+          for (const o of sc.openings) {
+            if (o.k !== 'window') continue;
+            const nx = -Math.sin(o.a);
+            const ny = Math.cos(o.a);
+            const side = [-1, 1].map((sg) => {
+              const z = zoneAt({ zones }, o.x + nx * 30 * sg, o.y + ny * 30 * sg);
+              return z && !z.out ? z.id : null;
+            });
+            if (!side[0] === !side[1]) continue; // Fenster zwischen zwei Räumen oder in einer Hofmauer
+            const sg = side[0] ? 1 : -1;
+            windows.push([Math.round(o.x + nx * 24 * sg), Math.round(o.y + ny * 24 * sg), Math.round(o.a * 1000) / 1000, Math.round(o.w), side[0] || side[1]]);
+          }
+          // Namen: ob die Spieler sie sehen, bleibt über das erneute Übernehmen hinweg erhalten
+          const labels = Object.fromEntries((sc.labels || []).filter((l) => l.text).map((l) => [l.id, { id: l.id, x: l.x, y: l.y, text: l.text, size: l.size || 'm', kind: l.kind || 'place', rot: l.rot || 0, shown: map.labels?.[l.id]?.shown !== false }]));
+          return { lights, walls, zones, doors, windows, labels };
+    }
+    /**
+     * Weitere Stockwerke fürs Spiel: je Stockwerk ein weiteres Bild derselben Karte mit eigenen Wänden, Türen, Räumen,
+     * Lichtern, Namen, eigenem Nebel und eigener Beleuchtung (map.uppers, map.lowers). In einem Obergeschoss scheint
+     * alles darunter abgedunkelt durch, ein Untergeschoss liegt für sich im Fels. Gezeigt wird ein Stockwerk erst, wenn
+     * die Spielleitung es einblendet. Liefert die Änderungen.
+     */
+    async function bakeFloors(map, W, H) {
+      const used = (list, keys) => {
+        let n = list.length;
+        while (n && !keys.some((k) => list[n - 1][k].length)) n--;
+        return n;
+      };
+      const ups = root.uppers || [];
+      const lows = root.lowers || [];
+      const nUp = used(ups, ['rooms', 'objects', 'walls']);
+      const nDown = used(lows, ['rooms', 'objects', 'walls', 'cave']);
+      const prevUp = Array.isArray(map.uppers) ? map.uppers : [];
+      const prevDown = Array.isArray(map.lowers) ? map.lowers : [];
+      const image = async (cv, f) => {
+        let blob = await new Promise((res) => cv.toBlob(res, 'image/webp', 0.92));
+        if (!blob || blob.type !== 'image/webp') blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
+        const [asset] = await uploadFiles(cid, [new File([blob], `${map.name} – ${floorLabel(f, nUp, nDown, tr)}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type })]);
+        return asset.id;
+      };
+      // Nebel, Beleuchtung und Zustände (Türen, sichtbare Namen, eigene Lichter) eines Stockwerks bleiben erhalten; ein
+      // neues beginnt mit dem Nebel so, wie er im Erdgeschoss steht (an oder aus)
+      const fog = (prev) => prev?.fog || { enabled: !!map.fog?.enabled, ops: [] };
+      const upOut = [];
+      if (nUp) renderer.compose(root); // unten mit geschlossenen Türen – in den Bildern der Obergeschosse bewegt sich dort nichts
+      lowKey = null;
+      for (let i = 1; i <= nUp; i++) {
+        const up = ups[i - 1];
+        const prev = prevUp[i - 1] || null;
+        await upR(i).ready(up);
+        const assetId = await image(upR(i).compose(up, { noDoors: true, under: underOf(i) }), i);
+        upOut.push({ assetId, ...playData(up, prev || {}, W, H, [], () => false), fog: fog(prev), lighting: prev?.lighting || { enabled: false, ambient: 0.15, ...(map.lighting || {}) } });
+        // fürs nächste Stockwerk liegt dieses mit geschlossenen Türen darunter
+        if (i < nUp) upR(i).compose(up, { under: underOf(i) });
+      }
+      const downOut = [];
+      for (let i = 1; i <= nDown; i++) {
+        const low = lows[i - 1];
+        const prev = prevDown[i - 1] || null;
+        const R = lowR(i);
+        await R.ready(low);
+        const assetId = await image(R.compose(low, { noDoors: true }), -i);
+        // unter der Erde ist es dunkel: ein neues Untergeschoss beginnt mit eingeschalteter Beleuchtung
+        downOut.push({ assetId, ...playData(low, prev || {}, W, H, R.terrain.caveLoops.map((L) => L.pts), (x, y) => R.isCave(x, y)), fog: fog(prev), lighting: prev?.lighting || { enabled: true, ambient: 0.12 } });
+        R.compose(low); // im Kartenbauer wieder mit Türen
+      }
+      // Bilder, die keiner mehr braucht, wieder entfernen
+      const keep = new Set([...upOut, ...downOut].map((u) => u.assetId));
+      const old = [...prevUp, ...prevDown].map((u) => u?.assetId).filter((id) => id && !keep.has(id));
+      const inUse = (id) => Object.values(S().maps).some((m) => m.assetId === id || [...(m.uppers || []), ...(m.lowers || [])].some((u) => u?.assetId === id));
+      if (old.length) setTimeout(() => old.forEach((id) => !inUse(id) && api('DELETE', `/api/campaigns/${cid}/assets/${id}`).catch(() => {})), 2000);
+      if (!nUp && !nDown && !prevUp.length && !prevDown.length) return [];
+      const clampF = (f) => Math.max(-nDown, Math.min(nUp, Math.trunc(Number(f) || 0)));
+      const ops = [{ t: 'merge', p: ['maps', mapId], v: { uppers: nUp ? upOut : null, lowers: nDown ? downOut : null, floor: clampF(map.floor) } }];
+      // Figuren auf einem Stockwerk, das es nicht mehr gibt, rücken auf das nächste vorhandene
+      for (const t of Object.values(map.tokens || {})) if (t.f && clampF(t.f) !== t.f) ops.push({ t: 'set', p: ['maps', mapId, 'tokens', t.id, 'f'], v: clampF(t.f) });
+      return ops;
+    }
     async function bake() {
       if (baking || !scene) return false;
       baking = true;
       bakeBtn.disabled = true;
       status.textContent = tr('Kartenbild wird erzeugt …');
       try {
-        await api('PUT', url, scene);
-        await renderer.ready(scene);
-        const cv = renderer.compose(scene, { noDoors: true }); // Türen zeichnet das Spiel selbst – sie gehen auf und zu
-        const { W, H } = sceneSize(scene);
+        await api('PUT', url, root);
+        await renderer.ready(root);
+        const cv = renderer.compose(root, { noDoors: true }); // Türen zeichnet das Spiel selbst – sie gehen auf und zu
+        lowKey = null;
+        const { W, H } = sceneSize(root);
         let blob = await new Promise((res) => cv.toBlob(res, 'image/webp', 0.92));
         if (!blob || blob.type !== 'image/webp') blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
         const map = S().maps[mapId];
         const file = new File([blob], `${map.name}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type });
         const [asset] = await uploadFiles(cid, [file]);
         const old = map.built ? map.assetId : null;
-        // Feuerstellen und Laternen leuchten: als Lichtquellen der Karte übernehmen (eigene Lichter der Spielleitung bleiben)
-        const lights = Object.fromEntries(Object.entries(map.lights || {}).filter(([k]) => !k.startsWith('mb')));
-        for (const o of scene.objects) {
-          const l = CATALOG[o.t]?.light;
-          if (!l) continue;
-          // Lichtpunkt des Gegenstands (bei der Wandfackel ein Stück vor der Wand), mitgedreht
-          const [ax, ay] = CATALOG[o.t].lightAt || [0, 0];
-          const ra = ((o.rot || 0) * Math.PI) / 180;
-          const fx = o.flip ? -ax : ax;
-          lights[`mb${o.id}`] = { id: `mb${o.id}`, x: Math.round(o.x + fx * Math.cos(ra) - ay * Math.sin(ra)), y: Math.round(o.y + fx * Math.sin(ra) + ay * Math.cos(ra)), on: true, seed: (o.v % 97) / 10, ...l };
-        }
-        // Türen: Zustand (offen/zu, verschlossen) bleibt über das erneute Übernehmen hinweg erhalten
-        const walls = wallSegments(scene.rooms, scene.walls, scene.openings, renderer.terrain.caveLoops.map((L) => L.pts));
-        const zones = roomZones(scene.rooms, scene.walls, renderer.terrain.caveLoops.map((L) => L.pts), W, H);
-        // Unter freiem Himmel: Flächen, die nur von Mauerzügen umschlossen sind (Burghof, ummauerte Stadt). Sie lassen
-        // sich aufdecken wie Räume, gelten für „nur innen dunkel“ aber als draußen.
-        for (const z of zones) {
-          const xs = z.in.filter((_, k) => k % 2 === 0);
-          const ys = z.in.filter((_, k) => k % 2 === 1);
-          const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-          let inside = 0;
-          let roofed = 0;
-          for (let k = 0; k < 400 && inside < 16; k++) {
-            const px = x0 + ((k * 0.618034) % 1) * (x1 - x0);
-            const py = y0 + ((k * 0.414214) % 1) * (y1 - y0);
-            if (!zoneAt({ zones: [{ id: z.id, pts: z.in, holes: z.holes }] }, px, py)) continue;
-            inside++;
-            const room = roomAt(scene.rooms, px, py);
-            if ((room && !room.open && !room.ruin) || renderer.isCave(px, py)) roofed++;
-          }
-          if (inside && roofed * 2 < inside) z.out = true;
-        }
-        // Was die Spielleitung im Spiel von Hand als Hof oder Innenraum eingestuft hat, bleibt so
-        for (const pz of map.zones || []) {
-          if (!pz.man || !pz.at) continue;
-          const z = zoneAt({ zones }, pz.at[0], pz.at[1]);
-          if (!z) continue;
-          if (pz.out) z.out = true;
-          else delete z.out;
-          z.man = 1;
-          z.at = pz.at;
-        }
-        const outline = buildingOutline(scene.rooms);
-        const doors = {};
-        let orphans = 0;
-        for (const o of scene.openings) {
-          if (o.k === 'window') continue;
-          // Eine Tür, die an keiner Wand mehr liegt, würde mitten im Raum das Licht sperren
-          if ((nearestWall(outline, scene.walls, o.x, o.y)?.d ?? 99) > 8) {
-            orphans++;
-            continue;
-          }
-          const prev = map.doors?.[o.id];
-          const inner = scene.walls.find((w) => (nearestWall({ segs: [w], arcs: [] }, [], o.x, o.y)?.d ?? 99) < 8);
-          const d = { id: o.id, x: o.x, y: o.y, a: o.a, w: o.w, open: !!prev?.open, locked: prev ? !!prev.locked : !!o.locked, secret: o.k === 'secret', gate: o.k === 'gate', found: !!prev?.found, wall: inner ? inner.kind || 'wood' : isTimberWall(scene.rooms, o.x, o.y) ? 'timber' : 'stone' };
-          d.seg = sealDoor(d, walls);
-          if (d.gate && inner) {
-            // Tor im Mauerring: die Flügel schwenken in den Hof
-            const n = ringOutsides(scene.walls.filter((w) => w.kind === inner.kind)).get(inner);
-            if (n) d.sw = n[0] * Math.sin(o.a) - n[1] * Math.cos(o.a) > 0 ? 1 : -1;
-          }
-          // Räume beiderseits der Tür (null = draußen): geht sie auf, werden sie aufgedeckt
-          d.z = [-1, 1].map((sgn) => zoneAt({ zones }, o.x - Math.sin(o.a) * 26 * sgn, o.y + Math.cos(o.a) * 26 * sgn)?.id || null);
-          doors[o.id] = d;
-        }
-        if (orphans) toast(tr('{n} Türen liegen an keiner Wand und fehlen deshalb im Spiel.', { n: orphans }), 5000);
-        // Tageslicht: Fenster, die ins Freie gehen. Gemerkt werden ein Punkt knapp vor dem Fenster, seine Richtung und
-        // Breite und der Raum dahinter – von dort fällt bei „nur innen dunkel“ das Licht in den Raum.
-        const windows = [];
-        for (const o of scene.openings) {
-          if (o.k !== 'window') continue;
-          const nx = -Math.sin(o.a);
-          const ny = Math.cos(o.a);
-          const side = [-1, 1].map((sg) => {
-            const z = zoneAt({ zones }, o.x + nx * 30 * sg, o.y + ny * 30 * sg);
-            return z && !z.out ? z.id : null;
-          });
-          if (!side[0] === !side[1]) continue; // Fenster zwischen zwei Räumen oder in einer Hofmauer
-          const sg = side[0] ? 1 : -1;
-          windows.push([Math.round(o.x + nx * 24 * sg), Math.round(o.y + ny * 24 * sg), Math.round(o.a * 1000) / 1000, Math.round(o.w), side[0] || side[1]]);
-        }
-        // Namen: ob die Spieler sie sehen, bleibt über das erneute Übernehmen hinweg erhalten
-        const labels = Object.fromEntries((scene.labels || []).filter((l) => l.text).map((l) => [l.id, { id: l.id, x: l.x, y: l.y, text: l.text, size: l.size || 'm', kind: l.kind || 'place', rot: l.rot || 0, shown: map.labels?.[l.id]?.shown !== false }]));
+        const { lights, walls, zones, doors, windows, labels } = playData(root, map, W, H, renderer.terrain.caveLoops.map((L) => L.pts), (px, py) => renderer.isCave(px, py));
+        const upper = await bakeFloors(map, W, H);
         // Dungeon und Höhle liegen im Dunkeln: beim ersten Übernehmen gleich die Beleuchtung einschalten
-        const lighting = !map.assetId && biomeOf(scene).solid ? { ...(map.lighting || {}), enabled: true, ambient: 0.12 } : null;
+        const lighting = !map.assetId && biomeOf(root).solid ? { ...(map.lighting || {}), enabled: true, ambient: 0.12 } : null;
         sync.do([
           lighting && { t: 'set', p: ['maps', mapId, 'lighting'], v: lighting },
-          { t: 'merge', p: ['maps', mapId], v: { assetId: asset.id, width: W, height: H, built: true, doors, labels, zones, walls, windows, anim: scene.still ? null : renderer.animData(scene), lights } },
+          { t: 'merge', p: ['maps', mapId], v: { assetId: asset.id, width: W, height: H, built: true, doors, labels, zones, walls, windows, anim: root.still ? null : renderer.animData(root), lights } },
           // Übersichtskarten zeigen beim ersten Übernehmen kein Raster – es stört auf Stadt- und Landkarten
-          { t: 'merge', p: ['maps', mapId, 'grid'], v: { size: CELL, offsetX: 0, offsetY: 0, cols: 0, rows: 0, ...(!map.assetId && scene.scale === 'overview' ? { show: false } : {}) } },
+          { t: 'merge', p: ['maps', mapId, 'grid'], v: { size: CELL, offsetX: 0, offsetY: 0, cols: 0, rows: 0, ...(!map.assetId && root.scale === 'overview' ? { show: false } : {}) } },
+          ...upper,
         ]);
         if (old && old !== asset.id && !Object.values(S().maps).some((m) => m.id !== mapId && m.assetId === old)) api('DELETE', `/api/campaigns/${cid}/assets/${old}`).catch(() => {});
         baked = true;
@@ -1652,19 +2024,21 @@ export function createBuilderView({ sync, cid, go, play }) {
     (async () => {
       status.textContent = tr('Lädt …');
       try {
-        scene = await api('GET', url);
+        root = await api('GET', url);
       } catch {
-        scene = null;
+        root = null;
       }
-      if (!scene || typeof scene !== 'object' || !scene.cols) {
+      let fresh = false;
+      if (!root || typeof root !== 'object' || !root.cols) {
         // neue Karte: mit der gewählten Vorlage beginnen, sonst leer
-        scene = takeTemplate(mapId) || newScene();
+        root = takeTemplate(mapId) || newScene();
         baked = false;
-        if (scene.objects?.length || scene.rooms?.length) save();
+        fresh = !!(root.objects?.length || root.rooms?.length);
       }
-      // fehlende Listen älterer Stände ergänzen
-      for (const k of ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels']) scene[k] ||= [];
-      history.push(JSON.stringify(scene));
+      // fehlende Listen älterer Stände ergänzen, Obergeschoss anbinden
+      link();
+      if (fresh) save();
+      history.push(JSON.stringify(root));
       hIndex = 0;
       undoBtn.disabled = redoBtn.disabled = true;
       syncTop();
@@ -1673,6 +2047,9 @@ export function createBuilderView({ sync, cid, go, play }) {
       fit();
       status.textContent = '';
       recompose();
+      // neue Karte mit Wunsch an die KI: gleich entwerfen lassen
+      const wish = takeWish(mapId);
+      if (wish && ai.text) aiMap(wish);
     })();
 
     return {

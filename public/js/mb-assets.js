@@ -603,9 +603,27 @@ export function sprite(o, B, cs) {
     promise: e.promise,
     w: Number(m[1]) * k,
     h: Number(m[2]) * k,
-    shadow: def.size ? px * (o.t === 'tree' ? 0.17 : o.t === 'bush' ? 0.12 : 0.2) : (def.h || 0) * s,
+    // Bäume sind hoch: ihr Schatten fällt deutlich über die Krone hinaus (etwa wie der eines Hauses)
+    shadow: def.size ? px * (o.t === 'tree' ? 0.3 : o.t === 'bush' ? 0.15 : 0.2) : (def.h || 0) * s,
     layer: def.layer || 'obj',
   };
 }
 /** Vorschaubild für die Palette. */
 export const previewUrl = (t, B) => dataUrl(CATALOG[t].make(7, B, CATALOG[t].size ? (t === 'tree' ? 120 : 84) : 0));
+/**
+ * Die verschiedenen Ausführungen eines Gegenstands (höchstens max): [{ v, url }]. Viele Gegenstände gibt es in
+ * mehreren Varianten (Bettwäsche, Fassdeckel, Baumform); wer nur eine hat, liefert eine leere Liste.
+ */
+export function variantsOf(t, B, max = 8) {
+  const def = CATALOG[t];
+  if (!def || !def.make.length) return [];
+  const seen = new Set();
+  const out = [];
+  for (let v = 0; v < 40 && out.length < max; v++) {
+    const text = def.make(def.size ? v % SHAPES : v, B, def.size ? (t === 'tree' ? 120 : 84) : 0);
+    if (seen.has(text)) continue;
+    seen.add(text);
+    out.push({ v, url: dataUrl(text) });
+  }
+  return out.length > 1 ? out : [];
+}

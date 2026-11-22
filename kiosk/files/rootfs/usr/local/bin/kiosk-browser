@@ -97,6 +97,11 @@ if [ "$KIOSK_ENGINE" = "cog" ]; then
     # Vollbild (sonst öffnet cog ein Fenster in Standardgröße oben links); Mauszeiger: cog lädt das Zeigerthema
     # „default“ – auf dem Kiosk ein unsichtbares (siehe buildroot/board/opizero2w)
     export COG_PLATFORM_WL_VIEW_FULLSCREEN=1
+    # Bildschirmmodus: cage nimmt sonst immer den vom Bildschirm bevorzugten (meist 1080p). Der Eintrag im Kernel
+    # (video=…) macht den gewünschten Modus nur verfügbar – ausgewählt wird er hier (Patch in buildroot/patches/cage).
+    # Wichtig für die Bildrate: die Tischansicht schafft auf dem Orange Pi Zero 2W in 720p gut doppelt so viele
+    # Bilder pro Sekunde wie in 1080p.
+    [ -n "${KIOSK_MODE:-}" ] && export CAGE_MODE="$KIOSK_MODE"
     exec cage -d -- cog --platform=wl "$@"
   fi
   # renderer=gles: Bild per OpenGL ES auf den Bildschirm bringen. „modeset“ (ohne Kopie, ~15 % schneller)

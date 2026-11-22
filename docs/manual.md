@@ -108,6 +108,27 @@ lying flat) and a player display, all from one browser.
   - **Several pieces at once:** a frame on free ground or Shift+click selects several items (on a tablet the
     “Multiple” switch). The selection can be dragged together, nudged with the arrow keys, duplicated, deleted and
     copied with Ctrl+C / Ctrl+V – into another map too. Rooms take their doors, interior walls and furniture along.
+  - **Placing objects:** many objects come in several variants (bed linen, barrels, trees). The variant changes by
+    itself with each placement; to keep one, click it under “Variant”. “Rotation when placing” sets each new piece
+    slightly askew, in 90° steps or at any angle, and optionally mirrors it at random – so tables, crates and barrels
+    do not look lined up.
+  - **Storeys:** above the canvas, “+ Upper floor” adds a storey above the ground floor, “+” further ones on top (up
+    to four); “+ Basement” builds downwards (up to three). On an upper floor you build rooms, walls, doors and
+    furniture – a tower room, a gallery, an attic. Whatever is not built over below stays visible but darkened – the
+    lower, the darker. A basement lies by itself in the rock: cellar, crypt or tunnels; the terrain brush paints cave
+    floor there. A dashed outline shows where the storey above lies. Otherwise terrain belongs to the ground floor;
+    an empty outermost storey disappears by itself.
+    During play the map first shows the ground floor, uncovered. At the bottom of the game master's map view all
+    storeys are offered: when the party takes the stairs, you bring in the next one – on the game table too. Each
+    storey has its own doors, lights, names, fog and lighting (a cellar starts dark). **Tokens belong to a storey**
+    and are only visible there: new tokens stand on the storey shown; in the inspector of a token (or of several
+    selected ones) the “storey” choice moves them up or down.
+  - **Building with AI** (only with a language model set up under “AI services”): “Furnish with AI …” on a room takes
+    a description in your own words (“alchemist's lab after an explosion”) and picks fitting furniture from the
+    catalogue. “Design map with AI …” (or “Let the AI design it” for a new map) builds a whole draft from a
+    description: rooms with doors and windows, furnishing, water, paths, groups of trees and place names. The AI only
+    delivers the plan – it is built by the map builder's rules, and everything can be changed afterwards. Depending
+    on the machine a draft takes one to three minutes.
   - **Fill:** drag out an area (circle or rectangle) – it fills itself with trees, bushes, rocks or a mix, but only on
     free ground (not in water, buildings, on paths or cliff edges). The density is adjustable, “Re-roll” distributes
     anew; afterwards every piece can be clicked and moved individually.
@@ -135,13 +156,20 @@ lying flat) and a player display, all from one browser.
     revealing and hiding).
   - **Lighting moods:** under “Fog, light & grid” buttons switch between day, dusk, night and “Underground”. “Dark
     indoors only” keeps the outdoors bright and darkens only rooms and caves – for the cellar below the tavern or a
-    cave mouth by day. Daylight then falls into the room through windows that face the outdoors. Which areas count
+    cave mouth by day. Daylight then falls into the room through windows that face the outdoors and scatters there:
+    the whole room gets brighter, most of all near the window. Which areas count
     as outdoors can be corrected: choose “Yard” in the Room tool and click the area (courtyard, garden) – useful
     above all for imported maps.
   - **Animated map:** on powerful displays (rendering “Smooth” under Screens, e.g. Orange Pi Zero 2W or a PC) the
-    trees sway, waves run to the shore and the water glitters, cloud shadows drift across the map and now and then a
-    bird flies past. Weak devices (Pi Zero 2 W) show the same map without motion. Can be switched off per map
-    (“Animated” in the map builder).
+    trees bend in the wind – the gusts travel across the map as a wave –, waves run to the shore and the water
+    glitters, cloud shadows drift across the map and now and then a bird flies past. Weak devices (Pi Zero 2 W) show
+    the same map without motion. Can be switched off per map (“Animated” in the map builder). The motion shows on
+    the game table and the player display, not in the game master's view.
+    Kiosk devices (single-board computers) get a lean version: fewer swaying crowns, no cloud shadows, torches
+    without a flickering glow – in return the map runs several times smoother there. The kiosk's resolution has the
+    biggest influence on the frame rate: on the Orange Pi Zero 2W the table view with tokens and fog reaches about 27
+    frames per second at 1080p, 38 at 1600 × 900 and 57 at 720p (display mode in the kiosk administration; effective
+    from the kiosk image of this version).
 - **Importing maps with walls:** files in the Universal VTT format (`.dd2vtt`, `.uvtt`, `.df2vtt`), as exported by
   many map makers and map packs, can be uploaded under “New map” like an image. The map image is extracted; grid,
   walls, doors and light sources come along. The game master opens and closes doors with a click, and the Room tool

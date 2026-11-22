@@ -47,6 +47,9 @@ if (kioskId) {
   }
 }
 const tableSettings = (settings) => kioskCalibration || settings.table;
+// Kiosk-Geräte (Einplatinenrechner) haben einen schwachen Grafikchip: Belebung und Lichteffekte in schlanker Fassung.
+// ?anim=full bzw. ?anim=lean legt es von Hand fest.
+const leanDisplay = param('anim') ? param('anim') === 'lean' : !!param('kiosk');
 const performanceFor = (table) => urlPerformance || (['high', 'low'].includes(table?.perf) ? table.perf : null) || devicePerformance || 'high';
 
 if (param('calibrate') || !campaignId) {
@@ -70,7 +73,7 @@ async function runTable() {
   sync.on(() => useCampaignUnits(sync.state));
   sync.on(() => followCampaignLanguage(sync.state.display));
   connectionBadge(sync);
-  const renderer = new MapRenderer(canvas, { mode: 'table', campaignId, getState: () => sync.state, renderScale: Number(param('scale')) || 1, performance: performanceFor(sync.state.display?.table) });
+  const renderer = new MapRenderer(canvas, { mode: 'table', campaignId, getState: () => sync.state, renderScale: Number(param('scale')) || 1, performance: performanceFor(sync.state.display?.table), lean: leanDisplay });
   if (param('maxfps')) renderer.maxFps = Number(param('maxfps'));
   // Ladebildschirm, solange die gewählte Karte noch lädt
   renderer.onLoading = (on) => loading.set(on, tr('Karte wird geladen …'));
