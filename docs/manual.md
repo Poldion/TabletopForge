@@ -72,6 +72,8 @@ lying flat) and a player display, all from one browser.
     stalagmites, a magic circle and more.
   - **Ruins:** a room marked “Ruin” gets crumbling walls with gaps and loose stones, the floor is overgrown in places,
     and light falls through the gaps.
+  - **Timber walls:** a room marked “Timber walls” gets sturdy beams and corner posts instead of masonry – for a log
+    cabin, barn or hut. Where it adjoins a stone room, the wall changes exactly at the seam.
   - **Overview maps** (scale at the top set to “Overview map”): for villages, towns, castles and regions. Trees, bushes
     and rocks are placed small; the “Buildings” catalogue has houses with thatched, tiled and slate roofs, an L-shaped
     house, barn, church, windmill, round tower, keep, wall tower, gatehouse, stone bridge, fields, a ship and more. The
@@ -84,12 +86,28 @@ lying flat) and a player display, all from one browser.
     clear. Orientation, density and house size of the quarter can be set afterwards, and every house moved
     individually. With the wall tool you set long **wall runs** point by point: every click is a corner, a click on
     the start closes the ring, double-click, Enter or Esc finishes. Besides the castle wall (with a tower at every
-    corner) there is the **palisade**. New in the “Buildings” catalogue: town house, row of houses, courtyard house,
+    corner) there is the **palisade**. Closed wall rings carry their battlements on the outside only. A **gate**
+    (under door/window) is two squares wide with two leaves and, in a castle wall, two gate towers; during play it
+    opens and closes like a door. With a piece of a closed wall ring selected, “Moat around the ring” paints a water
+    moat around the outside. Houses from a fill area first line streets and paths; the rows behind run in the same
+    direction as their street, and small trees and bushes grow in the yards. New in the “Buildings” catalogue: town house, row of houses, courtyard house,
     town hall, great hall, warehouse, market hall, stable, square tower, large round tower, bastion, drawbridge.
     Paths, dirt and streets now also lie on raised ground – so the castle hill gets its approach road and yard.
+    Where a path or street crosses the rock edge, the edge is left out: the way runs up as a ramp.
     Walled yards and cities can be revealed with the Room tool but count as outdoors for “dark indoors only”. Maps
     of 80 × 45 squares with well over a thousand objects stay smooth on a PC; on very large maps a ghost image moves
     while dragging and the map is redrawn on release.
+  - **Furnishing rooms:** select a room and choose a theme under “Furnish as” – taproom, kitchen, bedchamber,
+    storeroom, smithy, library, chapel, guard room, crypt or prison cell. Fitting furniture is placed with its back to
+    the wall, in the corners and in the middle (tables with stools or chairs); doors stay clear and whatever already
+    stands in the room is worked around. “Re-roll” arranges it differently, “Dissolve” releases the furniture for
+    editing.
+  - **Names on the map:** the **Text** tool places names of places (bold lettering) and of quarters or regions
+    (large, spaced). Names are not part of the map image: during play the game master clicks a name and shows or
+    hides it for the players – so a place appears only once the party knows it.
+  - **Several pieces at once:** a frame on free ground or Shift+click selects several items (on a tablet the
+    “Multiple” switch). The selection can be dragged together, nudged with the arrow keys, duplicated, deleted and
+    copied with Ctrl+C / Ctrl+V – into another map too. Rooms take their doors, interior walls and furniture along.
   - **Fill:** drag out an area (circle or rectangle) – it fills itself with trees, bushes, rocks or a mix, but only on
     free ground (not in water, buildings, on paths or cliff edges). The density is adjustable, “Re-roll” distributes
     anew; afterwards every piece can be clicked and moved individually.
@@ -107,8 +125,9 @@ lying flat) and a player display, all from one browser.
     on the right the door can be locked (lock symbol, game master only). The state is kept even when the map is
     changed in the map builder and applied again.
   - **Secret doors** look like wall on the game table; the game master sees them marked with a dashed outline. A
-    click opens them: the passage appears and a piece of wall swings aside. Closed again, it is wall again. Set them
-    in the map builder with the door/window tool.
+    click opens them: the passage appears and a piece of wall swings aside. After that the door counts as
+    discovered – closed again, a fine seam stays visible in the wall (can be switched off on the right). Set them in
+    the map builder with the door/window tool.
   - **Reveal room by room:** built maps know their rooms. The fog tool **Room** reveals the whole room you click in
     (walls and door frames included); with Shift it hides the room again. Doors, windows and interior walls separate
     rooms; outdoors keep using the brush or rectangle. With fog switched on, **opening a door** also reveals the rooms
@@ -116,11 +135,17 @@ lying flat) and a player display, all from one browser.
     revealing and hiding).
   - **Lighting moods:** under “Fog, light & grid” buttons switch between day, dusk, night and “Underground”. “Dark
     indoors only” keeps the outdoors bright and darkens only rooms and caves – for the cellar below the tavern or a
-    cave mouth by day.
+    cave mouth by day. Daylight then falls into the room through windows that face the outdoors. Which areas count
+    as outdoors can be corrected: choose “Yard” in the Room tool and click the area (courtyard, garden) – useful
+    above all for imported maps.
   - **Animated map:** on powerful displays (rendering “Smooth” under Screens, e.g. Orange Pi Zero 2W or a PC) the
     trees sway, waves run to the shore and the water glitters, cloud shadows drift across the map and now and then a
     bird flies past. Weak devices (Pi Zero 2 W) show the same map without motion. Can be switched off per map
     (“Animated” in the map builder).
+- **Importing maps with walls:** files in the Universal VTT format (`.dd2vtt`, `.uvtt`, `.df2vtt`), as exported by
+  many map makers and map packs, can be uploaded under “New map” like an image. The map image is extracted; grid,
+  walls, doors and light sources come along. The game master opens and closes doors with a click, and the Room tool
+  reveals enclosed rooms.
 - **Fog of war:** brush-based or rectangular, stored permanently across sessions.
 - **Game table calibration:** resolution, aspect ratio, diagonal or physical dimensions – one grid square on the TV is
   always exactly 1″ × 1″.

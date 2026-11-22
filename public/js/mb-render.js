@@ -1,7 +1,7 @@
 // Kartenbauer: zeichnet aus einer Szene (Gelände, Räume, Gegenstände) das Kartenbild.
 // Aufbau in Stufen, die einzeln zwischengespeichert werden: Gelände (langsam, Bildpunkt für Bildpunkt gemalt) →
 // Gebäude (Böden, Wände, deren Schatten) → Zusammensetzen mit Gegenständen und einem gemeinsamen Schattenwurf.
-import { CELL, rng, hashStr, valueNoise, tileField, boxBlur, chamfer, marchingSquares, chaikin, resample, normals, buildingOutline, wallPieces, arcPieces, inRoom, isRuinWall, ruinPieces, ruinArcPieces } from './mb-geom.js';
+import { CELL, rng, hashStr, valueNoise, tileField, boxBlur, chamfer, marchingSquares, chaikin, resample, normals, buildingOutline, wallPieces, arcPieces, inRoom, isRuinWall, isTimberWall, ruinPieces, ruinArcPieces, ringOutsides } from './mb-geom.js';
 import { INK, LIGHT, SHAPES, biomeOf, sprite } from './mb-assets.js';
 import { drawDoor } from './doors.js';
 
@@ -10,6 +10,7 @@ const BT = 8; // Balkenstärke Holz
 const RT = 30; // Stärke einer Burgmauer
 const TR = 38; // Halbmesser der Türme an den Enden einer Burgmauer
 const PT = 15; // Stärke einer Palisade
+const RAMP = 135; // so weit beiderseits der Felskante wird für eine Rampe ausgespart (Felsband samt Schlagschatten)
 const K = 4; // Geländefelder in Viertel-Auflösung
 const PAD = 10; // Rand der Geländefelder (Zellen), damit Ufer über den Kartenrand hinauslaufen
 const TS = 1024; // Kantenlänge der kachelbaren Rauschfelder
@@ -211,6 +212,7 @@ function blurShapes(m, shapes, grow, blur) {
   m.shadowOffsetX = 30000;
   m.drawImage(cv, -30000, 0);
   m.restore();
+  cv.width = cv.height = 0; // große Hilfsfläche gleich wieder freigeben
 }
 /**
  * Gemalte Geländeschicht im Ausschnitt box: drawMask zeichnet die Fläche weich (Deckkraft = Dichte). Der Rand entsteht
@@ -279,7 +281,8 @@ function drawGround(c, W, H, B, P, seed) {
   const o = [0, 0, 0];
   for (let y = 0, i = 0; y < gh; y++) {
     for (let x = 0; x < gw; x++, i += 4) {
-      ramp(GR, coarse(x * K, y * K, s), o);
+      // Farbzonen je Umgebung unterschiedlich stark (Pflaster ruhiger als Wiese)
+      ramp(GR, 0.5 + (coarse(x * K, y * K, s) - 0.5) * (B.zones ?? 1), o);
       const k = 1 + (coarse(x * K + 5000, y * K + 3000, s) - 0.5) * 0.1;
       d[i] = o[0] * k;
       d[i + 1] = o[1] * k;
@@ -366,6 +369,22 @@ function drawDirt(c, W, H, B, shapes) {
     out[1] = col[1] * k;
     out[2] = col[2] * k;
   }, { thr: 0.2, edge: 0.5, warp: 0.4, fine: 0.1, alpha: 0.86 * (B.dirtAlpha ?? 1) });
+}
+/**
+ * Festgetretener Boden unter einem Häuserviertel: weich auslaufend, gedeckter als der Trampelpfad – so steht ein
+ * Viertel nicht auf dem Rasen.
+ */
+function drawYards(c, W, H, B, shapes) {
+  if (!shapes.length) return;
+  const d = hx(B.dirt);
+  const gray = (d[0] + d[1] + d[2]) / 3;
+  const col = d.map((v) => v * 0.62 + gray * 0.38);
+  paintMask(c, shapesBox(shapes, 90, W, H), (m) => blurShapes(m, shapes, -14, 56), (v, x, y, out) => {
+    const k = 0.95 + fa(x, y) * 0.1;
+    out[0] = col[0] * k;
+    out[1] = col[1] * k;
+    out[2] = col[2] * k;
+  }, { thr: 0.3, edge: 0.45, warp: 0.72, fine: 0.14, alpha: 0.6, ox: 211, oy: 641 });
 }
 /**
  * Gepflasterte Straße oder Platz: ruhige, helle Fläche mit sauberem Rand und dunkler Randlinie, dazu locker verteilte
@@ -1061,7 +1080,69 @@ function woodWall(c, s) {
   c.stroke();
   c.restore();
 }
-/** Burgmauer: breites Steinband mit Wehrgang und Zinnen auf beiden Seiten. */
+const TIMBER = ['#6f5334', '#765939', '#684d30', '#72563a'];
+/** Ein Balken der Holz-Außenwand: Block in Wandstärke mit zwei feinen Maserlinien. */
+function timberBeam(c, P, x, l) {
+  block(c, P, x, -WT / 2, l - P.rnd(0, 0.8), WT, P.pick(TIMBER), 1.6, 2.3);
+  if (l < 12) return;
+  // helle Oberkante zum Licht hin
+  c.strokeStyle = 'rgba(160,130,88,.8)';
+  c.lineWidth = 1.2;
+  c.beginPath();
+  c.moveTo(x + 3, -WT / 2 + 2.6);
+  c.lineTo(x + l - 4, -WT / 2 + 2.6 + P.rnd(-0.4, 0.4));
+  c.stroke();
+  c.strokeStyle = 'rgba(40,26,12,.45)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(x + 4, 1 + P.rnd(-1, 1));
+  c.lineTo(x + l - 5, 1 + P.rnd(-1, 1));
+  c.stroke();
+}
+/** Holz-Außenwand (Blockhaus, Scheune, Hütte): kräftige Balken in Wandstärke, in langen Stücken gestoßen. */
+function timberWall(c, s) {
+  const P = rng(hashStr(`t${s.x1}|${s.y1}|${s.x2}|${s.y2}`));
+  const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+  c.save();
+  c.translate(s.x1, s.y1);
+  c.rotate(Math.atan2(s.y2 - s.y1, s.x2 - s.x1));
+  c.fillStyle = '#3c2c18';
+  c.fillRect(0, -WT / 2 + 3, len, WT - 6);
+  for (let p = 0; p < len; ) {
+    let l = P.rnd(70, 105);
+    if (len - p - l < 30) l = len - p;
+    timberBeam(c, P, p, l);
+    p += l;
+  }
+  c.restore();
+}
+/** Runde Holzwand (Turm, Jurte): kurze Bohlen entlang des Bogens. */
+function timberArc(c, a) {
+  const P = rng(hashStr(`t${a.cx}|${a.cy}|${a.r}|${a.a0.toFixed(2)}`));
+  const len = (a.a1 - a.a0) * a.r;
+  c.save();
+  c.strokeStyle = '#3c2c18';
+  c.lineWidth = WT - 6;
+  c.beginPath();
+  c.arc(a.cx, a.cy, a.r, a.a0, a.a1);
+  c.stroke();
+  c.restore();
+  for (let p = 0; p < len; ) {
+    let l = P.rnd(18, 30);
+    if (len - p - l < 10) l = len - p;
+    const ang = a.a0 + (p + l / 2) / a.r;
+    c.save();
+    c.translate(a.cx + Math.cos(ang) * a.r, a.cy + Math.sin(ang) * a.r);
+    c.rotate(ang + Math.PI / 2);
+    timberBeam(c, P, -l / 2, l);
+    c.restore();
+    p += l;
+  }
+}
+/**
+ * Burgmauer: breites Steinband mit Wehrgang und Zinnen. s.out = Richtung nach außen bei geschlossenen Ringen – dann
+ * stehen die Zinnen nur außen, innen läuft eine niedrige Brüstung; sonst Zinnen auf beiden Seiten.
+ */
 function rampartWall(c, s) {
   const P = rng(hashStr(`rm${s.x1}|${s.y1}|${s.x2}|${s.y2}`));
   const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
@@ -1076,11 +1157,26 @@ function rampartWall(c, s) {
   c.beginPath();
   for (let p = P.rnd(20, 50); p < len - 10; p += P.rnd(30, 60)) (c.moveTo(p, -RT / 2 + 8), c.lineTo(p + P.rnd(-1, 1), RT / 2 - 8));
   c.stroke();
+  // Außenseite im gedrehten Bild: +1 = unten, −1 = oben, 0 = unbekannt (beide Seiten)
+  const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+  const side = s.out ? Math.sign(s.out[0] * -Math.sin(a) + s.out[1] * Math.cos(a)) : 0;
   const n = Math.max(1, Math.round((len - 12) / 19));
   for (let i = 0; i <= n; i++) {
     const x = 6 + ((len - 12) * i) / n;
-    block(c, P, x - 5, -RT / 2 - 1, 10, 9, '#cfcdae', 1.2, 1.3);
-    block(c, P, x - 5, RT / 2 - 8, 10, 9, '#cfcdae', 1.2, 1.3);
+    if (side <= 0) block(c, P, x - 5, -RT / 2 - 1, 10, 9, '#cfcdae', 1.2, 1.3);
+    if (side >= 0) block(c, P, x - 5, RT / 2 - 8, 10, 9, '#cfcdae', 1.2, 1.3);
+  }
+  if (side) {
+    // Brüstung zur Hofseite: schmaler, heller Streifen mit Schattenkante zum Wehrgang
+    const y = side > 0 ? -RT / 2 + 1.5 : RT / 2 - 5.5;
+    c.fillStyle = '#c4c2a4';
+    c.fillRect(3, y, len - 6, 4);
+    c.strokeStyle = 'rgba(42,30,16,.45)';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(3, side > 0 ? y + 4 : y);
+    c.lineTo(len - 3, side > 0 ? y + 4 : y);
+    c.stroke();
   }
   c.restore();
 }
@@ -1107,6 +1203,18 @@ function palisadeWall(c, s) {
     c.fill();
   }
   c.restore();
+}
+/** Pfosten bzw. Türme beiderseits eines Tors: in der Burgmauer zwei Tortürme, sonst kräftige Pfosten. */
+function gatePosts(o, inner) {
+  const at = inner.find((q) => {
+    const dx = q.x2 - q.x1;
+    const dy = q.y2 - q.y1;
+    const u = Math.max(0, Math.min(1, ((o.x - q.x1) * dx + (o.y - q.y1) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(q.x1 + dx * u - o.x, q.y1 + dy * u - o.y) < 8;
+  });
+  const rampart = at?.kind === 'rampart';
+  const off = o.w / 2 + (rampart ? TR - 12 : 0);
+  return { rampart, pts: [-1, 1].map((d) => [o.x + Math.cos(o.a) * d * off, o.y + Math.sin(o.a) * d * off]) };
 }
 /** Runder Holzpfosten, Eckstein oder (an Burgmauern) Mauerturm an Wandenden. */
 function post(c, x, y, kind) {
@@ -1183,6 +1291,7 @@ function post(c, x, y, kind) {
 /** Tür (Holzblatt in der Wandöffnung) oder Fenster (Holzrahmen, breiter als die Wand, mit Glasstreifen). */
 export function drawOpening(c, o) {
   if (o.k === 'door') return drawDoor(c, o);
+  if (o.k === 'gate') return drawDoor(c, { ...o, gate: true });
   if (o.k === 'secret') return drawDoor(c, { ...o, secret: true }, { dm: true }); // nur im Kartenbauer zu sehen
   const P = rng(hashStr(`o${o.id}`));
   c.save();
@@ -1217,7 +1326,7 @@ export class SceneRenderer {
 
   /** Gelände neu malen, falls sich daran etwas geändert hat. */
   renderTerrain(scene) {
-    const key = JSON.stringify([scene.cols, scene.rows, scene.biome, scene.seed, scene.scale, scene.water, scene.paths, scene.roads, scene.dirt, scene.high, scene.cave]);
+    const key = JSON.stringify([scene.cols, scene.rows, scene.biome, scene.seed, scene.scale, scene.water, scene.paths, scene.roads, scene.dirt, scene.high, scene.cave, (scene.fills || []).filter((f) => f.kind === 'houses').map((f) => f.shape)]);
     if (this.keys.terrain === key) return;
     this.keys.terrain = key;
     const { W, H } = sceneSize(scene);
@@ -1238,6 +1347,7 @@ export class SceneRenderer {
     const cf = shapeField(scene.cave || [], W, H);
     let caveLoops = contours(cf);
     if (caveLoops.length) caveLoops = drawCave(c, W, H, B, P, cf, caveLoops, shadow);
+    drawYards(c, W, H, B, (scene.fills || []).filter((f) => f.kind === 'houses').map((f) => f.shape));
     drawDirt(c, W, H, B, scene.dirt || []);
     drawPaths(c, W, H, B, P, scene.paths || [], scene.scale === 'overview');
     const rf = shapeField(scene.roads || [], W, H);
@@ -1247,17 +1357,69 @@ export class SceneRenderer {
     drawShore(c, B, P, loops);
     const water = drawWaterBase(W, H, B, P, wf);
     const levels = [];
+    const rims = [];
+    const ways = [...(scene.paths || []), ...(scene.roads || [])];
+    const pf = shapeField(scene.paths || [], W, H, 0);
+    let keep = null;
     for (const lvl of [1, 2, 3]) {
       const shapes = (scene.high || []).filter((s) => (s.lvl || 1) === lvl);
       if (!shapes.length) continue;
       const f = shapeField(shapes, W, H);
-      const loops = contours(f);
-      if (loops.length) drawPlateau(c, W, H, B, P, f, loops, this.grass, shadow);
+      const rim = contours(f);
+      if (rim.length) {
+        // Rampe: wo ein Weg oder eine Straße die Felskante quert, ist die Kante auf Wegbreite ausgespart und läuft
+        // beiderseits weich aus. Dazu den Boden dort vor dem Malen der Felsstufe merken und danach zurücklegen.
+        // Ausgespart wird nur um Kantenstücke, die selbst auf einem Weg liegen – eine Straße am Fuß des Hügels
+        // behält Felswand und Schlagschatten.
+        let notch = false;
+        if (ways.length) {
+          const spokes = [];
+          const edge = new Path2D();
+          for (const L of rim) {
+            let run = false;
+            L.pts.forEach((pt, i) => {
+              const on = fieldAt(rf, pt[0], pt[1]) > 0.3 || fieldAt(pf, pt[0], pt[1]) > 0.3;
+              if (on) {
+                // läuft der Weg an der Kante entlang, fällt dort das ganze Felsband weg – sonst blieben Reste stehen
+                spokes.push({ pts: [pt, [pt[0] + L.nrm[i][0] * RAMP, pt[1] + L.nrm[i][1] * RAMP]], r: 6 });
+                if (run) edge.lineTo(pt[0], pt[1]);
+                else (edge.moveTo(pt[0], pt[1]), edge.lineTo(pt[0] + 0.1, pt[1]));
+              }
+              run = on;
+            });
+          }
+          if (spokes.length) {
+            notch = true;
+            keep ||= canvas(W, H);
+            const q = keep.getContext('2d');
+            q.globalCompositeOperation = 'source-over';
+            q.clearRect(0, 0, W, H);
+            blurShapes(q, [...ways, ...spokes], 16, 12);
+            q.globalCompositeOperation = 'destination-in';
+            q.strokeStyle = '#fff';
+            q.lineJoin = q.lineCap = 'round';
+            q.lineWidth = 2 * RAMP;
+            q.stroke(edge);
+            q.globalCompositeOperation = 'source-in';
+            q.drawImage(ground, 0, 0);
+          }
+        }
+        drawPlateau(c, W, H, B, P, f, rim, this.grass, shadow);
+        if (notch) {
+          c.drawImage(keep, 0, 0);
+          // auch der Schlagschatten der Kante fehlt auf der Rampe
+          const sh = shadow.getContext('2d');
+          sh.save();
+          sh.globalCompositeOperation = 'destination-out';
+          sh.drawImage(keep, 0, 0);
+          sh.restore();
+        }
+      }
       levels.push(f);
+      rims.push(rim);
     }
-    if (levels.length && ((scene.dirt || []).length || (scene.paths || []).length || (scene.roads || []).length)) {
-      // Zufahrt und Burghof liegen auf dem Hügel: dort noch einmal malen, beschnitten auf die Hochfläche –
-      // wo ein Weg die Felskante quert, wirkt er als Rampe
+    if (levels.length && ((scene.dirt || []).length || ways.length)) {
+      // Zufahrt und Burghof liegen auf dem Hügel: dort noch einmal malen, beschnitten auf die Hochfläche
       const top = canvas(W, H);
       const t = top.getContext('2d');
       drawDirt(t, W, H, B, scene.dirt || []);
@@ -1267,15 +1429,85 @@ export class SceneRenderer {
       // Maske: alle Stufen zusammen (eine obere Stufe kann über die untere hinausragen)
       const mk = canvas(W, H);
       const m = mk.getContext('2d');
-      for (const f of levels) {
+      for (const rim of rims) {
         const one = new Path2D();
-        for (const L of contours(f)) trace(one, L.pts);
+        for (const L of rim) trace(one, L.pts);
         m.fill(one, 'evenodd');
       }
       t.drawImage(mk, 0, 0);
       c.drawImage(top, 0, 0);
+      // große Hilfsflächen gleich wieder freigeben
+      mk.width = mk.height = top.width = top.height = 0;
+      // Rampe: an jeder Stelle, an der ein Weg die Kante quert, ein paar Stufen quer zum Weg (dunkle Linie, darunter
+      // eine helle Trittkante) und beiderseits ein schmaler Böschungsschatten – daran liest man das Gefälle
+      const PR = rng((scene.seed | 0) + 14);
+      const steps = (base, x, y, dx, dy, r) => {
+        const col = hx(base);
+        const nx = -dy;
+        const ny = dx;
+        c.save();
+        c.lineCap = 'round';
+        c.strokeStyle = 'rgba(30,24,12,.17)';
+        c.lineWidth = 7;
+        c.beginPath();
+        for (const sd of [-1, 1]) {
+          c.moveTo(x + nx * sd * (r - 1) - dx * 34, y + ny * sd * (r - 1) - dy * 34);
+          c.lineTo(x + nx * sd * (r - 1) + dx * 34, y + ny * sd * (r - 1) + dy * 34);
+        }
+        c.stroke();
+        const half = Math.max(8, r - 7);
+        for (let k = -2; k <= 2; k++) {
+          const px = x + dx * k * 11 + PR.rnd(-1, 1);
+          const py = y + dy * k * 11 + PR.rnd(-1, 1);
+          const h0 = half * PR.rnd(0.86, 1);
+          const h1 = half * PR.rnd(0.86, 1);
+          // helle Trittkante talwärts, direkt unter der dunklen Stufenlinie
+          c.strokeStyle = `rgba(${col.map((v) => Math.min(255, Math.round(v * 1.13))).join(',')},.55)`;
+          c.lineWidth = 2;
+          c.beginPath();
+          c.moveTo(px - nx * h0 - dx * 1.8, py - ny * h0 - dy * 1.8);
+          c.lineTo(px + nx * h1 - dx * 1.8, py + ny * h1 - dy * 1.8);
+          c.stroke();
+          c.strokeStyle = `rgba(${col.map((v) => Math.round(v * 0.76)).join(',')},.62)`;
+          c.lineWidth = 1.5;
+          c.beginPath();
+          c.moveTo(px - nx * h0, py - ny * h0);
+          c.lineTo(px + nx * h1, py + ny * h1);
+          c.stroke();
+        }
+        c.restore();
+      };
+      for (const [list, base] of [[scene.paths || [], B.path], [scene.roads || [], B.road || '#b9ae90']]) {
+        for (const st of list) {
+          if (!st.pts || st.pts.length < 2) continue;
+          for (const f of levels) {
+            let last = null; // letzte Querung dieses Wegs an dieser Stufe
+            let was = fieldAt(f, st.pts[0][0], st.pts[0][1]) >= 0.5;
+            for (let i = 1; i < st.pts.length; i++) {
+              const [x0, y0] = st.pts[i - 1];
+              const L = Math.hypot(st.pts[i][0] - x0, st.pts[i][1] - y0);
+              if (!L) continue;
+              const dx = (st.pts[i][0] - x0) / L;
+              const dy = (st.pts[i][1] - y0) / L;
+              for (let d = Math.min(8, L); d <= L; d += 8) {
+                const x = x0 + dx * d;
+                const y = y0 + dy * d;
+                const is = fieldAt(f, x, y) >= 0.5;
+                if (is === was) continue;
+                was = is;
+                // ein Weg, der an der Kante entlangläuft, quert sie dauernd – dort nur einmal Stufen
+                if (last && Math.hypot(x - last[0], y - last[1]) < 150) continue;
+                last = [x, y];
+                // Stufen bergauf ausrichten: die Trittkante liegt talwärts
+                steps(base, x - dx * 4, y - dy * 4, is ? dx : -dx, is ? dy : -dy, st.r);
+              }
+            }
+          }
+        }
+      }
     }
-    this.terrain = { ground, water, shadow, wf, loops, levels, cf, caveLoops, rf, pf: shapeField(scene.paths || [], W, H, 0) };
+    if (keep) keep.width = keep.height = 0;
+    this.terrain = { ground, water, shadow, wf, loops, levels, cf, caveLoops, rf, pf };
   }
 
   isWater(x, y) {
@@ -1489,7 +1721,9 @@ export class SceneRenderer {
       return parts;
     });
     const posts = outline.posts.filter(([x, y]) => !isRuinWall(rooms, x, y) || rng(hashStr(`rp${Math.round(x)}|${Math.round(y)}`)).R() < 0.6);
-    const innerPieces = inner.flatMap((w) => wallPieces(w, openings).map((p) => ({ ...p, kind: w.kind || 'wood' })));
+    // Geschlossene Burgmauer-Ringe kennen ihre Außenseite (dort stehen die Zinnen)
+    const outs = ringOutsides(inner.filter((w) => w.kind === 'rampart'));
+    const innerPieces = inner.flatMap((w) => wallPieces(w, openings).map((p) => ({ ...p, kind: w.kind || 'wood', out: outs.get(w) })));
     // Der Boden wird zu den Wänden hin weich dunkler (Schmutz in den Ecken, weniger Licht)
     f.save();
     f.clip(inside);
@@ -1526,6 +1760,11 @@ export class SceneRenderer {
     });
     const towers = [];
     for (const p of inner) if (p.kind === 'rampart') towers.push([p.x1, p.y1], [p.x2, p.y2]);
+    for (const o of openings) {
+      if (o.k !== 'gate') continue;
+      const g = gatePosts(o, inner);
+      if (g.rampart) towers.push(...g.pts);
+    }
     // Schatten nach Höhe: die Türme überragen die Mauer
     sweep(30, () => {
       for (const p of innerPieces) if (p.kind === 'rampart') line(p, RT);
@@ -1536,18 +1775,43 @@ export class SceneRenderer {
     // Wände
     const walls = canvas(W, H);
     const w = walls.getContext('2d');
-    for (const p of pieces) stoneWall(w, p);
-    for (const a of arcs) stoneArc(w, a);
+    // Räume mit Holzwänden (Blockhaus, Scheune): Balken statt Mauersteine, an den Ecken Pfosten
+    const timberRooms = rooms.filter((r) => r.timber && !r.open);
+    const timber = timberRooms.length > 0;
+    const isTimber = (x, y) => timber && isTimberWall(timberRooms, x, y);
+    // Ein Wandstück kann an Räumen mit Holz- und mit Steinwand entlanglaufen: an den Wechseln teilen
+    const byKind = (p) => {
+      if (!timber) return [p];
+      const n = Math.max(1, Math.round(Math.hypot(p.x2 - p.x1, p.y2 - p.y1) / 5));
+      const at = (i) => [p.x1 + ((p.x2 - p.x1) * i) / n, p.y1 + ((p.y2 - p.y1) * i) / n];
+      const out = [];
+      let from = 0;
+      let kind = isTimber(...at(0.5));
+      for (let i = 1; i <= n; i++) {
+        const next = i < n ? isTimber(...at(i + 0.5)) : null;
+        if (next === kind) continue;
+        const [x1, y1] = at(from);
+        const [x2, y2] = at(i);
+        out.push({ ...p, x1, y1, x2, y2, timber: kind });
+        from = i;
+        kind = next;
+      }
+      return out;
+    };
+    for (const p of pieces.flatMap(byKind)) (p.timber ? timberWall : stoneWall)(w, p);
+    for (const a of arcs) (isTimber(a.cx + Math.cos((a.a0 + a.a1) / 2) * a.r, a.cy + Math.sin((a.a0 + a.a1) / 2) * a.r) ? timberArc : stoneArc)(w, a);
     for (const p of innerPieces) (p.kind === 'stone' ? stoneWall : p.kind === 'rampart' ? rampartWall : p.kind === 'palisade' ? palisadeWall : woodWall)(w, p);
-    for (const [x, y] of posts) post(w, x, y, 'stone');
+    for (const [x, y] of posts) post(w, x, y, isTimber(x, y) ? 'wood' : 'stone');
     for (const [x, y] of rubble) {
       const P = rng(hashStr(`rb${Math.round(x)}|${Math.round(y)}`));
+      const wood = isTimber(x, y); // eingestürzte Holzwand: Balkenstücke statt Steine
       for (let i = 0, n = 2 + P.int(4); i < n; i++) {
         const sz = P.rnd(7, 15);
         w.save();
         w.translate(x + P.rnd(-24, 24), y + P.rnd(-24, 24));
         w.rotate(P.rnd(0, 3));
-        block(w, P, -sz / 2, -sz * 0.36, sz, sz * 0.72, P.pick(stones), 2, 1.3);
+        if (wood) block(w, P, -sz * 0.95, -2.6, sz * 1.9, 5.2, P.pick(TIMBER), 1.3, 1.3);
+        else block(w, P, -sz / 2, -sz * 0.36, sz, sz * 0.72, P.pick(stones), 2, 1.3);
         w.restore();
       }
     }
@@ -1567,6 +1831,25 @@ export class SceneRenderer {
     for (const o of openings) {
       if (o.k === 'door') {
         for (const d of [-1, 1]) post(w, o.x + Math.cos(o.a) * d * (o.w / 2), o.y + Math.sin(o.a) * d * (o.w / 2), 'wood');
+      }
+      if (o.k === 'gate') {
+        // Tor in der Burgmauer: zwei Tortürme; in anderen Wänden kräftige Pfosten
+        const g = gatePosts(o, inner);
+        if (g.rampart) {
+          // Schwelle in Mauerbreite: die Mauer läuft als Torbau durch, darin sitzen die Flügel
+          const P2 = rng(hashStr(`gt${o.id}`));
+          w.save();
+          w.translate(o.x, o.y);
+          w.rotate(o.a);
+          block(w, P2, -o.w / 2, -RT / 2, o.w, RT, '#a3a38b', 1.5, 2.4);
+          w.strokeStyle = 'rgba(42,30,16,.35)';
+          w.lineWidth = 1;
+          w.beginPath();
+          for (const x of [-o.w / 4, 0, o.w / 4]) (w.moveTo(x, -RT / 2 + 3), w.lineTo(x, RT / 2 - 3));
+          w.stroke();
+          w.restore();
+        }
+        for (const [x, y] of g.pts) post(w, x, y, g.rampart ? 'rampart' : 'palisade');
       }
       drawOpening(o.k === 'window' ? w : dc, o);
     }
@@ -1715,13 +1998,83 @@ export class SceneRenderer {
     c.globalCompositeOperation = 'source-over';
     c.drawImage(this.build.walls, 0, 0);
     if (!noDoors) c.drawImage(this.build.doors, 0, 0);
-    for (const layer of ['obj', 'top']) {
-      for (const [o, sp] of list) {
-        if (sp.layer !== layer) continue;
+    // Hohe Gebäude (Kirche, Bergfried, Türme, Hallen) werfen ihren Schatten auch auf die Dächer niedrigerer Nachbarn:
+    // erst die niedrigen zeichnen, dann je hohem Gebäude den Schatten nur dort auftragen, wo ein niedriges steht
+    const TALL = 30;
+    const objs = list.filter(([, sp]) => sp.layer === 'obj');
+    const tall = objs.filter(([, sp]) => sp.shadow >= TALL);
+    // bei sehr vielen hohen Gebäuden werfen nur die höchsten ihren Schatten auf Dächer
+    const casters = tall.length > 80 ? [...tall].sort((p, q) => q[1].shadow - p[1].shadow).slice(0, 80) : tall;
+    const low = tall.length ? objs.filter(([, sp]) => sp.shadow < TALL && sp.shadow > 0) : [];
+    for (const [o, sp] of objs) {
+      if (low.length && sp.shadow >= TALL) continue;
+      c.save();
+      draw(c, o, sp);
+      c.restore();
+    }
+    if (low.length) {
+      const reach = (sp) => Math.hypot(sp.w, sp.h) / 2;
+      for (const [o, sp] of casters) {
+        // Ausschnitt, den Gebäude und Schatten überdecken
+        const r0 = reach(sp);
+        const x0 = Math.floor(Math.min(o.x, o.x + LIGHT[0] * sp.shadow) - r0);
+        const y0 = Math.floor(Math.min(o.y, o.y + LIGHT[1] * sp.shadow) - r0);
+        const bw = Math.ceil(2 * r0 + Math.abs(LIGHT[0]) * sp.shadow) + 2;
+        const bh = Math.ceil(2 * r0 + Math.abs(LIGHT[1]) * sp.shadow) + 2;
+        const near = low.filter(([q, qs]) => Math.abs(q.x - (x0 + bw / 2)) < bw / 2 + reach(qs) && Math.abs(q.y - (y0 + bh / 2)) < bh / 2 + reach(qs));
+        if (!near.length) continue;
+        // zwei Arbeitsflächen, die für alle Gebäude wiederverwendet werden
+        const [a, m] = (this.work ||= [canvas(1, 1), canvas(1, 1)]);
+        for (const cv of [a, m]) {
+          if (cv.width < bw || cv.height < bh) (cv.width = Math.max(cv.width, bw)), (cv.height = Math.max(cv.height, bh));
+        }
+        const ac = a.getContext('2d');
+        ac.setTransform(1, 0, 0, 1, 0, 0);
+        ac.globalCompositeOperation = 'source-over';
+        ac.clearRect(0, 0, a.width, a.height);
+        ac.translate(-x0, -y0);
+        const step = sp.shadow > 30 ? 4 : 3;
+        for (let k = 0; ; k += step) {
+          const t = Math.min(k, sp.shadow);
+          ac.save();
+          ac.translate(LIGHT[0] * t, LIGHT[1] * t);
+          draw(ac, o, sp);
+          ac.restore();
+          if (k >= sp.shadow) break;
+        }
+        ac.setTransform(1, 0, 0, 1, 0, 0);
+        ac.globalCompositeOperation = 'source-in';
+        ac.fillStyle = B.shadow;
+        ac.fillRect(0, 0, bw, bh);
+        // Maske: die niedrigen Nachbarn in diesem Ausschnitt
+        const mc = m.getContext('2d');
+        mc.setTransform(1, 0, 0, 1, 0, 0);
+        mc.clearRect(0, 0, m.width, m.height);
+        mc.translate(-x0, -y0);
+        for (const [q, qs] of near) {
+          mc.save();
+          draw(mc, q, qs);
+          mc.restore();
+        }
+        ac.globalCompositeOperation = 'destination-in';
+        ac.drawImage(m, 0, 0);
+        c.globalCompositeOperation = 'multiply';
+        c.globalAlpha = 0.72;
+        c.drawImage(a, 0, 0, bw, bh, x0, y0, bw, bh);
+        c.globalAlpha = 1;
+        c.globalCompositeOperation = 'source-over';
+      }
+      for (const [o, sp] of tall) {
         c.save();
         draw(c, o, sp);
         c.restore();
       }
+    }
+    for (const [o, sp] of list) {
+      if (sp.layer !== 'top') continue;
+      c.save();
+      draw(c, o, sp);
+      c.restore();
     }
     return this.out;
   }

@@ -5,7 +5,7 @@ export const CELL = 70;
 
 /** Leere Szene: Größe in Feldern, Umgebung, Startwert für alles Zufällige (Wiese, Streuung). */
 export function newScene(cols = 30, rows = 20, biome = 'meadow') {
-  return { v: 1, cols, rows, biome, seed: Math.floor(Math.random() * 1e9), water: [], paths: [], roads: [], dirt: [], high: [], cave: [], rooms: [], walls: [], openings: [], objects: [], fills: [] };
+  return { v: 1, cols, rows, biome, seed: Math.floor(Math.random() * 1e9), water: [], paths: [], roads: [], dirt: [], high: [], cave: [], rooms: [], walls: [], openings: [], objects: [], fills: [], labels: [] };
 }
 
 export function mulberry(a) {
@@ -519,7 +519,7 @@ export function wallPieces(s, openings, windows = false) {
   const uy = (s.y2 - s.y1) / L;
   const cuts = [];
   for (const o of openings) {
-    if (o.k !== 'door' && !windows) continue;
+    if (o.k !== 'door' && o.k !== 'gate' && !windows) continue;
     const t = (o.x - s.x1) * ux + (o.y - s.y1) * uy;
     const d = Math.abs((o.x - s.x1) * -uy + (o.y - s.y1) * ux);
     if (d < 8 && t > -o.w / 2 && t < L + o.w / 2) cuts.push([t - o.w / 2, t + o.w / 2]);
@@ -531,7 +531,7 @@ export function wallPieces(s, openings, windows = false) {
 export function arcPieces(c, openings, windows = false) {
   const cuts = [];
   for (const o of openings) {
-    if ((o.k !== 'door' && !windows) || Math.abs(Math.hypot(o.x - c.cx, o.y - c.cy) - c.r) > 8) continue;
+    if ((o.k !== 'door' && o.k !== 'gate' && !windows) || Math.abs(Math.hypot(o.x - c.cx, o.y - c.cy) - c.r) > 8) continue;
     let a = Math.atan2(o.y - c.cy, o.x - c.cx);
     while (a < c.a0) a += 6.2832;
     const half = o.w / 2 / c.r;
@@ -546,6 +546,8 @@ const onRoomEdge = (r, x, y, tol = 3) =>
   r.k === 'circle' ? Math.abs(Math.hypot(x - r.cx, y - r.cy) - r.r) < tol : inRect(r, x, y, -tol) && !inRect(r, x, y, tol);
 /** Gehört die Wandstelle zu einem verfallenen Raum (Ruine)? */
 export const isRuinWall = (rooms, x, y) => rooms.some((r) => r.ruin && onRoomEdge(r, x, y));
+/** Gehört die Wandstelle zu einem Raum mit Holzwänden (Blockhaus, Scheune)? */
+export const isTimberWall = (rooms, x, y) => rooms.some((r) => r.timber && !r.open && onRoomEdge(r, x, y));
 
 /**
  * Verfallene Mauer: von einem Wandstück bleiben nur Teile stehen, dazwischen klaffen Lücken. Der Zufall hängt fest
@@ -657,7 +659,7 @@ export function roomZones(rooms, inner, loops, W, H, g = 10) {
 }
 
 /** Wie roomZones, aus fertigen Wandstrecken [[x1, y1, x2, y2], …] – etwa einer eingelesenen Karte; cell = Pixel je Feld. */
-export function zonesFromSegments(segs, W, H, g = 10, cell = CELL) {
+export function zonesFromSegments(segs, W, H, g = 10, cell = CELL, minCells = 0.3) {
   const gw = Math.ceil(W / g) + 2;
   const gh = Math.ceil(H / g) + 2;
   const wall = new Uint8Array(gw * gh);
@@ -699,7 +701,7 @@ export function zonesFromSegments(segs, W, H, g = 10, cell = CELL) {
       }
     }
     // auch ein Raum von einem Feld (Zelle, Wandschrank) zählt: seine Wände sperren schon die Hälfte seiner Fläche
-    if (outside || cells.length * g * g < cell * cell * 0.3) continue;
+    if (outside || cells.length * g * g < cell * cell * minCells) continue;
     // Fläche wachsen lassen und als Umriss fassen: weit (über die Wand hinaus, zum Aufdecken) und knapp (bis zur
     // Wandmitte, für „nur innen dunkel“)
     const pad = 4;
@@ -733,7 +735,7 @@ export function zonesFromSegments(segs, W, H, g = 10, cell = CELL) {
 
 // --- Szenen aus Vorlagen und Dateien ------------------------------------------------------------------------------------
 
-const LISTS = ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills'];
+const LISTS = ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels'];
 
 /**
  * Fremde Szene prüfen und bereinigen: Listen ergänzen, Größe begrenzen, unbekannte Gegenstände weglassen
@@ -761,9 +763,20 @@ export function freshIds(scene, uid, random = Math.random) {
     fills.set(f.id, id);
     f.id = id;
   }
-  for (const k of ['rooms', 'walls', 'openings']) for (const x of scene[k]) x.id = uid();
+  // Räume merken ihre alte Kennung: eingerichtete Räume finden ihre Möbel darüber wieder
+  const rooms = new Map();
+  for (const r of scene.rooms) {
+    const id = uid();
+    rooms.set(r.id, id);
+    r.id = id;
+  }
+  for (const k of ['walls', 'openings', 'labels']) for (const x of scene[k] || []) x.id = uid();
   for (const o of scene.objects) {
     o.id = uid();
+    if (o.theme) {
+      if (rooms.has(o.theme)) o.theme = rooms.get(o.theme);
+      else delete o.theme;
+    }
     if (o.fill) {
       if (fills.has(o.fill)) o.fill = fills.get(o.fill);
       else delete o.fill;
@@ -785,6 +798,99 @@ export const FILL_KINDS = {
   rocks: [['rock', 90, [0.5, 1.25], 0.9, 1]],
   mixed: [['tree', 200, [0.75, 1.35], 0.36, 1], ['bush', 90, [0.8, 1.2], 0.55, 0.45], ['rock', 90, [0.5, 1.1], 0.9, 0.2]],
 };
+
+/**
+ * Außenseite geschlossener Mauerringe: Für jede Strecke, die zu einem geschlossenen Zug gehört, die Richtung nach außen
+ * (Einheitsvektor). Offene Züge und Verzweigungen bleiben ohne Eintrag – dort stehen Zinnen auf beiden Seiten.
+ * walls: [{ x1, y1, x2, y2 }], liefert Map(Strecke → [nx, ny]).
+ */
+export function ringOutsides(walls) {
+  const key = (x, y) => `${Math.round(x)}|${Math.round(y)}`;
+  const at = new Map();
+  for (const w of walls) for (const k of [key(w.x1, w.y1), key(w.x2, w.y2)]) at.set(k, [...(at.get(k) || []), w]);
+  const out = new Map();
+  const seen = new Set();
+  for (const first of walls) {
+    if (seen.has(first)) continue;
+    // dem Zug folgen, solange es an jedem Punkt genau eine Fortsetzung gibt
+    const loop = [];
+    let w = first;
+    let from = key(first.x1, first.y1);
+    let closed = false;
+    for (let guard = 0; guard <= walls.length; guard++) {
+      const a = key(w.x1, w.y1);
+      const fwd = a === from;
+      loop.push([w, fwd]);
+      seen.add(w);
+      const end = fwd ? key(w.x2, w.y2) : a;
+      const next = (at.get(end) || []).filter((q) => q !== w);
+      if (next.length !== 1) break;
+      if (next[0] === first) {
+        closed = (at.get(key(first.x1, first.y1)) || []).length === 2;
+        break;
+      }
+      if (seen.has(next[0])) break;
+      from = end;
+      w = next[0];
+    }
+    if (!closed || loop.length < 3) continue;
+    const pts = loop.map(([q, fwd]) => (fwd ? [q.x1, q.y1] : [q.x2, q.y2]));
+    const cw = polyArea(pts) > 0;
+    for (const [q, fwd] of loop) {
+      const dx = (fwd ? 1 : -1) * (q.x2 - q.x1);
+      const dy = (fwd ? 1 : -1) * (q.y2 - q.y1);
+      const L = Math.hypot(dx, dy) || 1;
+      out.set(q, cw ? [dy / L, -dx / L] : [-dy / L, dx / L]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Linie rund um einen geschlossenen Mauerring, um dist nach außen versetzt (für einen Graben): Punkte des Zugs, zu dem
+ * die Strecke seg gehört – oder null, wenn der Zug offen ist oder sich verzweigt.
+ */
+export function ringAround(walls, seg, dist) {
+  const outs = ringOutsides(walls);
+  if (!outs.has(seg)) return null;
+  const key = (x, y) => `${Math.round(x)}|${Math.round(y)}`;
+  // Ecken des Rings in Umlaufrichtung
+  const pts = [[seg.x1, seg.y1], [seg.x2, seg.y2]];
+  const used = new Set([seg]);
+  for (let guard = 0; guard < walls.length; guard++) {
+    const end = pts[pts.length - 1];
+    const next = walls.find((w) => !used.has(w) && outs.has(w) && (key(w.x1, w.y1) === key(end[0], end[1]) || key(w.x2, w.y2) === key(end[0], end[1])));
+    if (!next) break;
+    used.add(next);
+    pts.push(key(next.x1, next.y1) === key(end[0], end[1]) ? [next.x2, next.y2] : [next.x1, next.y1]);
+  }
+  pts.pop(); // der letzte Punkt ist wieder der erste
+  if (pts.length < 3) return null;
+  const sign = polyArea(pts) > 0 ? 1 : -1;
+  const n = pts.length;
+  const ring = pts.map((p, i) => {
+    // an der Ecke entlang der Winkelhalbierenden hinaus – so bleibt der Abstand zu beiden Mauern gleich
+    const a = pts[(i - 1 + n) % n];
+    const b = pts[(i + 1) % n];
+    const n1 = [(p[1] - a[1]) / (Math.hypot(p[0] - a[0], p[1] - a[1]) || 1), -(p[0] - a[0]) / (Math.hypot(p[0] - a[0], p[1] - a[1]) || 1)];
+    const n2 = [(b[1] - p[1]) / (Math.hypot(b[0] - p[0], b[1] - p[1]) || 1), -(b[0] - p[0]) / (Math.hypot(b[0] - p[0], b[1] - p[1]) || 1)];
+    const mx = n1[0] + n2[0];
+    const my = n1[1] + n2[1];
+    const L = Math.hypot(mx, my) || 1;
+    const k = Math.min(2.2, 1 / Math.max(0.3, (mx / L) * n1[0] + (my / L) * n1[1]));
+    return [p[0] + (mx / L) * dist * k * sign, p[1] + (my / L) * dist * k * sign];
+  });
+  // dichter abtasten, damit der Pinsel die Ecken weich nimmt
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const p = ring[i % n];
+    const q = ring[(i + 1) % n];
+    const steps = i === n ? 1 : Math.max(1, Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) / 60));
+    for (let j = 0; j < steps; j++) out.push([Math.round(p[0] + ((q[0] - p[0]) * j) / steps), Math.round(p[1] + ((q[1] - p[1]) * j) / steps)]);
+    if (i === n) break;
+  }
+  return out;
+}
 
 /** Abstand einer Stelle im Inneren zum Rand der Form (Rechteck: zur nächsten Kante; Ellipse: genähert). */
 function edgeDepth(sh, x, y) {
@@ -823,13 +929,52 @@ const weighted = (shares, q) => {
 };
 
 /**
- * Häuserviertel: füllt die Fläche mit Häuserzeilen aus Stadthäusern. Je zwei Zeilen teilen sich einen Hof, zwischen den
+ * Straßen oder Wege so, wie sie nach dem Radieren noch daliegen: Pinselstriche einer Geländeliste (in Malreihenfolge),
+ * zerlegt an den Stellen, die ein späterer Radierstrich (sub) überdeckt. Liefert [{ pts, r }].
+ */
+export function cutStreets(list) {
+  const out = [];
+  const covers = (e, x, y) => {
+    if (e.k === 'rect' || e.k === 'ellipse') return inShape(e, x, y);
+    const pts = e.pts || [];
+    if (pts.length === 1) return Math.hypot(pts[0][0] - x, pts[0][1] - y) <= e.r;
+    for (let i = 1; i < pts.length; i++) {
+      const [x1, y1] = pts[i - 1];
+      const dx = pts[i][0] - x1;
+      const dy = pts[i][1] - y1;
+      const u = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy || 1)));
+      if (Math.hypot(x1 + dx * u - x, y1 + dy * u - y) <= e.r) return true;
+    }
+    return false;
+  };
+  list.forEach((st, i) => {
+    if (st.sub || !st.pts || st.pts.length < 2) return;
+    const erasers = list.slice(i + 1).filter((e) => e.sub);
+    if (!erasers.length) return out.push({ pts: st.pts, r: st.r });
+    // dicht abtasten, damit auch ein Radierstrich mitten auf einer langen Geraden trennt
+    let run = [];
+    for (const [x, y] of resample(st.pts, 16, false)) {
+      if (erasers.some((e) => covers(e, x, y))) {
+        if (run.length > 1) out.push({ pts: run, r: st.r });
+        run = [];
+      } else run.push([x, y]);
+    }
+    if (run.length > 1) out.push({ pts: run, r: st.r });
+  });
+  return out;
+}
+
+/**
+ * Häuserviertel: füllt die Fläche mit Stadthäusern. Zuerst entlang der Straßen und Wege (streets: [{ pts, r }]) –
+ * beiderseits dicht an der Kante, Front zur Straße –, dahinter in Zeilen: je zwei teilen sich einen Hof, zwischen den
  * Doppelzeilen bleibt eine Gasse; die Häuser stehen mit der Front an der Gasse, der First läuft meist mit der Zeile.
  * Nachbarn haben oft denselben Dachton – sonst wirkt ein Viertel wie Konfetti. fill.angle dreht das Viertel,
  * fill.size ist die Hausgröße, fill.density rückt alles enger zusammen. Wo blocked(x, y, r, 'house') etwas einzuwenden
  * hat (Wasser, Straße, Weg, Mauer, Geländestufe), bleibt eine Lücke. Gleicher Startwert ergibt dasselbe Viertel.
+ * opts.tree (Größe der Natur im Kartenmaßstab, z. B. 0.4): in Restflächen zwischen den Häusern, in die kein Haus
+ * mehr passt, wachsen Bäume – Höfe und Gärten statt kahler Zwickel.
  */
-export function scatterHouses(fill, blocked = () => false) {
+export function scatterHouses(fill, blocked = () => false, streets = [], opts = {}) {
   const { R, rnd } = rng(fill.seed >>> 0);
   const s = fill.size ?? 1;
   const dens = Math.max(0.3, fill.density ?? 1);
@@ -842,11 +987,105 @@ export function scatterHouses(fill, blocked = () => false) {
   const depth = 84 * s; // Tiefe einer Zeile; das tiefere Winkelhaus ragt in den Hof
   const lane = (18 * s) / dens + 6;
   const yard = (3 * s) / dens + 13 * s; // Platz für Anbauten und die Flügel der Winkelhäuser
-  const world = (u, v) => [cx + u * Math.cos(ang) - v * Math.sin(ang), cy + u * Math.sin(ang) + v * Math.cos(ang)];
   const out = [];
-  let row = 0;
+  const placed = []; // Grundflächen der schon gesetzten Häuser
   // Deckel: mehr Häuser in einem Bereich machen den Kartenbauer träge
   const MAX = 600;
+  /**
+   * Haus setzen, wenn es passt: Mitte (x, y), Grundfläche fw × fd im um frame Grad gedrehten Rahmen. Geprüft wird die
+   * Grundfläche selbst (Mitte, Ecken, Kantenmitten) – so rücken Häuser bis an den Straßenrand.
+   */
+  const put = (x, y, frame, fw, fd, rot, v) => {
+    const a = (frame * Math.PI) / 180;
+    const at = (u, w) => [x + u * Math.cos(a) - w * Math.sin(a), y + u * Math.sin(a) + w * Math.cos(a)];
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([p, q]) => at((p * fw) / 2, (q * fd) / 2));
+    if (!inShape(fill.shape, x, y) || corners.some(([px, py]) => !inShape(fill.shape, px, py))) return false;
+    const foot = [[x, y], ...corners, ...corners.map((c, i) => [(c[0] + corners[(i + 1) % 4][0]) / 2, (c[1] + corners[(i + 1) % 4][1]) / 2])];
+    if (placed.length && (foot.some(([px, py]) => inRects(placed, px, py)) || placed.some((q) => Math.hypot(q.x - x, q.y - y) < 130 * s && inRects([{ x, y, hw: fw / 2, hh: fd / 2, rot: frame }], q.x, q.y)))) return false;
+    if (blocked(x, y, Math.max(fw, fd) * 0.5, 'house', foot)) return false;
+    out.push({ t: 'townHouse', x: Math.round(x), y: Math.round(y), rot: Math.round(((rot % 360) + 360) % 360), s: Math.round(s * 100) / 100, v });
+    placed.push({ x, y, hw: fw / 2 + 2, hh: fd / 2 + 2, rot: frame });
+    return true;
+  };
+  const variant = (tone, shape) => tone + TOWN_TONES * shape + TOWN_TONES * TOWN_SHAPES.length * Math.floor(R() * 4);
+
+  // So tief reichen die Zeilen, die sich an einer Straße ausrichten: zwei Doppelzeilen
+  const ROWS = 4;
+  const reach = (ROWS / 2) * (2 * depth + yard + lane);
+  // Straßen und Wege als Linien mit Lauflängen. Gemalte Striche haben alle paar Pixel einen Punkt: ausdünnen, und
+  // nur Straßen nehmen, die in die Nähe der Fläche kommen – sonst rechnet ein großes Viertel sekundenlang.
+  const far = reach + 140 * s;
+  const close = ([x, y]) => x > bx - far && x < bx + bw + far && y > by - far && y < by + bh + far;
+  const lines = streets.filter((st) => (st.pts || []).length >= 2 && st.r <= 64 && st.pts.some(close)).map((st) => {
+    const pts = simplify(st.pts, 2);
+    const len = [0];
+    for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = len[len.length - 1];
+    const along = (d) => {
+      let i = 1;
+      while (i < len.length - 1 && len[i] < d) i++;
+      const t = (d - len[i - 1]) / (len[i] - len[i - 1] || 1);
+      const a = pts[i - 1];
+      const b = pts[i];
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, Math.atan2(b[1] - a[1], b[0] - a[0])];
+    };
+    return { r: st.r, pts, total, along };
+  }).filter((st) => st.total > 0);
+  /** Nächste Straße zu einem Punkt: Abstand zur Straßenkante, Richtung der Straße dort und die Seite (±1). */
+  const nearest = (x, y) => {
+    let best = null;
+    for (const st of lines) {
+      for (let i = 1; i < st.pts.length; i++) {
+        const [x1, y1] = st.pts[i - 1];
+        const dx = st.pts[i][0] - x1;
+        const dy = st.pts[i][1] - y1;
+        const L2 = dx * dx + dy * dy;
+        if (!L2) continue;
+        const u = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / L2));
+        const d = Math.hypot(x1 + dx * u - x, y1 + dy * u - y) - st.r;
+        if (!best || d < best.d) best = { d, st, ang: Math.atan2(dy, dx), side: dx * (y - y1) - dy * (x - x1) > 0 ? 1 : -1 };
+      }
+    }
+    return best;
+  };
+
+  // 1. Entlang jeder Straße und jedes Wegs: vorn die Häuserfront dicht an der Kante, Front zur Straße – so wird aus
+  //    der Straße eine Häuserzeile statt eines Wegs über die Wiese. Dahinter folgen weitere Zeilen in derselben
+  //    Richtung (Rücken an Rücken über einen Hof, dann eine Gasse): ein Baublock zwischen zwei Straßen hat so nur
+  //    die Richtungen seiner Straßen. Erst alle Fronten, dann Zeile um Zeile nach hinten.
+  for (let k = 0; k < ROWS; k++) {
+    const base = Math.floor(k / 2) * (2 * depth + yard + lane) + (k % 2 ? depth + yard : 0);
+    for (const st of lines) {
+      for (const side of [1, -1]) {
+        let tone = weighted(TONE_SHARE, R());
+        for (let d = rnd(4, 40) * s; d < st.total && out.length < MAX; ) {
+          if (R() > 0.6) tone = weighted(TONE_SHARE, R());
+          const shape = weighted(SHAPE_SHARE.slice(0, 5), R() * 0.93);
+          const turned = shape === 0 && R() < 0.3;
+          const [w0, d0] = TOWN_SHAPES[shape];
+          const fw = (turned ? d0 : w0) * s;
+          const fd = (turned ? w0 : d0) * s;
+          const [px, py, ta] = st.along(Math.min(st.total, d + fw / 2));
+          // gerade Zeilen stehen mit der Front zur Straße hin, ungerade mit der Front an der Gasse dahinter
+          const off = st.r + 3 + base + (k % 2 ? depth - fd / 2 : fd / 2);
+          const frame = (ta * 180) / Math.PI;
+          const x = px - Math.sin(ta) * side * off;
+          const y = py + Math.cos(ta) * side * off;
+          const face = (side > 0) === !(k % 2) ? 180 : 0;
+          const jitter = rnd(-2, 2);
+          const vi = variant(tone, shape);
+          // hintere Zeilen nur dort, wo keine andere Straße näher liegt – deren Zeilen stehen dort
+          const ok = inShape(fill.shape, x, y) && (k === 0 || !((nearest(x, y)?.d ?? 1e9) < off - st.r - fd / 2 - 14)) && put(x, y, frame, fw, fd, frame + face + (turned ? 90 : 0) + jitter, vi);
+          d += ok ? fw + (R() < 0.4 ? 1 : (rnd(4, 9) * s) / dens) : 24 * s;
+        }
+      }
+    }
+  }
+
+  // 2. Abseits der Straßen Zeile um Zeile: je zwei Zeilen teilen sich einen Hof, zwischen den Doppelzeilen bleibt
+  //    eine Gasse
+  const world = (u, v) => [cx + u * Math.cos(ang) - v * Math.sin(ang), cy + u * Math.sin(ang) + v * Math.cos(ang)];
+  let row = 0;
   for (let v = -half + rnd(0, depth * 0.5); v < half && out.length < MAX; row++) {
     let tone = weighted(TONE_SHARE, R());
     for (let u = -half + rnd(0, 60) * s; u < half && out.length < MAX; ) {
@@ -864,19 +1103,96 @@ export function scatterHouses(fill, blocked = () => false) {
       const lv = row % 2 ? v + depth - fd / 2 : v + fd / 2;
       u += fw + (R() < 0.35 ? 1 : (rnd(4, 9) * s) / dens);
       const jitter = rnd(-3, 3);
-      const vi = tone + TOWN_TONES * shape + TOWN_TONES * TOWN_SHAPES.length * Math.floor(R() * 4);
+      const vi = variant(tone, shape);
       if (R() < 0.04) continue; // freies Grundstück
       const [x, y] = world(lu, lv);
-      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => world(lu + (a * fw) / 2, lv + (b * fd) / 2));
-      if (!inShape(fill.shape, x, y) || corners.some(([px, py]) => !inShape(fill.shape, px, py))) continue;
-      // Geprüft wird die Grundfläche selbst (Mitte, Ecken, Kantenmitten) – so rücken Häuser bis an den Straßenrand
-      const foot = [[x, y], ...corners, ...corners.map((c, i) => [(c[0] + corners[(i + 1) % 4][0]) / 2, (c[1] + corners[(i + 1) % 4][1]) / 2])];
-      if (blocked(x, y, Math.max(fw, fd) * 0.5, 'house', foot)) continue;
+      // nahe einer Straße gilt deren Richtung – dort stehen schon ihre Zeilen, Reste füllt Schritt 3
+      if (lines.length && inShape(fill.shape, x, y) && (nearest(x, y)?.d ?? 1e9) < reach) continue;
       // Anbau und Flügel zeigen in den Hof
-      out.push({ t: 'townHouse', x: Math.round(x), y: Math.round(y), rot: Math.round((deg + (row % 2 ? 0 : 180) + (turned ? 90 : 0) + jitter + 720) % 360), s: Math.round(s * 100) / 100, v: vi });
+      put(x, y, deg, fw, fd, deg + (row % 2 ? 0 : 180) + (turned ? 90 : 0) + jitter, vi);
     }
     v += depth + (row % 2 ? lane : yard);
   }
+
+  // 3. Lücken schließen: zwischen den Zeilen bleiben Restflächen – dort passen noch kleine Häuser hinein. Sie
+  //    übernehmen exakt die Richtung der nächsten Zeile (keine Zwischenwinkel) und schauen zur Straße hin.
+  const rows = placed.slice();
+  const neighbour = (x, y) => {
+    let best = null;
+    let bd = (320 * s) ** 2;
+    for (const q of rows) {
+      const d = (q.x - x) ** 2 + (q.y - y) ** 2;
+      if (d < bd) (bd = d), (best = q);
+    }
+    return best;
+  };
+  const small = TOWN_SHAPES[0];
+  const sw = small[0] * s;
+  const sd = small[1] * s;
+  // In halben Schritten abtasten: die Häuser stehen gedreht zum Raster, da passt oft erst die versetzte Stelle. Mit
+  // etwas Luft ringsum (gw, gd), damit sich Lückenhäuser nicht an die Zeilen quetschen.
+  const gw = sw + 7 * s;
+  const gd = sd + 7 * s;
+  for (let v = -half + sd / 2; v < half && out.length < MAX; v += (sd + 10 * s) / 2) {
+    let tone = weighted(TONE_SHARE, R());
+    for (let u = -half + rnd(0, sw); u < half && out.length < MAX; u += (sw + 6 * s) / 2) {
+      if (R() > 0.8) tone = weighted(TONE_SHARE, R());
+      const [x, y] = world(u, v);
+      const flip = R() < 0.5;
+      const jitter = rnd(-3, 3);
+      const vi = variant(tone, 0);
+      if (!inShape(fill.shape, x, y)) continue;
+      const near = lines.length ? nearest(x, y) : null;
+      const nb = near && near.d < reach + 60 * s ? neighbour(x, y) : null;
+      if (nb) {
+        // Front zur Straße: die Seite des Rahmens wählen, die der Straße zugewandt ist
+        const fa = (nb.rot * Math.PI) / 180;
+        const toward = Math.cos(fa - near.ang) * near.side > 0 ? 180 : 0;
+        put(x, y, nb.rot, gw, gd, nb.rot + toward + jitter, vi);
+      } else if (near && near.d < reach + 60 * s) {
+        const frame = (near.ang * 180) / Math.PI;
+        put(x, y, frame, gw, gd, frame + (near.side > 0 ? 180 : 0) + jitter, vi);
+      } else put(x, y, deg, gw, gd, deg + (flip ? 180 : 0) + jitter, vi);
+    }
+  }
+
+  // 4. Was jetzt noch frei ist, ist für ein Haus zu klein oder zu schief: dort stehen Bäume (Hof, Garten)
+  const trees = [];
+  if (opts.tree > 0 && placed.length) {
+    const z = opts.tree;
+    const step = 46 * s;
+    for (let v = -half + step / 2; v < half && trees.length < 160; v += step) {
+      for (let u = -half + rnd(0, step); u < half && trees.length < 160; u += step) {
+        const [x, y] = world(u + rnd(-12, 12) * s, v + rnd(-12, 12) * s);
+        // Hofbäume sind kleiner als Waldbäume; wo auch die nicht passen, wächst ein Busch
+        const kinds = [['tree', 200, rnd(0.55, 0.9)], ['bush', 90, rnd(0.8, 1.2)]];
+        const vv = Math.floor(R() * 1e6);
+        const keep = R() < 0.75;
+        if (!keep || !inShape(fill.shape, x, y) || edgeDepth(fill.shape, x, y) < 40 * s) continue;
+        // nur zwischen Häusern, nicht auf der Wiese neben dem Viertel
+        let nearHouse = false;
+        for (const q of placed) {
+          if ((q.x - x) ** 2 + (q.y - y) ** 2 < (150 * s) ** 2) {
+            nearHouse = true;
+            break;
+          }
+        }
+        if (!nearHouse) continue;
+        for (const [t, base, ts] of kinds) {
+          const d = base * z * ts;
+          const rr = d * 0.56; // die Krone ist breiter als der Stamm: etwas Luft zu den Dächern
+          const ring = [[x, y]];
+          for (let k = 0; k < 8; k++) ring.push([x + Math.cos(k * 0.785) * rr, y + Math.sin(k * 0.785) * rr]);
+          if (ring.some(([px, py]) => inRects(placed, px, py)) || trees.some((o) => Math.hypot(o.x - x, o.y - y) < (o.d + d) * 0.45)) continue;
+          // wie ein Haus geprüft (mit Grundfläche): so bleibt Abstand zu Mauern und gesetzten Gebäuden
+          if (blocked(x, y, rr, t, ring)) continue;
+          trees.push({ t, x: Math.round(x), y: Math.round(y), s: Math.round(ts * z * 100) / 100, v: vv, rot: 0, d });
+          break;
+        }
+      }
+    }
+  }
+  for (const { d, ...o } of trees) out.push(o);
   return out.map((o, i) => ({ id: `${fill.id}-${i}`, ...o, fill: fill.id }));
 }
 

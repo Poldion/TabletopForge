@@ -19,7 +19,7 @@ export const BIOMES = {
     label: tr('Wiese'),
     ground: ['#59a844', '#6aae44', '#76b444', '#8cb14d'], strokes: ['200,235,130', '35,95,45'], dots: ['#b9e39a', '#e8e07a', '#d8f0c0'],
     road: '#b9ae90', path: '#c5a967', pathEdge: '#b3a65e', dirt: '#bf9f62', sand: '#cbc198', sandShade: '#a89f7c', rock: ROCK,
-    water: TEAL, foam: '#a0d4d3', shoreLine: '#1f3b36', shadow: '#b0a2b2',
+    water: TEAL, foam: '#a0d4d3', shoreLine: '#1f3b36', shadow: '#a7a49e',
     trees: [['#1f3a1c', '#36522e', '#4a7040', '#5a8a4c'], ['#2e3a1c', '#485731', '#66763f', '#808f56'], ['#1c3a2c', '#2f5540', '#3f7052', '#4f8a62']],
   },
   desert: {
@@ -27,7 +27,7 @@ export const BIOMES = {
     ground: ['#d39c5c', '#dba96a', '#e2b376', '#e9c088'], strokes: ['250,225,170', '150,95,50'], dots: ['#f2dca8', '#c98f55'],
     road: '#d2b98c', path: '#c98f55', pathEdge: '#bd8850', dirt: '#c48a50', sand: '#ecd3a0', sandShade: '#c9a878',
     rock: { top: '#ce8f59', side: '#ad5d38', line: '#5a2e1c', plateau: '#c98a56', cell: '#d9a06a' },
-    water: TEAL, foam: '#a0d4d3', shoreLine: '#3b2a1f', shadow: '#b09a9c',
+    water: TEAL, foam: '#a0d4d3', shoreLine: '#3b2a1f', shadow: '#a7a49e',
     trees: [['#22301a', '#47692f', '#648a3d', '#82a44e'], ['#262e1a', '#516a31', '#708a41', '#8da253'], ['#30321c', '#5f6734', '#808745', '#9ba15a']],
   },
   tundra: {
@@ -50,15 +50,15 @@ export const BIOMES = {
     label: tr('Auenland'),
     ground: ['#6aa83a', '#7cb640', '#8cc048', '#a6c850'], strokes: ['225,245,140', '50,110,40'], dots: ['#fff6d8', '#ffd34a', '#f2a7c0', '#ffffff'],
     road: '#bfb190', path: '#cdb074', pathEdge: '#bca968', dirt: '#c2a468', sand: '#d6caa0', sandShade: '#b3a880', rock: ROCK,
-    water: ['#1f6a70', '#278084', '#32989c', '#48b4b4'], foam: '#b4e0dc', shoreLine: '#1f3b36', shadow: '#b29fb8',
+    water: ['#1f6a70', '#278084', '#32989c', '#48b4b4'], foam: '#b4e0dc', shoreLine: '#1f3b36', shadow: '#a7a49e',
     trees: [['#24401c', '#3d5e2c', '#567e3c', '#6c9a4a'], ['#33401c', '#546430', '#748840', '#92a652'], ['#38331f', '#665c3a', '#80744a', '#a2975c']],
   },
   town: {
-    label: tr('Stadt'), strokeDir: 'any', strokeAlpha: [0.14, 0.08], strokeLen: [4, 9], pebbles: 0.34, blades: false,
+    label: tr('Stadt'), zones: 0.55, strokeDir: 'any', strokeAlpha: [0.14, 0.08], strokeLen: [4, 9], pebbles: 0.34, blades: false,
     ground: ['#8a8672', '#96927c', '#a09c86', '#aaa690'], strokes: ['200,196,170', '70,66,52'], dots: ['#b8b49c', '#7c7864'],
     road: '#c2bca4', path: '#b0a888', pathEdge: '#9c957a', dirt: '#8f8468', sand: '#b8b094', sandShade: '#96907a',
     rock: { top: '#b0ae96', side: '#84826e', line: '#444236', plateau: '#a6a48c', cell: '#bcbaa2' },
-    water: ['#1f5660', '#27686f', '#337c82', '#479498'], foam: '#a8cccc', shoreLine: '#1f3438', shadow: '#a8a0a8',
+    water: ['#1f5660', '#27686f', '#337c82', '#479498'], foam: '#a8cccc', shoreLine: '#1f3438', shadow: '#a7a49e',
     trees: [['#1f3a1c', '#36522e', '#4a7040', '#5a8a4c'], ['#2e3a1c', '#485731', '#667a3e', '#81934b']],
   },
   dungeon: {
@@ -66,7 +66,7 @@ export const BIOMES = {
     ground: ['#373632', '#3e3c37', '#44413b', '#4b4740'], strokes: ['122,116,104', '29,27,24'], dots: ['#6f6a5e', '#857f70', '#272521', '#2c2a25'],
     road: '#99937e', path: '#8d8872', pathEdge: '#7c7764', dirt: '#6f6a58', sand: '#8c8874', sandShade: '#6a6756', cave: '#7d786a',
     rock: { top: '#8a887a', side: '#5e5c52', line: '#24231e', plateau: '#7e7c6e', cell: '#96947f' },
-    water: ['#143c44', '#1a4c54', '#235e66', '#2f747a'], foam: '#8fc0c0', shoreLine: '#101c1e', shadow: '#9c99a2',
+    water: ['#143c44', '#1a4c54', '#235e66', '#2f747a'], foam: '#8fc0c0', shoreLine: '#101c1e', shadow: '#9d9b97',
     trees: [['#2e2020', '#4f3530', '#69423c', '#7d4f49'], ['#22302c', '#3f5a50', '#56796c', '#6a9484'], ['#302a1c', '#5c5338', '#7a6e48', '#948659']],
   },
   cave: {
@@ -74,7 +74,7 @@ export const BIOMES = {
     ground: ['#39322a', '#40382e', '#463e33', '#4d4538'], strokes: ['133,119,95', '31,26,21'], dots: ['#5e5444', '#7a6e58', '#27221c', '#2c261f'],
     road: '#a09478', path: '#9a8c6c', pathEdge: '#867a5e', dirt: '#74684e', sand: '#948a6e', sandShade: '#70684e', cave: '#857a62',
     rock: { top: '#93876c', side: '#75694f', line: '#20180f', plateau: '#857a62', cell: '#a3977c' },
-    water: ['#123a40', '#184a50', '#215c62', '#2d7276'], foam: '#8fc0bc', shoreLine: '#0e1a1c', shadow: '#9390a0',
+    water: ['#123a40', '#184a50', '#215c62', '#2d7276'], foam: '#8fc0bc', shoreLine: '#0e1a1c', shadow: '#96938f',
     trees: [['#2e2020', '#4f3530', '#69423c', '#7d4f49'], ['#22302c', '#3f5a50', '#56796c', '#6a9484'], ['#302a1c', '#5c5338', '#7a6e48', '#948659']],
   },
 };

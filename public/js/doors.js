@@ -110,6 +110,80 @@ export function drawDoor(c, d, { dm = false } = {}) {
   c.save();
   c.translate(d.x, d.y);
   c.rotate(d.a);
+  if (d.plain) {
+    // Tür einer eingelesenen Karte: steht schon im Kartenbild – nur die Spielleitung sieht, ob sie offen oder zu ist
+    if (dm) {
+      c.lineCap = 'round';
+      c.strokeStyle = 'rgba(20,14,8,.7)';
+      c.lineWidth = 7;
+      c.beginPath();
+      c.moveTo(-w / 2, 0);
+      c.lineTo(w / 2, 0);
+      c.stroke();
+      c.strokeStyle = d.open ? '#7ad67a' : d.locked ? '#e8c04a' : '#ff9a5a';
+      c.lineWidth = 3.5;
+      if (d.open) c.setLineDash([7, 7]);
+      c.stroke();
+      c.setLineDash([]);
+    }
+    c.restore();
+    return;
+  }
+  if (d.gate) {
+    // Tor: zwei schwere Flügel mit Eisenbändern. In der Burgmauer sitzen die Angeln an den Innenkanten der Tortürme;
+    // offen schwenken beide Flügel zur selben Seite (d.sw: in den Hof)
+    const stone = d.wall === 'rampart';
+    const hinge = stone ? w / 2 - 12 : w / 2;
+    const t = stone ? 9 : 4.5;
+    const sw = d.sw || -1;
+    for (const side of [-1, 1]) {
+      c.save();
+      c.translate(side * hinge, 0);
+      c.scale(-side, sw < 0 ? 1 : -1);
+      if (d.open) c.rotate(-1.4);
+      const L = hinge - (d.open ? 0 : 1);
+      if (d.open) {
+        c.fillStyle = 'rgba(40,24,34,.2)';
+        c.fillRect(3, t - 2, L - 3, 8);
+      }
+      c.beginPath();
+      c.rect(0, -t, L, 2 * t);
+      c.fillStyle = d.open ? '#73593a' : '#6b5236';
+      c.fill();
+      c.strokeStyle = INK;
+      c.lineWidth = 2.4;
+      c.lineJoin = 'round';
+      c.stroke();
+      // Bohlenfuge und zwei Eisenbänder
+      c.strokeStyle = 'rgba(42,30,16,.45)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(3, 0);
+      c.lineTo(L - 3, 0);
+      c.stroke();
+      c.strokeStyle = '#3d3a34';
+      c.lineWidth = 3;
+      c.beginPath();
+      for (const k of [0.28, 0.72]) {
+        c.moveTo(L * k, -t + 1.5);
+        c.lineTo(L * k, t - 1.5);
+      }
+      c.stroke();
+      c.restore();
+    }
+    if (dm && d.locked) {
+      c.fillStyle = '#e8c04a';
+      c.strokeStyle = INK;
+      c.lineWidth = 1.4;
+      c.beginPath();
+      c.arc(0, -5, 4.6, Math.PI, 0);
+      c.stroke();
+      c.fillRect(-6.5, -5, 13, 10);
+      c.strokeRect(-6.5, -5, 13, 10);
+    }
+    c.restore();
+    return;
+  }
   if (d.secret && !d.open) {
     if (dm) {
       c.setLineDash([5, 4]);
@@ -117,14 +191,25 @@ export function drawDoor(c, d, { dm = false } = {}) {
       c.lineWidth = 2.4;
       c.strokeRect(-w / 2, -10, w, 20);
       c.setLineDash([]);
-      c.fillStyle = 'rgba(150,90,200,.3)';
+      c.fillStyle = d.found ? 'rgba(150,90,200,.12)' : 'rgba(150,90,200,.3)';
       c.fillRect(-w / 2, -10, w, 20);
+    }
+    if (d.found) {
+      // entdeckt, aber zu: eine feine Fuge verrät die Tür in der Wand
+      c.strokeStyle = 'rgba(42,30,16,.75)';
+      c.lineWidth = 1.4;
+      c.beginPath();
+      for (const x of [-w / 2 + 2, w / 2 - 2]) {
+        c.moveTo(x, -8);
+        c.lineTo(x, 8);
+      }
+      c.stroke();
     }
     c.restore();
     return;
   }
   // Wandstärke und Farbe des Stücks, das bei der Geheimtür zur Seite schwenkt
-  const [thick, slab] = { wood: [8, '#806743'], palisade: [15, '#7a6242'], rampart: [30, '#a9a58c'] }[d.wall] || [14, '#a9a58c'];
+  const [thick, slab] = { wood: [8, '#806743'], timber: [14, '#8a6c44'], palisade: [15, '#7a6242'], rampart: [30, '#a9a58c'] }[d.wall] || [14, '#a9a58c'];
   if (d.secret) {
     // Durchgang: die Wand aus dem Kartenbild überdecken
     const g = thick / 2 + 2.5;
@@ -188,6 +273,76 @@ export function drawDoor(c, d, { dm = false } = {}) {
     c.stroke();
     c.fillRect(w / 2 - 6, -4.5, 12, 9.5);
     c.strokeRect(w / 2 - 6, -4.5, 12, 9.5);
+  }
+  c.restore();
+}
+
+// --- Beschriftung ------------------------------------------------------------------------------------------------------
+
+const LABEL_PX = { s: 26, m: 40, l: 62, xl: 96 };
+const AREA_PX = { s: 24, m: 34, l: 50, xl: 80 };
+/** Schriftgröße eines Namens in Karten-Pixeln. */
+export const labelSize = (l) => (l.kind === 'area' ? AREA_PX : LABEL_PX)[l.size] || (l.kind === 'area' ? AREA_PX.m : LABEL_PX.m);
+/** Ungefähre halbe Breite und Höhe eines Namens (für Treffer und Auswahlrahmen). */
+export function labelBox(l) {
+  const px = labelSize(l);
+  const n = (l.text || '').length;
+  return [Math.max(px, (n * px * (l.kind === 'area' ? 0.86 : 0.52)) / 2 + 6), px * 0.7];
+}
+/** Name an der Stelle (x, y) oder null. */
+export function labelAt(labels, x, y) {
+  for (const l of Array.isArray(labels) ? labels : Object.values(labels || {})) {
+    const a = (-(l.rot || 0) * Math.PI) / 180;
+    const dx = (x - l.x) * Math.cos(a) - (y - l.y) * Math.sin(a);
+    const dy = (x - l.x) * Math.sin(a) + (y - l.y) * Math.cos(a);
+    const [hw, hh] = labelBox(l);
+    if (Math.abs(dx) < hw && Math.abs(dy) < hh) return l;
+  }
+  return null;
+}
+/**
+ * Namen auf die Karte schreiben: Orte in kräftiger Schrift, Viertel und Landstriche groß, gesperrt und zurückhaltend.
+ * Verborgene Namen (shown === false) sieht nur die Spielleitung (dm), blass und gestrichelt unterlegt.
+ */
+export function drawLabel(c, l, { dm = false } = {}) {
+  if (!l.text || (l.shown === false && !dm)) return;
+  const px = labelSize(l);
+  const area = l.kind === 'area';
+  c.save();
+  c.translate(l.x, l.y);
+  if (l.rot) c.rotate((l.rot * Math.PI) / 180);
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.lineJoin = 'round';
+  c.globalAlpha = l.shown === false ? 0.45 : 1;
+  if (area) {
+    // Viertel und Landstriche: helle, gesperrte Kapitälchen mit feiner dunkler Kontur – liegt ruhig über Dächern
+    c.font = `small-caps 600 ${px}px Georgia, 'Times New Roman', serif`;
+    if ('letterSpacing' in c) c.letterSpacing = `${Math.round(px * 0.25)}px`;
+    c.strokeStyle = 'rgba(42,32,24,.6)';
+    c.lineWidth = 3;
+    c.strokeText(l.text, 0, 0);
+    c.fillStyle = 'rgba(243,234,210,.9)';
+    c.fillText(l.text, 0, 0);
+  } else {
+    // Orte: dunkle Schrift mit weichem, hellem Hof
+    c.font = `600 ${px}px Georgia, 'Times New Roman', serif`;
+    if ('letterSpacing' in c) c.letterSpacing = '0px';
+    c.shadowColor = 'rgba(243,234,210,.9)';
+    c.shadowBlur = 3;
+    c.strokeStyle = 'rgba(243,234,210,.8)';
+    c.lineWidth = px / 7;
+    c.strokeText(l.text, 0, 0);
+    c.shadowBlur = 0;
+    c.fillStyle = '#2a1e10';
+    c.fillText(l.text, 0, 0);
+  }
+  if (l.shown === false) {
+    const [hw, hh] = labelBox(l);
+    c.setLineDash([6, 5]);
+    c.strokeStyle = '#d9a6ff';
+    c.lineWidth = 2;
+    c.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
   }
   c.restore();
 }

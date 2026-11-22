@@ -3,6 +3,41 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.58.0] – 2026-11-22
+
+### Added
+
+- **Furnish rooms with one click** in the map builder: choose a theme (taproom, kitchen, bedchamber, storeroom, smithy,
+  library, chapel, guard room, crypt, prison cell) and the room is furnished – wall pieces with their backs to the
+  wall, tables with stools, doors kept clear. Re-roll or dissolve at any time.
+- **Names on the map:** a text tool for places and quarters. Names are drawn during play instead of being baked into
+  the image, so the game master can show or hide each one for the players.
+- **Selecting several items** in the map builder: frame or Shift+click, move together, duplicate, copy and paste –
+  also into another map.
+- **Gates:** a two-square opening with two leaves; in a castle wall it gets two gate towers. Opens and closes during
+  play like a door. A closed wall ring can be given a moat with one click.
+- **Universal VTT import:** `.dd2vtt`, `.uvtt` and `.df2vtt` files can be uploaded as maps – the image is extracted,
+  and grid, walls, doors and lights come along. Doors can be opened and closed, rooms revealed with the Room tool.
+- **Timber walls** for rooms in the map builder (log cabin, barn, hut): beams and corner posts instead of masonry.
+- **Daylight through windows:** with “dark indoors only”, light falls into rooms through windows that face the
+  outdoors (maps from the map builder; apply the map once more to get it on existing maps).
+- **Ramps:** where a path or street crosses the edge of raised ground, the rock edge is left out and the way runs up.
+- **Marking yards:** the Room tool has a “Yard” mode – a clicked area counts as under open sky and stays bright with
+  “dark indoors only”. Handy for imported maps.
+- Names on the map come in a fourth, very large size for overview maps.
+
+### Changed
+
+- House quarters now line streets and paths first (fronts facing the street); the rows behind run in the same
+  direction as their street, and they keep clear of placed buildings. Gaps are filled more densely, and small trees
+  and bushes grow in the yards where no house fits. Erased stretches of a street no longer attract houses.
+- Closed castle wall rings carry battlements on the outside only, with a parapet towards the yard.
+- Tall buildings cast their shadow onto the roofs of lower neighbours.
+- A secret door stays recognisable as a fine seam once it has been opened (can be switched off per door).
+- Calmer paved ground in the town environment. Cast shadows are now neutral instead of slightly violet.
+- Pasting a copied group keeps all of it inside the map; in a group, doors and windows move only together with
+  their wall.
+
 ## [0.57.0] – 2026-11-20
 
 ### Added

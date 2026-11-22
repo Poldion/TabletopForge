@@ -409,6 +409,7 @@ export function createPrepViews({ sync, cid, go, play, adventure = () => null, s
       let editor = null;
       const kindSel = h('select', ...Object.entries(MAP_KINDS).map(([v, l]) => h('option', { value: v }, l)));
 
+      let uvtt = []; // je hochgeladener Datei die Daten einer Universal-VTT-Karte (oder null)
       const createFromAsset = (asset) => {
         const m = newMap(asset, kindSel.value);
         sync.set(['maps', m.id], m);
@@ -440,11 +441,45 @@ export function createPrepViews({ sync, cid, go, play, adventure = () => null, s
           h('div.section-title', tr('Neue Karte')),
           field(tr('Kartentyp'), kindSel),
           dropzone(cid, {
-            accept: 'image/*',
-            label: tr('Kartenbild hierher ziehen oder '),
+            accept: 'image/*,.dd2vtt,.uvtt,.df2vtt',
+            label: tr('Kartenbild oder Universal-VTT-Datei hierher ziehen oder '),
+            // Universal-VTT (.dd2vtt, .uvtt): Bild herauslösen und hochladen; Wände, Türen und Lichter kommen an die Karte
+            prepare: async (files) => {
+              uvtt = [];
+              const out = [];
+              for (const f of files) {
+                let extra = null;
+                let file = f;
+                const { isUvtt, parseUvtt, base64Bytes } = await import('./uvtt.js');
+                if (isUvtt(f.name)) {
+                  let data;
+                  if (f.size > 120 * 1024 * 1024) throw new Error(tr('„{name}“ ist zu groß (über 120 MB) – bitte das Kartenbild kleiner exportieren', { name: f.name }));
+                  try {
+                    data = parseUvtt(JSON.parse(await f.text()));
+                  } catch {
+                    throw new Error(tr('„{name}“ ist keine lesbare Universal-VTT-Datei', { name: f.name }));
+                  }
+                  file = new File([base64Bytes(data.image.b64)], `${f.name.replace(/\.[^.]+$/, '')}.${data.image.ext}`, { type: data.image.mime });
+                  extra = data;
+                }
+                out.push(file);
+                uvtt.push(extra);
+              }
+              return out;
+            },
             onUploaded: (created) => {
               let last = null;
-              for (const a of created) last = createFromAsset(a);
+              created.forEach((a, i) => {
+                last = createFromAsset(a);
+                const u = uvtt[i];
+                if (!u) return;
+                sync.do([
+                  { t: 'merge', p: ['maps', last.id], v: { width: u.width, height: u.height, walls: u.walls, doors: u.doors, lights: u.lights, zones: u.zones } },
+                  { t: 'merge', p: ['maps', last.id, 'grid'], v: { ...u.grid, show: false } },
+                ]);
+                toast(tr('Karte eingelesen: {walls} Wandstücke, {doors} Türen, {lights} Lichter. Dynamische Beleuchtung bei Bedarf einschalten.', { walls: u.walls.length, doors: Object.keys(u.doors).length, lights: Object.keys(u.lights).length }), 6000);
+              });
+              uvtt = [];
               if (last) go(`maps/${last.id}`);
             },
           }),

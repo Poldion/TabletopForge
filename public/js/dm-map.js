@@ -3,7 +3,7 @@
 import { h, uid, clear, bindInput, byOrder, TOKEN_COLORS, toast, fill } from './util.js';
 import { MapRenderer, gridOf, snapPoint, snapViewCenter, inAoe, feetToPx, lightPos, drawStroke, FOG_STYLES, fogStyleOf } from './maprender.js';
 import { Viewport } from './viewport.js';
-import { doorAt, zoneAt, zoneOp, zoneShown } from './doors.js';
+import { doorAt, zoneAt, zoneOp, zoneShown, labelAt } from './doors.js';
 import { tableCells } from '/shared/calibration.js';
 import { addCreatureToInitiative } from './creatures-view.js';
 import { putOnTable } from './table-view.js';
@@ -274,6 +274,8 @@ export function createMapEditor(sync, cid, hooks = {}) {
     }
     const door = doorAt(map, x, y, 4 / renderer.view.scale);
     if (door) return { type: 'door', id: door.id };
+    const label = labelAt(map.labels, x, y);
+    if (label) return { type: 'label', id: label.id };
     return null;
   }
 
@@ -452,6 +454,11 @@ export function createMapEditor(sync, cid, hooks = {}) {
         drag = { door: hit.id, x: e.clientX, y: e.clientY };
         return true;
       }
+      if (hit.type === 'label') {
+        // Name auf der Karte: auswählen, rechts zeigen oder verbergen; die Karte lässt sich trotzdem verschieben
+        select(hit);
+        return false;
+      }
       if (hit.type === 'token' && additive) {
         const next = new Set(picked);
         if (next.has(hit.id)) next.delete(hit.id);
@@ -512,6 +519,18 @@ export function createMapEditor(sync, cid, hooks = {}) {
           const zone = zoneAt(map, p.x, p.y);
           if (!zone) {
             toast(tr('Hier ist kein geschlossener Raum – im Freien bitte Pinsel oder Rechteck nehmen'), 3500);
+            break;
+          }
+          if (opt.roomSky) {
+            // Hof, Garten, Dachterrasse: für „nur innen dunkel“ als draußen merken (oder wieder als Innenraum)
+            sync.set(P('zones'), map.zones.map((z) => {
+              if (z.id !== zone.id) return z;
+              // von Hand gesetzt (man) samt Klickpunkt: so findet der Kartenbauer den Bereich beim nächsten
+              // Übernehmen wieder und behält die Einstufung
+              const { out, ...rest } = z;
+              return { ...rest, ...(out ? {} : { out: true }), man: 1, at: [Math.round(p.x), Math.round(p.y)] };
+            }));
+            toast(zone.out ? tr('Dieser Bereich gilt wieder als Innenraum.') : tr('Dieser Bereich liegt jetzt unter freiem Himmel – bei „nur innen dunkel“ bleibt er hell.'), 3500);
             break;
           }
           if (!map.fog?.enabled) sync.merge(P('fog'), { enabled: true });
@@ -823,8 +842,9 @@ export function createMapEditor(sync, cid, hooks = {}) {
       doorBox.addEventListener('change', () => sync.merge(P('fog'), { doorReveal: doorBox.checked }));
       add(
         h('div.row', { style: { gap: '2px' } },
-          h('button.small', { class: opt.roomHide ? '' : 'active', onclick: () => ((opt.roomHide = false), renderOptions()) }, icon('sun'), tr(' Aufdecken')),
-          h('button.small', { class: opt.roomHide ? 'active' : '', style: opt.roomHide ? { background: '#6b6f7a', borderColor: '#9aa0ad', color: '#fff' } : null, onclick: () => ((opt.roomHide = true), renderOptions()) }, icon('cloud'), tr(' Verdecken')),
+          h('button.small', { class: opt.roomHide || opt.roomSky ? '' : 'active', onclick: () => ((opt.roomHide = false), (opt.roomSky = false), renderOptions()) }, icon('sun'), tr(' Aufdecken')),
+          h('button.small', { class: opt.roomHide && !opt.roomSky ? 'active' : '', style: opt.roomHide && !opt.roomSky ? { background: '#6b6f7a', borderColor: '#9aa0ad', color: '#fff' } : null, onclick: () => ((opt.roomHide = true), (opt.roomSky = false), renderOptions()) }, icon('cloud'), tr(' Verdecken')),
+          h('button.small', { class: opt.roomSky ? 'active' : '', title: tr('Klick auf einen Bereich: Er gilt als unter freiem Himmel (Hof, Garten) und bleibt bei „nur innen dunkel“ hell. Noch ein Klick macht ihn wieder zum Innenraum.'), onclick: () => ((opt.roomSky = !opt.roomSky), renderOptions()) }, tr('Hof')),
         ),
         h('label.row', { title: tr('Öffnet die Spielleitung eine Tür, werden die Räume beiderseits aufgedeckt'), style: { gap: '4px', alignItems: 'center' } }, doorBox, h('span.small', tr('Türen decken auf'))),
         h('button.small', { onclick: () => sync.set(P('fog', 'ops'), [{ m: 'reveal', s: 'all' }]) }, tr('Alles aufdecken')),
@@ -985,10 +1005,31 @@ export function createMapEditor(sync, cid, hooks = {}) {
     );
   }
 
+  /** Name auf einer gebauten Karte: für die Spieler zeigen oder verbergen. */
+  function renderLabelInspector(map) {
+    const label = map?.labels?.[selected.id];
+    if (!label) {
+      inspector.classList.add('hidden');
+      return;
+    }
+    inspector.classList.remove('hidden');
+    const all = Object.values(map.labels);
+    const setAll = (shown) => sync.do(all.map((l) => ({ t: 'set', p: P('labels', l.id, 'shown'), v: shown })));
+    clear(inspector);
+    inspector.append(
+      h('div.row', h('strong.grow', label.text), h('button.small', { onclick: () => select(null), title: tr('Schließen') }, icon('x'))),
+      h('label.row', h('input', { type: 'checkbox', checked: label.shown !== false, onchange: (e) => sync.set(P('labels', label.id, 'shown'), e.target.checked) }), tr(' für die Spieler sichtbar')),
+      h('div.row', h('button.small', { onclick: () => setAll(true) }, icon('eye'), tr(' Alle Namen zeigen')), h('button.small', { onclick: () => setAll(false) }, icon('eyeOff'), tr(' Alle verbergen'))),
+      h('div.muted.small', tr('Namen stammen aus dem Kartenbauer. Verborgene Namen siehst nur du – so erscheint ein Ort erst, wenn die Gruppe ihn kennt.')),
+    );
+  }
+
   /** Tür öffnen oder schließen. Geht sie auf und ist der Nebel an, erscheinen die Räume beiderseits. */
   function setDoor(door, open) {
     const map = M();
     sync.set(P('doors', door.id, 'open'), open);
+    // Eine Geheimtür ist nach dem ersten Öffnen entdeckt: geschlossen bleibt dann eine feine Fuge in der Wand sichtbar
+    if (open && door.secret && !door.found) sync.set(P('doors', door.id, 'found'), true);
     if (!open || !map.fog?.enabled || map.fog.doorReveal === false) return;
     const fresh = (door.z || []).map((id) => id && map.zones?.find((z) => z.id === id)).filter((z) => z && !zoneShown(map, z));
     if (fresh.length) sync.push(P('fog', 'ops'), fresh.map((z) => zoneOp(z)));
@@ -1005,9 +1046,10 @@ export function createMapEditor(sync, cid, hooks = {}) {
     const set = (k, v) => (k === 'open' ? setDoor(door, v) : sync.set(P('doors', door.id, k), v));
     clear(inspector);
     inspector.append(
-      h('div.row', h('strong.grow', door.secret ? tr('Geheimtür') : tr('Tür')), h('button.small', { onclick: () => select(null), title: tr('Schließen') }, icon('x'))),
+      h('div.row', h('strong.grow', door.secret ? tr('Geheimtür') : door.gate ? tr('Tor') : tr('Tür')), h('button.small', { onclick: () => select(null), title: tr('Schließen') }, icon('x'))),
       h('div.row', h('button.small.primary', { disabled: door.locked && !door.open, onclick: () => set('open', !door.open) }, door.open ? tr('Tür schließen') : tr('Tür öffnen')), h('label.row', h('input', { type: 'checkbox', checked: !!door.locked, onchange: (e) => set('locked', e.target.checked) }), tr(' verschlossen'))),
-      h('div.muted.small', door.secret ? tr('Am Spieltisch sieht die Geheimtür aus wie Wand, bis sie offen ist.') : tr('Eine geschlossene Tür hält das Licht auf. Ein Klick auf die Tür öffnet und schließt sie.')),
+      door.secret ? h('label.row', h('input', { type: 'checkbox', checked: !!door.found, onchange: (e) => set('found', e.target.checked) }), tr(' entdeckt (Fuge in der Wand sichtbar)')) : null,
+      h('div.muted.small', door.secret ? tr('Am Spieltisch sieht die Geheimtür aus wie Wand, bis sie offen ist. Danach gilt sie als entdeckt: geschlossen bleibt eine feine Fuge sichtbar.') : tr('Eine geschlossene Tür hält das Licht auf. Ein Klick auf die Tür öffnet und schließt sie.')),
     );
   }
 
@@ -1015,6 +1057,7 @@ export function createMapEditor(sync, cid, hooks = {}) {
     const map = M();
     if (selected?.type === 'tokens') return renderMultiInspector(map);
     if (selected?.type === 'door') return renderDoorInspector(map);
+    if (selected?.type === 'label') return renderLabelInspector(map);
     const obj = selected && map?.[selected.type === 'token' ? 'tokens' : selected.type === 'light' ? 'lights' : 'aoes']?.[selected.id];
     if (!obj) {
       inspector.classList.add('hidden');
@@ -1156,7 +1199,7 @@ export function createMapEditor(sync, cid, hooks = {}) {
       if (!confirm(tr('{size} Tokens löschen?', { size: picked.size }))) return;
       sync.do([...picked].map((id) => ({ t: 'del', p: P('tokens', id) })));
       select(null);
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected && selected.type !== 'door') {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected && selected.type !== 'door' && selected.type !== 'label') {
       const coll = selected.type === 'token' ? 'tokens' : selected.type === 'light' ? 'lights' : 'aoes';
       sync.del(P(coll, selected.id));
       select(null);

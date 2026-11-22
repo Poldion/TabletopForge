@@ -1,15 +1,16 @@
 // Kartenbauer: Editor. Gelände malen, Räume aufziehen, Wände/Türen/Fenster setzen, Gegenstände platzieren und
 // Flächen automatisch mit Bäumen, Büschen oder Felsen füllen. Die Szene liegt als eigene Datei je Karte auf dem
 // Server; „Karte übernehmen“ backt daraus das Kartenbild, das Spieltisch und Spieler-Display wie jede Karte zeigen.
-import { h, fill, api, toast, uid, uploadFiles, debounce } from './util.js';
+import { h, fill, api, toast, uid, uploadFiles, debounce, prompt2 } from './util.js';
 import { icon } from './icons.js';
 import { tr } from './i18n.js';
-import { CELL, newScene, thin, roomAt, inRoom, buildingOutline, nearestWall, wallSegments, roomZones, scatter, scatterHouses, inRects, shapeBox } from './mb-geom.js';
+import { CELL, newScene, thin, roomAt, inRoom, buildingOutline, nearestWall, wallSegments, roomZones, isTimberWall, scatter, scatterHouses, cutStreets, inRects, ringAround, ringOutsides, shapeBox } from './mb-geom.js';
 import { BIOMES, CATALOG, CATEGORIES, biomeOf, previewUrl, sprite } from './mb-assets.js';
 import { SceneRenderer, sceneSize, FLOORS, floorSwatch } from './mb-render.js';
 import { tableCells } from '/shared/calibration.js';
-import { sealDoor, zoneAt } from './doors.js';
+import { sealDoor, zoneAt, drawLabel, labelAt, labelBox } from './doors.js';
 import { takeTemplate, downloadScene, uploadScene } from './mb-templates.js';
+import { THEMES, furnish } from './mb-themes.js';
 
 const HALF = CELL / 2;
 const snap = (v) => Math.round(v / HALF) * HALF;
@@ -24,6 +25,7 @@ const TERRAIN = {
 /** Maßstab: auf Übersichtskarten sind Bäume, Büsche und Felsen entsprechend kleiner. */
 const SCALES = { battle: 1, overview: 0.32 };
 const FLOOR_LABEL = { wood: tr('Dielen'), woodDark: tr('Dielen dunkel'), woodLight: tr('Dielen hell'), stone: tr('Steinplatten'), cobble: tr('Kopfstein'), earth: tr('Erde') };
+const THEME_LABEL = { tavern: tr('Schankraum'), kitchen: tr('Küche'), bedroom: tr('Schlafkammer'), storage: tr('Lager'), smithy: tr('Schmiede'), library: tr('Bibliothek'), chapel: tr('Kapelle'), barracks: tr('Wachstube'), crypt: tr('Gruft'), cell: tr('Kerkerzelle') };
 const FILL_LABEL = { trees: tr('Bäume'), bushes: tr('Büsche'), rocks: tr('Felsen'), mixed: tr('Gemischt'), houses: tr('Häuser') };
 const TOOLS = [
   ['select', 'cursor', tr('Auswählen')],
@@ -34,6 +36,7 @@ const TOOLS = [
   ['opening', 'home', tr('Tür/Fenster')],
   ['object', 'token', tr('Gegenstand')],
   ['fill', 'cloud', tr('Füllen')],
+  ['label', 'edit', tr('Text')],
 ];
 
 /** @param {{ sync: import('./sync.js').Sync, cid: string, go: (route: string) => void, play: (o: object) => void }} ctx */
@@ -53,9 +56,10 @@ export function createBuilderView({ sync, cid, go, play }) {
     let sel = null; // { type: 'object'|'room'|'wall'|'opening'|'fill', id }
     let drag = null;
     let chain = null; // angefangener Mauerzug: { start, last }
+    let multi = []; // Mehrfachauswahl: [{ type, id }] (ab zwei Elementen; sonst gilt sel)
     let hover = null; // Mausposition in Kartenkoordinaten
     let baked = true; // entspricht das Kartenbild dem Stand der Szene?
-    const opt = { terrain: 'water', r: TERRAIN.water.r, erase: false, lvl: 1, room: 'rect', open: false, ruin: false, search: '', floor: 'wood', wall: 'wood', opening: 'door', obj: 'tableRound', rot: 0, fill: 'trees', density: 1, fillShape: 'ellipse' };
+    const opt = { terrain: 'water', r: TERRAIN.water.r, erase: false, lvl: 1, room: 'rect', open: false, ruin: false, timber: false, search: '', floor: 'wood', wall: 'wood', opening: 'door', obj: 'tableRound', rot: 0, fill: 'trees', density: 1, fillShape: 'ellipse', labelSize: 'm', labelKind: 'place' };
     const view = { k: 0.4, tx: 0, ty: 0 };
     const history = [];
     let hIndex = -1;
@@ -164,12 +168,14 @@ export function createBuilderView({ sync, cid, go, play }) {
       hIndex += dir;
       scene = JSON.parse(history[hIndex]);
       chain = null; // ein angefangener Mauerzug hinge sonst an einem Punkt, den es nicht mehr gibt
+      multi = multi.filter((g) => find(g));
+      if (multi.length < 2) multi = [];
       if (sel && !find(sel)) sel = null;
       syncTop();
       renderSide();
       touched();
     }
-    const listOf = (type) => ({ object: scene.objects, room: scene.rooms, wall: scene.walls, opening: scene.openings, fill: scene.fills })[type];
+    const listOf = (type) => ({ object: scene.objects, room: scene.rooms, wall: scene.walls, opening: scene.openings, fill: scene.fills, label: scene.labels })[type];
     const find = (s) => (s ? listOf(s.type).find((x) => x.id === s.id) : null);
     function syncTop() {
       cols.value = scene.cols;
@@ -186,7 +192,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         else Object.assign(r, { x: r.x + dx, y: r.y + dy });
       }
       for (const w of scene.walls) Object.assign(w, { x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy });
-      for (const o of [...scene.openings, ...scene.objects]) Object.assign(o, { x: o.x + dx, y: o.y + dy });
+      for (const o of [...scene.openings, ...scene.objects, ...(scene.labels || [])]) Object.assign(o, { x: o.x + dx, y: o.y + dy });
       for (const f of scene.fills) {
         const sh = f.shape;
         if (sh.k === 'rect') Object.assign(sh, { x: sh.x + dx, y: sh.y + dy });
@@ -316,9 +322,13 @@ export function createBuilderView({ sync, cid, go, play }) {
           c.setLineDash([]);
         }
       }
-      // Auswahl
-      const it = find(sel);
-      if (it) {
+      // Namen: stehen nicht im Kartenbild, das Spiel schreibt sie darüber (und kann sie verbergen)
+      for (const l of scene.labels || []) drawLabel(c, l, { dm: true });
+      // Auswahl (einzeln oder mehrere)
+      for (const one of multi.length ? multi : sel ? [sel] : []) {
+        const it = find(one);
+        if (!it) continue;
+        const sel = one; // eslint-disable-line no-shadow
         c.strokeStyle = '#ffd54a';
         c.lineWidth = 2 * px;
         c.setLineDash([6 * px, 4 * px]);
@@ -335,7 +345,7 @@ export function createBuilderView({ sync, cid, go, play }) {
           c.stroke();
           c.setLineDash([]);
           c.fillStyle = '#ffd54a';
-          for (const [x, y] of handles(it)) c.fillRect(x - 5 * px, y - 5 * px, 10 * px, 10 * px);
+          if (!multi.length) for (const [x, y] of handles(it)) c.fillRect(x - 5 * px, y - 5 * px, 10 * px, 10 * px);
         } else if (sel.type === 'wall') {
           c.beginPath();
           c.moveTo(it.x1, it.y1);
@@ -345,6 +355,16 @@ export function createBuilderView({ sync, cid, go, play }) {
         } else if (sel.type === 'opening') {
           c.beginPath();
           c.arc(it.x, it.y, it.w / 2 + 8, 0, 7);
+          c.stroke();
+        } else if (sel.type === 'label') {
+          const [hw, hh] = labelBox(it);
+          c.save();
+          c.translate(it.x, it.y);
+          c.rotate(((it.rot || 0) * Math.PI) / 180);
+          c.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
+          c.restore();
+        } else if (sel.type === 'fill' && multi.length) {
+          shapePath(c, it.shape);
           c.stroke();
         }
         c.setLineDash([]);
@@ -401,7 +421,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       } else if (hover && tool === 'opening') {
         const w = wallAt(hover[0], hover[1]);
         if (w) {
-          const len = opt.opening === 'window' ? 56 : 70;
+          const len = opt.opening === 'window' ? 56 : opt.opening === 'gate' ? 140 : 70;
           c.strokeStyle = '#ffd54a';
           c.lineWidth = 6 * px;
           c.beginPath();
@@ -440,6 +460,31 @@ export function createBuilderView({ sync, cid, go, play }) {
       else [nx, ny] = [nx / L, ny / L];
       return { x: Math.round(w.x + nx * (depth + 5)), y: Math.round(w.y + ny * (depth + 5)), rot: Math.round((Math.atan2(-nx, ny) * 180) / Math.PI + 360) % 360 };
     }
+    /**
+     * Stelle auf der Wand so verschieben, dass eine Öffnung der Breite width Abstand zu den Enden des Wandstücks hält
+     * (ein Tor in der Burgmauer braucht Platz für seine Tortürme). Liefert [x, y] oder null, wenn es nicht passt.
+     */
+    function awayFromEnds(w, width, kind) {
+      const outline = buildingOutline(scene.rooms);
+      const on = (q) => {
+        const dx = q.x2 - q.x1;
+        const dy = q.y2 - q.y1;
+        const L2 = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((w.x - q.x1) * dx + (w.y - q.y1) * dy) / L2));
+        return Math.hypot(q.x1 + dx * t - w.x, q.y1 + dy * t - w.y) < 2 ? t : -1;
+      };
+      const seg = [...scene.walls, ...outline.segs].find((q) => on(q) >= 0);
+      if (!seg) {
+        // runde Wand: Tore nur in weiten Bögen
+        const arc = outline.arcs.find((c) => Math.abs(Math.hypot(w.x - c.cx, w.y - c.cy) - c.r) < 3);
+        return arc && kind === 'gate' && arc.r < 3 * CELL ? null : [w.x, w.y];
+      }
+      const L = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+      const margin = kind === 'gate' && seg.kind === 'rampart' ? 134 : width / 2 + (kind === 'gate' ? 12 : 6);
+      if (L < 2 * margin) return null;
+      const t = Math.max(margin / L, Math.min(1 - margin / L, on(seg)));
+      return [seg.x1 + (seg.x2 - seg.x1) * t, seg.y1 + (seg.y2 - seg.y1) * t];
+    }
     const wallAt = (x, y) => {
       const w = nearestWall(buildingOutline(scene.rooms), scene.walls, x, y);
       return w && w.d < 60 ? w : null;
@@ -466,6 +511,9 @@ export function createBuilderView({ sync, cid, go, play }) {
         const n = nearestWall({ segs: [w], arcs: [] }, [], x, y);
         if (n.d < 8) return { type: 'wall', id: w.id };
       }
+      // Namen erst jetzt: was unter einem breiten Viertelnamen steht, bleibt anklickbar
+      const label = labelAt(scene.labels, x, y);
+      if (label) return { type: 'label', id: label.id };
       const r = roomAt(scene.rooms, x, y);
       if (r) return { type: 'room', id: r.id };
       for (let i = scene.fills.length - 1; i >= 0; i--) {
@@ -574,6 +622,9 @@ export function createBuilderView({ sync, cid, go, play }) {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') (e.preventDefault(), undo(e.shiftKey ? 1 : -1));
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') (e.preventDefault(), undo(1));
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') (e.preventDefault(), duplicate());
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') copySelection();
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') paste();
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && tool === 'select') (e.preventDefault(), setSelection([...scene.fills.map((f) => ({ type: 'fill', id: f.id })), ...scene.objects.filter((o) => !o.fill).map((o) => ({ type: 'object', id: o.id })), ...(scene.labels || []).map((l) => ({ type: 'label', id: l.id })), ...scene.openings.map((o) => ({ type: 'opening', id: o.id })), ...scene.walls.map((w) => ({ type: 'wall', id: w.id })), ...scene.rooms.map((r) => ({ type: 'room', id: r.id }))]));
       else if (e.key === 'Delete' || e.key === 'Backspace') remove();
       else if (e.key === 'Enter' && chain) ((chain = null), draw());
       else if (e.key.toLowerCase() === 'r') rotate(e.shiftKey ? -15 : 15);
@@ -585,6 +636,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         if (d && nudge(d[0], d[1], e.shiftKey)) e.preventDefault();
       } else if (e.key === 'Escape') {
         sel = null;
+        multi = [];
         setTool('select');
       }
     };
@@ -610,7 +662,7 @@ export function createBuilderView({ sync, cid, go, play }) {
           return null;
         }
       }
-      if (tool === 'select') return startSelect(x, y);
+      if (tool === 'select') return startSelect(x, y, e);
       if (tool === 'terrain') {
         const def = TERRAIN[opt.terrain];
         const stroke = { k: 'brush', pts: [[x, y]], r: opt.r, ...(opt.erase || e.altKey ? { sub: true } : {}), ...(opt.terrain === 'high' ? { lvl: opt.lvl } : {}) };
@@ -661,7 +713,7 @@ export function createBuilderView({ sync, cid, go, play }) {
           up: () => {
             if (!room) return;
             const id = uid();
-            scene.rooms.push({ id, ...room, floor: opt.floor, ...(opt.open ? { open: true } : {}), ...(opt.ruin ? { ruin: true } : {}) });
+            scene.rooms.push({ id, ...room, floor: opt.floor, ...(opt.open ? { open: true } : {}), ...(opt.ruin ? { ruin: true } : {}), ...(opt.timber ? { timber: true } : {}) });
             sel = { type: 'room', id };
             commit();
             renderSide();
@@ -721,6 +773,19 @@ export function createBuilderView({ sync, cid, go, play }) {
           },
         };
       }
+      if (tool === 'label') {
+        prompt2(tr('Name auf der Karte'), '').then((text) => {
+          if (!text) return;
+          const id = uid();
+          scene.labels.push({ id, x: Math.round(x), y: Math.round(y), text, size: opt.labelSize, kind: opt.labelKind });
+          sel = { type: 'label', id };
+          setTool('select');
+          sel = { type: 'label', id };
+          commit();
+          renderSide();
+        });
+        return null;
+      }
       if (tool === 'opening') {
         const w = wallAt(x, y);
         if (!w) return toast(tr('Türen und Fenster sitzen auf einer Wand – erst einen Raum oder eine Wand anlegen.')), null;
@@ -728,7 +793,10 @@ export function createBuilderView({ sync, cid, go, play }) {
         let a = w.a;
         while (a > Math.PI / 2) a -= Math.PI;
         while (a <= -Math.PI / 2) a += Math.PI;
-        scene.openings.push({ id: uid(), k: opt.opening, x: Math.round(w.x), y: Math.round(w.y), a: Math.round(a * 1000) / 1000, w: opt.opening === 'window' ? 56 : 70 });
+        const width = opt.opening === 'window' ? 56 : opt.opening === 'gate' ? 140 : 70;
+        const at = awayFromEnds(w, width, opt.opening);
+        if (!at) return toast(opt.opening === 'gate' ? tr('Für ein Tor ist dieses Mauerstück zu kurz oder zu stark gebogen.') : tr('Dieses Wandstück ist dafür zu kurz.')), null;
+        scene.openings.push({ id: uid(), k: opt.opening, x: Math.round(at[0]), y: Math.round(at[1]), a: Math.round(a * 1000) / 1000, w: width });
         commit();
         return null;
       }
@@ -791,13 +859,13 @@ export function createBuilderView({ sync, cid, go, play }) {
       }).filter(Boolean);
       const free = (x, y, r, t, foot) => renderer.blocked(scene, x, y, r, t, foot) || (foot ? foot.some(([px, py]) => inRects(rects, px, py)) || rects.some((q) => inRects([{ x, y, hw: r, hh: r * 0.6, rot: 0 }], q.x, q.y)) : taken.some(([ox, oy, or]) => Math.hypot(ox - x, oy - y) < (or + r) * 0.7));
       // Häuser haben ihre eigene Größe; Bäume, Büsche und Felsen richten sich nach dem Maßstab der Karte
-      const made = f.kind === 'houses' ? scatterHouses(f, free) : scatter(f, CELL * z, free);
+      const made = f.kind === 'houses' ? scatterHouses(f, free, [...cutStreets(scene.roads || []), ...cutStreets(scene.paths || [])], { tree: z }) : scatter(f, CELL * z, free);
       if (f.kind !== 'houses') for (const o of made) o.s = Math.round(o.s * z * 100) / 100;
       scene.objects.push(...made);
       if (!made.length) toast(tr('Hier ist kein freier Boden zum Füllen.'));
     }
 
-    function startSelect(x, y) {
+    function startSelect(x, y, e) {
       // Griffe des gewählten Raums zuerst
       const cur = find(sel);
       if (cur && sel.type === 'room') {
@@ -823,6 +891,71 @@ export function createBuilderView({ sync, cid, go, play }) {
         }
       }
       const hit = pick(x, y);
+      const same = (a, b) => a.type === b.type && a.id === b.id;
+      if (hit && (e?.shiftKey || opt.multiSel)) {
+        // Umschalt-Klick (oder Schalter „Mehrfach“): Element zur Auswahl dazunehmen oder wieder herausnehmen
+        const one = { type: hit.type, id: hit.id };
+        let group = multi.length ? multi : sel ? [sel] : [];
+        group = group.some((g) => same(g, one)) ? group.filter((g) => !same(g, one)) : [...group, one];
+        setSelection(group);
+        return null;
+      }
+      if (hit && multi.some((g) => same(g, hit))) {
+        // Gruppe gemeinsam ziehen
+        const mv = movers(multi);
+        const grid = mv.rooms.size || mv.walls.size;
+        let done = [0, 0];
+        let moved = false;
+        return {
+          move: (mx, my) => {
+            let dx = mx - x;
+            let dy = my - y;
+            if (!moved && Math.hypot(dx, dy) < 4 / view.k) return;
+            moved = true;
+            if (grid) [dx, dy] = [snap(dx), snap(dy)];
+            shiftMovers(mv, Math.round(dx - done[0]), Math.round(dy - done[1]));
+            done = [Math.round(dx), Math.round(dy)];
+            if (slow) draw();
+            else recompose();
+          },
+          up: () => moved && commit(),
+        };
+      }
+      if (!hit) {
+        // Rahmen auf freier Fläche: alles darin auswählen
+        let box = null;
+        return {
+          move: (mx, my) => (box = [Math.min(x, mx), Math.min(y, my), Math.max(x, mx), Math.max(y, my)]),
+          preview: (c, px) => {
+            if (!box) return;
+            c.fillStyle = 'rgba(255,213,74,.12)';
+            c.strokeStyle = '#ffd54a';
+            c.lineWidth = 1.5 * px;
+            c.setLineDash([6 * px, 4 * px]);
+            c.fillRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+            c.strokeRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+            c.setLineDash([]);
+          },
+          up: () => {
+            if (!box || (box[2] - box[0] < 6 / view.k && box[3] - box[1] < 6 / view.k)) return setSelection([]);
+            const inBox = (px2, py2) => px2 >= box[0] && px2 <= box[2] && py2 >= box[1] && py2 <= box[3];
+            const group = [];
+            // Füllbereiche zählen als Ganzes; ihre Bäume und Häuser kommen dann nicht einzeln in die Auswahl
+            const fills = new Set();
+            for (const f of scene.fills) {
+              const [fx, fy, fw, fh] = shapeBox(f.shape);
+              if (inBox(fx + fw / 2, fy + fh / 2)) (fills.add(f.id), group.push({ type: 'fill', id: f.id }));
+            }
+            for (const o of scene.objects) if (!fills.has(o.fill) && inBox(o.x, o.y)) group.push({ type: 'object', id: o.id });
+            for (const l of scene.labels || []) if (inBox(l.x, l.y)) group.push({ type: 'label', id: l.id });
+            for (const o of scene.openings) if (inBox(o.x, o.y)) group.push({ type: 'opening', id: o.id });
+            for (const w of scene.walls) if (inBox((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2)) group.push({ type: 'wall', id: w.id });
+            for (const r of scene.rooms) if (r.k === 'circle' ? inBox(r.cx, r.cy) : inBox(r.x + r.w / 2, r.y + r.h / 2)) group.push({ type: 'room', id: r.id });
+            setSelection(group);
+          },
+        };
+      }
+      multi = [];
       sel = hit && { type: hit.type, id: hit.id };
       renderSide();
       const it = find(sel);
@@ -831,7 +964,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       const o0 = JSON.parse(orig);
       const members = sel.type === 'fill' ? scene.objects.filter((o) => o.fill === it.id).map((o) => [o, o.x, o.y]) : [];
       // Raum: Türen, Fenster, Innenwände und Einrichtung wandern mit
-      const att = sel.type === 'room' ? attached(it, 'room') : { points: [], walls: [] };
+      const att = sel.type === 'room' || sel.type === 'wall' ? attached(it, sel.type) : { points: [], walls: [] };
       const att0 = { points: att.points.map((o) => [o, o.x, o.y]), walls: att.walls.map((w) => [w, w.x1, w.y1, w.x2, w.y2]) };
       let moved = false;
       return {
@@ -840,7 +973,7 @@ export function createBuilderView({ sync, cid, go, play }) {
           let dy = my - y;
           if (!moved && Math.hypot(dx, dy) < 4 / view.k) return;
           moved = true;
-          if (sel.type === 'object') Object.assign(it, { x: Math.round(o0.x + dx), y: Math.round(o0.y + dy) });
+          if (sel.type === 'object' || sel.type === 'label') Object.assign(it, { x: Math.round(o0.x + dx), y: Math.round(o0.y + dy) });
           else if (sel.type === 'room') {
             dx = snap(dx);
             dy = snap(dy);
@@ -852,6 +985,7 @@ export function createBuilderView({ sync, cid, go, play }) {
             dx = snap(dx);
             dy = snap(dy);
             Object.assign(it, { x1: o0.x1 + dx, y1: o0.y1 + dy, x2: o0.x2 + dx, y2: o0.y2 + dy });
+            for (const [o, ox, oy] of att0.points) Object.assign(o, { x: ox + dx, y: oy + dy });
           } else if (sel.type === 'opening') {
             const w = wallAt(mx, my);
             if (!w) return;
@@ -892,12 +1026,218 @@ export function createBuilderView({ sync, cid, go, play }) {
         /* voll oder gesperrt */
       }
     }
+    /**
+     * Raum nach einem Thema einrichten (oder mit theme = '' wieder leeren). Die erzeugten Stücke gehören zum Raum:
+     * „Neu würfeln“ ersetzt sie, alles andere im Raum bleibt stehen und wird umstellt.
+     */
+    function furnishRoom(room, theme, reroll = true) {
+      scene.objects = scene.objects.filter((o) => o.theme !== room.id);
+      room.theme = theme || undefined;
+      if (!theme) return commit();
+      if (reroll || !room.themeSeed) room.themeSeed = Math.floor(Math.random() * 1e9);
+      const B = biomeOf(scene);
+      const box = (t) => {
+        const sp = sprite({ t, v: 0, s: 1, rot: 0 }, B, 1);
+        return sp ? [sp.w, sp.h] : [60, 60];
+      };
+      const outline = buildingOutline(scene.rooms);
+      const taken = scene.objects.filter((o) => inRoom(room, o.x, o.y) && CATALOG[o.t] && CATALOG[o.t].layer !== 'rug').map((o) => {
+        const [w, h2] = box(o.t);
+        return { x: o.x, y: o.y, hw: w / 2 + 4, hh: h2 / 2 + 4, rot: o.rot || 0 };
+      });
+      const made = furnish(room, theme, room.themeSeed, {
+        size: box,
+        known: (t) => !!CATALOG[t] && !CATALOG[t].size,
+        openings: scene.openings,
+        walls: scene.walls.map((w) => [w.x1, w.y1, w.x2, w.y2, w.kind === 'rampart' ? 15 : w.kind === 'stone' ? 7 : w.kind === 'palisade' ? 8 : 4]),
+        isWall: (x, y) => (nearestWall(outline, scene.walls, x, y)?.d ?? 99) < 6,
+        taken,
+      });
+      for (const o of made) scene.objects.push({ id: uid(), s: 1, ...o, theme: room.id });
+      if (!made.length) toast(tr('Der Raum ist zu klein oder zu voll für diese Einrichtung.'));
+      commit();
+    }
+    /** Auswahl setzen: kein, ein oder mehrere Elemente. */
+    function setSelection(group) {
+      multi = group.length > 1 ? group : [];
+      sel = group.length === 1 ? group[0] : null;
+      renderSide();
+      draw();
+    }
+    /** Alles, was mit einer Auswahl wandert – jedes Stück nur einmal, auch wenn ein Raum samt Einrichtung gewählt ist. */
+    function movers(group) {
+      const mv = { pts: new Set(), rooms: new Set(), walls: new Set(), shapes: new Set() };
+      for (const g of group) {
+        const it = find(g);
+        if (!it) continue;
+        // In einer Gruppe wandert eine Tür oder ein Fenster nur mit der Wand, an der sie sitzt – allein mitgezogen
+        // läge sie danach mitten im Raum
+        if (g.type === 'opening' && group.length > 1) continue;
+        if (g.type === 'room') mv.rooms.add(it);
+        else if (g.type === 'wall') mv.walls.add(it);
+        else if (g.type === 'fill') mv.shapes.add(it.shape);
+        else mv.pts.add(it);
+        const att = attached(it, g.type);
+        att.points.forEach((q) => mv.pts.add(q));
+        att.walls.forEach((q) => mv.walls.add(q));
+      }
+      return mv;
+    }
+    function shiftMovers(mv, dx, dy) {
+      if (!dx && !dy) return;
+      for (const o of mv.pts) Object.assign(o, { x: o.x + dx, y: o.y + dy });
+      for (const r of mv.rooms) {
+        if (r.k === 'circle') Object.assign(r, { cx: r.cx + dx, cy: r.cy + dy });
+        else Object.assign(r, { x: r.x + dx, y: r.y + dy });
+      }
+      for (const w of mv.walls) Object.assign(w, { x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy });
+      for (const sh of mv.shapes) {
+        if (sh.k === 'rect') Object.assign(sh, { x: sh.x + dx, y: sh.y + dy });
+        else Object.assign(sh, { cx: sh.cx + dx, cy: sh.cy + dy });
+      }
+    }
+    /** Auswahl samt Anhang als eigenständige Daten (für Verdoppeln und die Zwischenablage). */
+    function snapshot(group) {
+      const out = { objects: [], rooms: [], walls: [], openings: [], fills: [], labels: [] };
+      const seen = new Set();
+      const add = (key, it) => {
+        if (seen.has(it)) return;
+        seen.add(it);
+        out[key].push(JSON.parse(JSON.stringify(it)));
+      };
+      for (const g of group) {
+        const it = find(g);
+        if (!it) continue;
+        if (g.type === 'opening' && group.length > 1) continue; // kommt nur mit ihrer Wand mit
+        add({ object: 'objects', room: 'rooms', wall: 'walls', opening: 'openings', fill: 'fills', label: 'labels' }[g.type], it);
+        const att = attached(it, g.type);
+        for (const q of att.points) add(scene.objects.includes(q) ? 'objects' : 'openings', q);
+        for (const q of att.walls) add('walls', q);
+      }
+      return out;
+    }
+    /** Daten aus snapshot() um (dx, dy) versetzt in die Szene einfügen; liefert die neue Auswahl. */
+    function insert(data, dx, dy) {
+      const group = [];
+      const fills = new Map();
+      for (const f of data.fills || []) {
+        const id = uid();
+        fills.set(f.id, id);
+        const sh = f.shape;
+        if (sh.k === 'rect') Object.assign(sh, { x: sh.x + dx, y: sh.y + dy });
+        else Object.assign(sh, { cx: sh.cx + dx, cy: sh.cy + dy });
+        scene.fills.push({ ...f, id });
+        group.push({ type: 'fill', id });
+      }
+      const rooms = new Map(); // alte → neue Kennung: die mitkopierte Einrichtung gehört zum neuen Raum
+      for (const r of data.rooms || []) {
+        const id = uid();
+        rooms.set(r.id, id);
+        scene.rooms.push(r.k === 'circle' ? { ...r, id, cx: r.cx + dx, cy: r.cy + dy } : { ...r, id, x: r.x + dx, y: r.y + dy });
+        group.push({ type: 'room', id });
+      }
+      for (const w of data.walls || []) {
+        const id = uid();
+        scene.walls.push({ ...w, id, x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy });
+        group.push({ type: 'wall', id });
+      }
+      for (const o of data.openings || []) {
+        const id = uid();
+        scene.openings.push({ ...o, id, x: o.x + dx, y: o.y + dy });
+        group.push({ type: 'opening', id });
+      }
+      for (const o of data.objects || []) {
+        if (!CATALOG[o.t]) continue;
+        const id = uid();
+        const copy = { ...o, id, x: o.x + dx, y: o.y + dy };
+        if (fills.has(o.fill)) copy.fill = fills.get(o.fill);
+        else delete copy.fill;
+        if (rooms.has(o.theme)) copy.theme = rooms.get(o.theme);
+        else delete copy.theme;
+        scene.objects.push(copy);
+        if (!copy.fill) group.push({ type: 'object', id });
+      }
+      for (const l of data.labels || []) {
+        const id = uid();
+        scene.labels.push({ ...l, id, x: l.x + dx, y: l.y + dy });
+        group.push({ type: 'label', id });
+      }
+      return group;
+    }
+    const CLIP = 'mb:clip';
+    /** Auswahl in die Zwischenablage (je Gerät gemerkt – so lässt sich auch in eine andere Karte einfügen). */
+    function copySelection() {
+      const group = multi.length ? multi : sel ? [sel] : [];
+      if (!group.length) return;
+      const data = snapshot(group);
+      // Bezugspunkt: Mitte aller Stücke
+      const pts = [...data.objects, ...data.openings, ...data.labels].map((o) => [o.x, o.y]).concat(data.rooms.map((r) => (r.k === 'circle' ? [r.cx, r.cy] : [r.x + r.w / 2, r.y + r.h / 2])), data.walls.map((w) => [(w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2]), data.fills.map((f) => { const b = shapeBox(f.shape); return [b[0] + b[2] / 2, b[1] + b[3] / 2]; }));
+      if (!pts.length) return;
+      data.at = [pts.reduce((a, q) => a + q[0], 0) / pts.length, pts.reduce((a, q) => a + q[1], 0) / pts.length];
+      try {
+        localStorage.setItem(CLIP, JSON.stringify(data));
+        toast(tr('{n} Elemente kopiert – mit Strg+V einfügen, auch in einer anderen Karte', { n: group.length }), 2500);
+      } catch {
+        toast(tr('Die Auswahl ist zu groß für die Zwischenablage.'));
+      }
+    }
+    function paste() {
+      let data = null;
+      try {
+        data = JSON.parse(localStorage.getItem(CLIP) || 'null');
+      } catch {
+        /* nichts Brauchbares */
+      }
+      if (!data?.at) return toast(tr('Die Zwischenablage ist leer – erst etwas auswählen und mit Strg+C kopieren.'));
+      const { W, H } = sceneSize(scene);
+      // Ziel: der Mauszeiger, aber immer in der Karte
+      const [tx, ty] = (hover || [W / 2, H / 2]).map((v, i) => Math.max(40, Math.min((i ? H : W) - 40, v)));
+      const grid = (data.rooms?.length || 0) + (data.walls?.length || 0) > 0;
+      let dx = tx - data.at[0];
+      let dy = ty - data.at[1];
+      // Die ganze Gruppe soll in der Karte landen, nicht nur ihr Mittelpunkt
+      const box = [Infinity, Infinity, -Infinity, -Infinity];
+      const grow = (x, y) => ((box[0] = Math.min(box[0], x)), (box[1] = Math.min(box[1], y)), (box[2] = Math.max(box[2], x)), (box[3] = Math.max(box[3], y)));
+      for (const o of [...(data.objects || []), ...(data.openings || []), ...(data.labels || [])]) grow(o.x, o.y);
+      for (const r of data.rooms || []) r.k === 'circle' ? (grow(r.cx - r.r, r.cy - r.r), grow(r.cx + r.r, r.cy + r.r)) : (grow(r.x, r.y), grow(r.x + r.w, r.y + r.h));
+      for (const w of data.walls || []) (grow(w.x1, w.y1), grow(w.x2, w.y2));
+      for (const f of data.fills || []) {
+        const b = shapeBox(f.shape);
+        grow(b[0], b[1]);
+        grow(b[0] + b[2], b[1] + b[3]);
+      }
+      if (box[2] >= box[0]) {
+        // passt die Gruppe nicht ganz hinein, kommt sie mittig
+        dx = box[2] - box[0] > W ? W / 2 - (box[0] + box[2]) / 2 : Math.max(-box[0], Math.min(W - box[2], dx));
+        dy = box[3] - box[1] > H ? H / 2 - (box[1] + box[3]) / 2 : Math.max(-box[1], Math.min(H - box[3], dy));
+      }
+      dx = grid ? snap(dx) : Math.round(dx);
+      dy = grid ? snap(dy) : Math.round(dy);
+      if (tool !== 'select') setTool('select');
+      const group = insert(data, dx, dy);
+      commit();
+      setSelection(group);
+    }
     function remove() {
+      if (multi.length) {
+        for (const g of multi) {
+          const it = find(g);
+          if (!it) continue;
+          const list = listOf(g.type);
+          list.splice(list.indexOf(it), 1);
+          if (g.type === 'fill') scene.objects = scene.objects.filter((o) => o.fill !== it.id);
+          if (g.type === 'room') scene.objects = scene.objects.filter((o) => o.theme !== it.id);
+        }
+        multi = [];
+        commit();
+        return renderSide();
+      }
       const it = find(sel);
       if (!it) return;
       const list = listOf(sel.type);
       list.splice(list.indexOf(it), 1);
       if (sel.type === 'fill') scene.objects = scene.objects.filter((o) => o.fill !== it.id);
+      if (sel.type === 'room') scene.objects = scene.objects.filter((o) => o.theme !== it.id);
       sel = null;
       commit();
       renderSide();
@@ -908,7 +1248,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         return draw();
       }
       const it = find(sel);
-      if (!it || sel.type !== 'object') return;
+      if (!it || (sel.type !== 'object' && sel.type !== 'label')) return;
       it.rot = ((it.rot || 0) + deg + 360) % 360;
       commit();
     }
@@ -930,16 +1270,23 @@ export function createBuilderView({ sync, cid, go, play }) {
     }
     /** Auswahl mit den Pfeiltasten schieben: Gegenstände ein halbes Feld (fein: 5 px), Räume und Wände ein ganzes (fein: ein halbes). */
     function nudge(ux, uy, fine) {
+      if (multi.length) {
+        const mv = movers(multi);
+        const step = mv.rooms.size || mv.walls.size ? (fine ? HALF : CELL) : fine ? 5 : HALF;
+        shiftMovers(mv, ux * step, uy * step);
+        commit();
+        return true;
+      }
       const it = find(sel);
       if (!it || sel.type === 'opening') return false;
-      const step = sel.type === 'object' || sel.type === 'fill' ? (fine ? 5 : HALF) : fine ? HALF : CELL;
+      const step = sel.type === 'object' || sel.type === 'fill' || sel.type === 'label' ? (fine ? 5 : HALF) : fine ? HALF : CELL;
       moveBy(it, sel.type, ux * step, uy * step);
       commit();
       return true;
     }
     /** Verschiebt ein Element; Räume nehmen Türen, Fenster, Innenwände und Einrichtung mit, Füllbereiche ihren Inhalt. */
     function moveBy(it, type, dx, dy, att = attached(it, type)) {
-      if (type === 'object') Object.assign(it, { x: it.x + dx, y: it.y + dy });
+      if (type === 'object' || type === 'label') Object.assign(it, { x: it.x + dx, y: it.y + dy });
       else if (type === 'room') {
         if (it.k === 'circle') Object.assign(it, { cx: it.cx + dx, cy: it.cy + dy });
         else Object.assign(it, { x: it.x + dx, y: it.y + dy });
@@ -955,6 +1302,7 @@ export function createBuilderView({ sync, cid, go, play }) {
     /** Was an einem Element hängt und mitwandert. */
     function attached(it, type) {
       if (type === 'fill') return { points: scene.objects.filter((o) => o.fill === it.id), walls: [] };
+      if (type === 'wall') return { points: scene.openings.filter((o) => (nearestWall({ segs: [it], arcs: [] }, [], o.x, o.y)?.d ?? 99) < 8), walls: [] };
       if (type !== 'room') return { points: [], walls: [] };
       return {
         points: [...scene.objects.filter((o) => !o.fill && inRoom(it, o.x, o.y)), ...scene.openings.filter((o) => inRoom(it, o.x, o.y, -10))],
@@ -962,6 +1310,12 @@ export function createBuilderView({ sync, cid, go, play }) {
       };
     }
     function duplicate() {
+      if (multi.length || (sel && sel.type !== 'object')) {
+        // Gruppe oder Raum/Wand/Füllbereich: samt Anhang ein Feld versetzt noch einmal
+        const group = insert(snapshot(multi.length ? multi : [sel]), CELL, CELL);
+        commit();
+        return setSelection(group);
+      }
       const it = find(sel);
       if (!it || sel.type !== 'object') return;
       const copy = { ...it, id: uid(), x: it.x + 30, y: it.y + 30 };
@@ -975,7 +1329,7 @@ export function createBuilderView({ sync, cid, go, play }) {
     function setTool(t) {
       tool = t;
       chain = null;
-      if (t !== 'select') sel = null;
+      if (t !== 'select') (sel = null), (multi = []);
       for (const b of toolbar.children) b.classList.toggle('active', b.dataset.tool === t);
       canvas.style.cursor = t === 'select' ? 'default' : 'crosshair';
       renderSide();
@@ -993,8 +1347,20 @@ export function createBuilderView({ sync, cid, go, play }) {
       const out = [];
       const title = (t) => h('div.section-title', t);
       const hint = (t) => h('p.small.muted', t);
-      if (tool === 'select') {
+      if (tool === 'select' && multi.length) {
+        out.push(
+          title(tr('{n} Elemente ausgewählt', { n: multi.length })),
+          h('div.row', { style: { flexWrap: 'wrap', gap: '6px' } }, h('button.small', { title: tr('Verdoppeln (Strg+D)'), onclick: duplicate }, icon('copy'), tr(' Verdoppeln')), h('button.small', { title: tr('In die Zwischenablage (Strg+C)'), onclick: copySelection }, icon('clipboard'), tr(' Kopieren')), h('button.small.danger', { title: tr('Löschen (Entf)'), onclick: remove }, icon('trash'), tr(' Löschen'))),
+          hint(tr('Ziehen verschiebt alles gemeinsam, die Pfeiltasten schieben. Räume nehmen ihre Türen und Einrichtung mit. Umschalt-Klick nimmt ein Stück dazu oder heraus.')),
+          h('button.small', { onclick: () => setSelection([]) }, tr('Auswahl aufheben')),
+        );
+      } else if (tool === 'select') {
         if (!it) {
+          const many = h('input', { type: 'checkbox', checked: !!opt.multiSel });
+          many.addEventListener('change', () => (opt.multiSel = many.checked));
+          out.push(
+            h('div.row', { style: { flexWrap: 'wrap', gap: '6px', marginBottom: '6px' } }, h('label.inline.small', { title: tr('Jeder Klick nimmt ein Stück zur Auswahl dazu – für Geräte ohne Umschalt-Taste') }, many, tr('Mehrfach')), h('button.small', { title: tr('Aus der Zwischenablage einfügen (Strg+V)'), onclick: paste }, icon('clipboard'), tr(' Einfügen'))),
+          );
           out.push(
             h('div.row', { style: { flexWrap: 'wrap', gap: '6px', marginBottom: '10px' } },
               h('button.small', { title: tr('Die Szene als Datei sichern – zum Aufbewahren oder für eine andere Kampagne'), onclick: () => downloadScene(scene, S().maps[mapId]?.name) }, icon('download'), tr(' Szene sichern')),
@@ -1018,7 +1384,7 @@ export function createBuilderView({ sync, cid, go, play }) {
             ),
           );
         }
-        if (!it) out.push(title(tr('Auswählen')), hint(tr('Anklicken wählt aus, Ziehen verschiebt – Räume nehmen Türen und Einrichtung mit. Pfeiltasten schieben (mit Umschalt fein), R dreht, F spiegelt, Entf löscht, Strg+D verdoppelt. Alt+Klick nimmt einen Gegenstand als Vorlage. Mausrad zoomt, rechte Maustaste oder Leertaste verschiebt die Ansicht.')));
+        if (!it) out.push(title(tr('Auswählen')), hint(tr('Anklicken wählt aus, Ziehen verschiebt – Räume nehmen Türen und Einrichtung mit. Ein Rahmen auf freier Fläche oder Umschalt-Klick wählt mehrere Stücke; Strg+C und Strg+V kopieren sie, auch in eine andere Karte. Pfeiltasten schieben (mit Umschalt fein), R dreht, F spiegelt, Entf löscht, Strg+D verdoppelt. Alt+Klick nimmt einen Gegenstand als Vorlage. Mausrad zoomt, rechte Maustaste oder Leertaste verschiebt die Ansicht.')));
         else if (sel.type === 'object') {
           const scale = h('input', { type: 'range', min: 0.5, max: 2, step: 0.05, value: it.s || 1 });
           scale.addEventListener('input', () => ((it.s = Number(scale.value)), slow ? draw() : recompose()));
@@ -1035,13 +1401,44 @@ export function createBuilderView({ sync, cid, go, play }) {
           open.addEventListener('change', () => ((it.open = open.checked || undefined), commit()));
           const ruin = h('input', { type: 'checkbox', checked: !!it.ruin });
           ruin.addEventListener('change', () => ((it.ruin = ruin.checked || undefined), commit()));
-          out.push(title(tr('Raum')), hint(tr('Ziehen verschiebt, die Griffe ändern die Größe.')), floorPicker(() => it.floor, (f) => ((it.floor = f), commit())), h('label.inline', open, tr('Offen (ohne Wände, z. B. Veranda oder Steg)')), h('label.inline', ruin, tr('Ruine (verfallene Mauern, überwucherter Boden)')), h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Raum löschen')));
+          const timber = h('input', { type: 'checkbox', checked: !!it.timber });
+          timber.addEventListener('change', () => ((it.timber = timber.checked || undefined), commit()));
+          const theme = h('select', { title: tr('Stellt passende Möbel an Wände, in Ecken und in die Mitte – Türen bleiben frei') }, h('option', { value: '' }, tr('– leer lassen –')), Object.keys(THEMES).map((k) => h('option', { value: k }, THEME_LABEL[k])));
+          theme.value = it.theme || '';
+          theme.addEventListener('change', () => (furnishRoom(it, theme.value), renderSide()));
+          out.push(title(tr('Raum')), hint(tr('Ziehen verschiebt, die Griffe ändern die Größe.')), floorPicker(() => it.floor, (f) => ((it.floor = f), commit())),
+            h('label.small.muted', tr('Einrichten als')),
+            theme,
+            it.theme ? h('div.row', h('button.small', { onclick: () => furnishRoom(it, it.theme) }, icon('d20'), tr(' Neu würfeln')), h('button.small', { title: tr('Die Möbel behalten und einzeln weiterbearbeiten'), onclick: () => ((scene.objects.forEach((o) => o.theme === it.id && delete o.theme)), delete it.theme, commit(), renderSide()) }, tr('Auflösen'))) : null, h('label.inline', open, tr('Offen (ohne Wände, z. B. Veranda oder Steg)')), h('label.inline', ruin, tr('Ruine (verfallene Mauern, überwucherter Boden)')), h('label.inline', timber, tr('Holzwände (Blockhaus, Scheune, Hütte)')), h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Raum löschen')));
         } else if (sel.type === 'wall') {
-          out.push(title(tr('Wand')), choice([['wood', tr('Holz')], ['stone', tr('Stein')], ['rampart', tr('Burgmauer')], ['palisade', tr('Palisade')]], () => it.kind || 'wood', (v) => ((it.kind = v), commit())), h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Wand löschen')));
+          out.push(title(tr('Wand')), choice([['wood', tr('Holz')], ['stone', tr('Stein')], ['rampart', tr('Burgmauer')], ['palisade', tr('Palisade')]], () => it.kind || 'wood', (v) => ((it.kind = v), commit())),
+            it.kind === 'rampart' || it.kind === 'palisade'
+              ? h('button.small', {
+                  title: tr('Malt einen Wassergraben rund um den geschlossenen Mauerring – wie mit dem Wasserpinsel, also danach frei änderbar'),
+                  onclick: () => {
+                    const ring = ringAround(scene.walls.filter((w) => w.kind === it.kind), it, 124);
+                    if (!ring) return toast(tr('Ein Graben braucht einen geschlossenen Mauerring.'));
+                    scene.water.push({ k: 'brush', r: 44, pts: ring });
+                    commit();
+                  },
+                }, icon('plus'), tr(' Graben um den Ring'))
+              : null, h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Wand löschen')));
         } else if (sel.type === 'opening') {
           const locked = h('input', { type: 'checkbox', checked: !!it.locked });
           locked.addEventListener('change', () => ((it.locked = locked.checked || undefined), commit()));
-          out.push(title(it.k === 'door' ? tr('Tür') : it.k === 'secret' ? tr('Geheimtür') : tr('Fenster')), hint(tr('Ziehen verschiebt entlang der Wände.')), it.k === 'window' ? null : h('label.inline', { title: tr('Gilt, wenn die Karte zum ersten Mal übernommen wird – im Spiel lässt sich jede Tür auf- und zuschließen') }, locked, tr('Zu Beginn verschlossen')), h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Löschen')));
+          out.push(title(it.k === 'door' ? tr('Tür') : it.k === 'secret' ? tr('Geheimtür') : it.k === 'gate' ? tr('Tor') : tr('Fenster')), hint(tr('Ziehen verschiebt entlang der Wände.')), it.k === 'window' ? null : h('label.inline', { title: tr('Gilt, wenn die Karte zum ersten Mal übernommen wird – im Spiel lässt sich jede Tür auf- und zuschließen') }, locked, tr('Zu Beginn verschlossen')), h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Löschen')));
+        } else if (sel.type === 'label') {
+          const text = h('input', { type: 'text', value: it.text });
+          text.addEventListener('input', () => ((it.text = text.value), draw()));
+          text.addEventListener('change', () => (it.text.trim() ? commit() : remove()));
+          out.push(
+            title(tr('Name')),
+            text,
+            choice([['place', tr('Ort')], ['area', tr('Viertel')]], () => it.kind || 'place', (v) => ((it.kind = v), (opt.labelKind = v), commit())),
+            choice([['s', tr('Klein')], ['m', tr('Mittel')], ['l', tr('Groß')], ['xl', tr('Sehr groß')]], () => it.size || 'm', (v) => ((it.size = v), (opt.labelSize = v), commit())),
+            hint(tr('Ziehen verschiebt, R dreht. Namen stehen nicht im Kartenbild: Im Spiel lässt sich jeder einzeln für die Spieler zeigen oder verbergen.')),
+            h('button.small.danger', { onclick: remove }, icon('trash'), tr(' Löschen')),
+          );
         } else if (sel.type === 'fill') {
           const dens = h('input', { type: 'range', min: 0.3, max: 2, step: 0.1, value: it.density });
           dens.addEventListener('change', () => ((it.density = Number(dens.value)), refill(it), commit()));
@@ -1057,7 +1454,7 @@ export function createBuilderView({ sync, cid, go, play }) {
                   angle.addEventListener('change', () => ((it.angle = Number(angle.value)), refill(it), commit()));
                   const size = h('input', { type: 'range', min: 0.7, max: 1.8, step: 0.05, value: it.size ?? 1 });
                   size.addEventListener('change', () => ((it.size = Number(size.value)), refill(it), commit()));
-                  return [h('label.small.muted', tr('Ausrichtung')), angle, h('label.small.muted', tr('Hausgröße')), size];
+                  return [h('label.small.muted', { title: tr('Wirkt abseits der Straßen – an Straßen und Wegen richten sich die Häuser nach diesen') }, tr('Ausrichtung')), angle, h('label.small.muted', tr('Hausgröße')), size];
                 })()
               : []),
             h('div.row', h('button.small', { onclick: () => ((it.seed = Math.floor(Math.random() * 1e9)), refill(it), commit()) }, icon('d20'), tr(' Neu würfeln')), h('button.small', { title: tr('Bereich entfernen, Inhalt behalten'), onclick: () => ((scene.objects.forEach((o) => o.fill === it.id && delete o.fill)), scene.fills.splice(scene.fills.indexOf(it), 1), (sel = null), commit(), renderSide()) }, tr('Auflösen')), h('button.small.danger', { title: tr('Bereich samt Inhalt löschen'), onclick: remove }, icon('trash'))),
@@ -1083,13 +1480,15 @@ export function createBuilderView({ sync, cid, go, play }) {
         open.addEventListener('change', () => (opt.open = open.checked));
         const ruin = h('input', { type: 'checkbox', checked: opt.ruin });
         ruin.addEventListener('change', () => (opt.ruin = ruin.checked));
-        out.push(title(tr('Raum aufziehen')), choice([['rect', tr('Rechteck')], ['circle', tr('Kreis')]], () => opt.room, (v) => (opt.room = v)), floorPicker(() => opt.floor, (f) => (opt.floor = f)), h('label.inline', open, tr('Offen (ohne Wände)')), h('label.inline', ruin, tr('Ruine (verfallene Mauern, überwucherter Boden)')), hint(tr('Räume rasten auf halbe Felder ein. Überlappende und angrenzende Räume verschmelzen zu einem Gebäude; die Außenwand läuft um den gemeinsamen Umriss.')));
+        const timber = h('input', { type: 'checkbox', checked: opt.timber });
+        timber.addEventListener('change', () => (opt.timber = timber.checked));
+        out.push(title(tr('Raum aufziehen')), choice([['rect', tr('Rechteck')], ['circle', tr('Kreis')]], () => opt.room, (v) => (opt.room = v)), floorPicker(() => opt.floor, (f) => (opt.floor = f)), h('label.inline', open, tr('Offen (ohne Wände)')), h('label.inline', ruin, tr('Ruine (verfallene Mauern, überwucherter Boden)')), h('label.inline', timber, tr('Holzwände (Blockhaus, Scheune, Hütte)')), hint(tr('Räume rasten auf halbe Felder ein. Überlappende und angrenzende Räume verschmelzen zu einem Gebäude; die Außenwand läuft um den gemeinsamen Umriss.')));
       } else if (tool === 'floor') {
         out.push(title(tr('Boden festlegen')), floorPicker(() => opt.floor, (f) => (opt.floor = f)), hint(tr('Boden wählen und einen Raum anklicken.')));
       } else if (tool === 'wall') {
         out.push(title(tr('Wand ziehen')), choice([['wood', tr('Holz')], ['stone', tr('Stein')], ['rampart', tr('Burgmauer')], ['palisade', tr('Palisade')]], () => opt.wall, (v) => (opt.wall = v)), chain ? h('button.small', { onclick: () => ((chain = null), renderSide(), draw()) }, icon('check'), tr(' Mauerzug beenden')) : null, hint(tr('Ziehen zieht eine einzelne Wand. Für einen langen Mauerzug Punkt für Punkt klicken: jeder Klick setzt die nächste Ecke, ein Klick auf den Anfang schließt den Ring, Doppelklick, Enter oder Esc beendet. Außenwände entstehen von selbst um jeden Raum. Burgmauern haben Zinnen und an jeder Ecke einen Turm, Palisaden sind Reihen aus Stämmen; ein Tor entsteht mit „Tür“ auf der Mauer.')));
       } else if (tool === 'opening') {
-        out.push(title(tr('Tür oder Fenster setzen')), choice([['door', tr('Tür')], ['window', tr('Fenster')], ['secret', tr('Geheimtür')]], () => opt.opening, (v) => (opt.opening = v)), hint(tr('Auf eine Wand klicken. Türen öffnen die Wand, Fenster sitzen darauf. Eine Geheimtür sieht aus wie Wand, bis die Spielleitung sie im Spiel öffnet.')));
+        out.push(title(tr('Tür oder Fenster setzen')), choice([['door', tr('Tür')], ['window', tr('Fenster')], ['secret', tr('Geheimtür')], ['gate', tr('Tor')]], () => opt.opening, (v) => (opt.opening = v)), hint(tr('Auf eine Wand klicken. Türen öffnen die Wand, Fenster sitzen darauf. Eine Geheimtür sieht aus wie Wand, bis die Spielleitung sie im Spiel öffnet. Ein Tor ist zwei Felder breit und hat zwei Flügel – in der Burgmauer mit zwei Tortürmen.')));
       } else if (tool === 'object') {
         const list = h('div.mb-cats');
         const search = h('input', { type: 'search', placeholder: tr('Katalog durchsuchen …'), value: opt.search });
@@ -1111,6 +1510,8 @@ export function createBuilderView({ sync, cid, go, play }) {
         search.addEventListener('input', () => ((opt.search = search.value), renderList()));
         renderList();
         out.push(title(tr('Gegenstand setzen')), hint(tr('Auswählen und auf die Karte klicken. R dreht vor dem Setzen.')), search, list);
+      } else if (tool === 'label') {
+        out.push(title(tr('Namen setzen')), choice([['place', tr('Ort')], ['area', tr('Viertel')]], () => opt.labelKind, (v) => (opt.labelKind = v)), choice([['s', tr('Klein')], ['m', tr('Mittel')], ['l', tr('Groß')], ['xl', tr('Sehr groß')]], () => opt.labelSize, (v) => (opt.labelSize = v)), hint(tr('Auf die Karte klicken und den Namen eingeben – für Orte (Rathaus, Zum Eber) oder ganze Viertel und Landstriche (große, gesperrte Schrift). Im Spiel entscheidest du, welche Namen die Spieler sehen.')));
       } else if (tool === 'fill') {
         const dens = h('input', { type: 'range', min: 0.3, max: 2, step: 0.1, value: opt.density });
         dens.addEventListener('input', () => (opt.density = Number(dens.value)));
@@ -1169,6 +1570,16 @@ export function createBuilderView({ sync, cid, go, play }) {
           }
           if (inside && roofed * 2 < inside) z.out = true;
         }
+        // Was die Spielleitung im Spiel von Hand als Hof oder Innenraum eingestuft hat, bleibt so
+        for (const pz of map.zones || []) {
+          if (!pz.man || !pz.at) continue;
+          const z = zoneAt({ zones }, pz.at[0], pz.at[1]);
+          if (!z) continue;
+          if (pz.out) z.out = true;
+          else delete z.out;
+          z.man = 1;
+          z.at = pz.at;
+        }
         const outline = buildingOutline(scene.rooms);
         const doors = {};
         let orphans = 0;
@@ -1181,18 +1592,40 @@ export function createBuilderView({ sync, cid, go, play }) {
           }
           const prev = map.doors?.[o.id];
           const inner = scene.walls.find((w) => (nearestWall({ segs: [w], arcs: [] }, [], o.x, o.y)?.d ?? 99) < 8);
-          const d = { id: o.id, x: o.x, y: o.y, a: o.a, w: o.w, open: !!prev?.open, locked: prev ? !!prev.locked : !!o.locked, secret: o.k === 'secret', wall: inner ? inner.kind || 'wood' : 'stone' };
+          const d = { id: o.id, x: o.x, y: o.y, a: o.a, w: o.w, open: !!prev?.open, locked: prev ? !!prev.locked : !!o.locked, secret: o.k === 'secret', gate: o.k === 'gate', found: !!prev?.found, wall: inner ? inner.kind || 'wood' : isTimberWall(scene.rooms, o.x, o.y) ? 'timber' : 'stone' };
           d.seg = sealDoor(d, walls);
+          if (d.gate && inner) {
+            // Tor im Mauerring: die Flügel schwenken in den Hof
+            const n = ringOutsides(scene.walls.filter((w) => w.kind === inner.kind)).get(inner);
+            if (n) d.sw = n[0] * Math.sin(o.a) - n[1] * Math.cos(o.a) > 0 ? 1 : -1;
+          }
           // Räume beiderseits der Tür (null = draußen): geht sie auf, werden sie aufgedeckt
           d.z = [-1, 1].map((sgn) => zoneAt({ zones }, o.x - Math.sin(o.a) * 26 * sgn, o.y + Math.cos(o.a) * 26 * sgn)?.id || null);
           doors[o.id] = d;
         }
         if (orphans) toast(tr('{n} Türen liegen an keiner Wand und fehlen deshalb im Spiel.', { n: orphans }), 5000);
+        // Tageslicht: Fenster, die ins Freie gehen. Gemerkt werden ein Punkt knapp vor dem Fenster, seine Richtung und
+        // Breite und der Raum dahinter – von dort fällt bei „nur innen dunkel“ das Licht in den Raum.
+        const windows = [];
+        for (const o of scene.openings) {
+          if (o.k !== 'window') continue;
+          const nx = -Math.sin(o.a);
+          const ny = Math.cos(o.a);
+          const side = [-1, 1].map((sg) => {
+            const z = zoneAt({ zones }, o.x + nx * 30 * sg, o.y + ny * 30 * sg);
+            return z && !z.out ? z.id : null;
+          });
+          if (!side[0] === !side[1]) continue; // Fenster zwischen zwei Räumen oder in einer Hofmauer
+          const sg = side[0] ? 1 : -1;
+          windows.push([Math.round(o.x + nx * 24 * sg), Math.round(o.y + ny * 24 * sg), Math.round(o.a * 1000) / 1000, Math.round(o.w), side[0] || side[1]]);
+        }
+        // Namen: ob die Spieler sie sehen, bleibt über das erneute Übernehmen hinweg erhalten
+        const labels = Object.fromEntries((scene.labels || []).filter((l) => l.text).map((l) => [l.id, { id: l.id, x: l.x, y: l.y, text: l.text, size: l.size || 'm', kind: l.kind || 'place', rot: l.rot || 0, shown: map.labels?.[l.id]?.shown !== false }]));
         // Dungeon und Höhle liegen im Dunkeln: beim ersten Übernehmen gleich die Beleuchtung einschalten
         const lighting = !map.assetId && biomeOf(scene).solid ? { ...(map.lighting || {}), enabled: true, ambient: 0.12 } : null;
         sync.do([
           lighting && { t: 'set', p: ['maps', mapId, 'lighting'], v: lighting },
-          { t: 'merge', p: ['maps', mapId], v: { assetId: asset.id, width: W, height: H, built: true, doors, zones, walls, anim: scene.still ? null : renderer.animData(scene), lights } },
+          { t: 'merge', p: ['maps', mapId], v: { assetId: asset.id, width: W, height: H, built: true, doors, labels, zones, walls, windows, anim: scene.still ? null : renderer.animData(scene), lights } },
           // Übersichtskarten zeigen beim ersten Übernehmen kein Raster – es stört auf Stadt- und Landkarten
           { t: 'merge', p: ['maps', mapId, 'grid'], v: { size: CELL, offsetX: 0, offsetY: 0, cols: 0, rows: 0, ...(!map.assetId && scene.scale === 'overview' ? { show: false } : {}) } },
         ]);
@@ -1230,7 +1663,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         if (scene.objects?.length || scene.rooms?.length) save();
       }
       // fehlende Listen älterer Stände ergänzen
-      for (const k of ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills']) scene[k] ||= [];
+      for (const k of ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels']) scene[k] ||= [];
       history.push(JSON.stringify(scene));
       hIndex = 0;
       undoBtn.disabled = redoBtn.disabled = true;

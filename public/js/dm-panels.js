@@ -335,7 +335,7 @@ const builders = {
             { style: { marginTop: '6px', flexWrap: 'wrap' } },
             h('button.small', { onclick: () => sync.set(P('lighting'), { ...(map.lighting || {}), enabled: false }) }, tr('Tag')),
             [[tr('Dämmerung'), 0.5], [tr('Nacht'), 0.2], [tr('Unter der Erde'), 0.06]].map(([label, ambient]) => h('button.small', { class: map.lighting?.enabled && Math.abs((map.lighting.ambient ?? 0.15) - ambient) < 0.03 ? 'active' : '', onclick: () => sync.set(P('lighting'), { ...(map.lighting || {}), enabled: true, ambient }) }, label)),
-            map.zones?.some((z) => !z.out) ? h('label.inline.small', { title: tr('Draußen bleibt es hell – dunkel ist es nur in Räumen und Höhlen der gebauten Karte') }, h('input', { type: 'checkbox', checked: !!map.lighting?.indoor, onchange: (e) => sync.set(P('lighting'), { ambient: 0.15, ...(map.lighting || {}), enabled: true, indoor: e.target.checked }) }), tr('nur innen dunkel')) : null,
+            map.zones?.some((z) => !z.out) || map.lighting?.indoor ? h('label.inline.small', { title: tr('Draußen bleibt es hell – dunkel ist es nur in Räumen und Höhlen der gebauten Karte') }, h('input', { type: 'checkbox', checked: !!map.lighting?.indoor, onchange: (e) => sync.set(P('lighting'), { ambient: 0.15, ...(map.lighting || {}), enabled: true, indoor: e.target.checked }) }), tr('nur innen dunkel')) : null,
           ),
           h(
             'div.list',

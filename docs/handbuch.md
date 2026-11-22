@@ -70,6 +70,8 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     Tropfsteine, magischer Kreis und mehr.
   - **Ruinen:** Ein Raum mit „Ruine“ bekommt verfallene Mauern mit Lücken und losen Steinen, der Boden ist stellenweise
     überwuchert, und das Licht fällt durch die Lücken.
+  - **Holzwände:** Ein Raum mit „Holzwände“ bekommt statt der Steinmauer kräftige Balken und Eckpfosten – für
+    Blockhaus, Scheune oder Hütte. Grenzt er an einen gemauerten Raum, wechselt die Wand genau an der Nahtstelle.
   - **Übersichtskarten** (Maßstab oben auf „Übersichtskarte“): für Dörfer, Städte, Burgen und Landstriche. Bäume,
     Büsche und Felsen werden klein gesetzt; im Katalog „Gebäude“ stehen Häuser mit Stroh-, Ziegel- und Schieferdach,
     Winkelhaus, Scheune, Kirche, Windmühle, Rundturm, Bergfried, Mauerturm, Torhaus, Steinbrücke, Felder, Schiff u. a.
@@ -82,12 +84,29 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     bleiben frei. Ausrichtung, Dichte und Hausgröße des Viertels lassen sich danach einstellen, jedes Haus einzeln
     verschieben. Im Wandwerkzeug setzt man lange **Mauerzüge** Punkt für Punkt: jeder Klick eine Ecke, ein Klick auf
     den Anfang schließt den Ring, Doppelklick, Enter oder Esc beendet. Neben der Burgmauer (mit Turm an jeder Ecke)
-    gibt es die **Palisade**. Im Katalog „Gebäude“ neu: Stadthaus, Häuserzeile, Haus mit Innenhof, Rathaus, Große
+    gibt es die **Palisade**. Geschlossene Mauerringe tragen ihre Zinnen nur außen. Ein **Tor** (bei Tür/Fenster) ist
+    zwei Felder breit, hat zwei Flügel und in der Burgmauer zwei Tortürme; es geht im Spiel auf und zu wie eine Tür.
+    Ist ein Stück eines geschlossenen Mauerrings ausgewählt, malt „Graben um den Ring“ einen Wassergraben außen herum.
+    Häuser aus dem Füllbereich stellen sich zuerst als Front an Straßen und Wege; die Zeilen dahinter laufen in
+    derselben Richtung wie ihre Straße, und in den Höfen wachsen kleine Bäume und Büsche. Im Katalog „Gebäude“ neu: Stadthaus, Häuserzeile, Haus mit Innenhof, Rathaus, Große
     Halle, Lagerhaus, Markthalle, Stall, eckiger Turm, großer Rundturm, Bastion, Zugbrücke. Wege, Erde und Straßen
-    liegen jetzt auch auf Erhöhungen – so bekommt der Burgberg Zufahrt und Hof. Ummauerte Höfe und Städte lassen sich
+    liegen jetzt auch auf Erhöhungen – so bekommt der Burgberg Zufahrt und Hof. Wo ein Weg oder eine Straße die
+    Felskante quert, ist die Kante ausgespart: Der Weg läuft als Rampe hinauf. Ummauerte Höfe und Städte lassen sich
     mit dem Raum-Werkzeug aufdecken, gelten bei „nur innen dunkel“ aber als draußen. Auch Karten mit 80 × 45 Feldern
     und weit über tausend Gegenständen bleiben am PC flüssig; auf sehr großen Karten bewegt sich beim Ziehen ein
     Geisterbild, und erst beim Loslassen wird neu gezeichnet.
+  - **Räume einrichten:** Einen Raum auswählen und unter „Einrichten als“ ein Thema wählen – Schankraum, Küche,
+    Schlafkammer, Lager, Schmiede, Bibliothek, Kapelle, Wachstube, Gruft oder Kerkerzelle. Passende Möbel stehen dann
+    mit dem Rücken an der Wand, in den Ecken und in der Mitte (Tische mit Hockern oder Stühlen), Türen bleiben frei,
+    und was schon im Raum steht, wird umstellt. „Neu würfeln“ stellt anders, „Auflösen“ gibt die Möbel zum Bearbeiten
+    frei.
+  - **Namen auf der Karte:** Das Werkzeug **Text** setzt Ortsnamen (kräftige Schrift) und Namen für Viertel oder
+    Landstriche (groß, gesperrt). Namen stehen nicht im Kartenbild: Im Spiel klickt die Spielleitung einen Namen an
+    und zeigt oder verbirgt ihn für die Spieler – so erscheint ein Ort erst, wenn die Gruppe ihn kennt.
+  - **Mehrere Stücke auf einmal:** Ein Rahmen auf freier Fläche oder Umschalt-Klick wählt mehrere Elemente (am Tablet
+    der Schalter „Mehrfach“). Die Auswahl lässt sich gemeinsam ziehen, mit den Pfeiltasten schieben, verdoppeln,
+    löschen und mit Strg+C / Strg+V kopieren – auch in eine andere Karte. Räume nehmen Türen, Innenwände und
+    Einrichtung mit.
   - **Füllen:** eine Fläche aufziehen (Kreis oder Rechteck) – sie füllt sich von selbst mit Bäumen, Büschen, Felsen
     oder einer Mischung, aber nur auf freiem Boden (nicht in Wasser, Gebäuden, auf Wegen oder Felskanten). Dichte
     einstellbar, „Neu würfeln“ verteilt neu; danach lässt sich jedes Stück einzeln anklicken und verschieben.
@@ -105,7 +124,8 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     offene fällt es hinaus. Rechts lässt sich die Tür abschließen (Schloss-Zeichen, nur für die Spielleitung).
     Der Zustand bleibt erhalten, auch wenn die Karte im Kartenbauer geändert und neu übernommen wird.
   - **Geheimtüren** sehen am Spieltisch aus wie Wand; die Spielleitung sieht sie gestrichelt markiert. Ein Klick
-    öffnet sie: Der Durchgang erscheint, ein Stück Wand schwenkt zur Seite. Wieder geschlossen ist sie wieder Wand.
+    öffnet sie: Der Durchgang erscheint, ein Stück Wand schwenkt zur Seite. Danach gilt sie als entdeckt – wieder
+    geschlossen bleibt eine feine Fuge in der Wand sichtbar (rechts abschaltbar).
   - **Raumweise aufdecken:** Gebaute Karten kennen ihre Räume. Das Nebel-Werkzeug **Raum** deckt mit einem Klick
     den ganzen Raum auf, in dem man klickt (Wände und Türrahmen inklusive); mit Umschalt verdeckt es ihn wieder.
     Türen, Fenster und Innenwände trennen Räume; das Freie deckt man weiter mit Pinsel oder Rechteck auf.
@@ -113,11 +133,17 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     auf“ in der Leiste des Raum-Werkzeugs; dort lässt sich auch zwischen Aufdecken und Verdecken umschalten).
   - **Lichtstimmungen:** Unter „Nebel, Licht & Raster“ schalten Knöpfe zwischen Tag, Dämmerung, Nacht und „Unter der
     Erde“. „Nur innen dunkel“ lässt es draußen hell und verdunkelt nur Räume und Höhlen – etwa für den Keller unter
-    der Taverne oder den Höhleneingang am Tag.
+    der Taverne oder den Höhleneingang am Tag. Durch Fenster, die ins Freie gehen, fällt dann Tageslicht in den Raum.
+    Welche Bereiche als draußen gelten, lässt sich nachbessern: Im Raum-Werkzeug „Hof“ wählen und den Bereich
+    anklicken (Innenhof, Garten) – nützlich vor allem bei eingelesenen Karten.
   - **Belebte Karte:** Auf starken Anzeigen (Darstellung „Flüssig“ unter Bildschirme, z. B. Orange Pi Zero 2W oder ein
     PC) wiegen sich die Bäume, auf dem Wasser laufen Wellen ans Ufer und glitzert es, Wolkenschatten ziehen über die
     Karte und ab und zu fliegt ein Vogel vorbei. Schwache Geräte (Pi Zero 2 W) zeigen dieselbe Karte unbewegt. Je Karte
     abschaltbar („Belebt“ im Kartenbauer).
+- **Karten mit Wänden einlesen:** Dateien im Universal-VTT-Format (`.dd2vtt`, `.uvtt`, `.df2vtt`), wie sie viele
+  Kartenzeichner und Kartenpakete mitbringen, lassen sich bei „Neue Karte“ wie ein Bild hochladen. Das Kartenbild wird
+  herausgelöst; Raster, Wände, Türen und Lichtquellen kommen mit. Türen öffnet und schließt die Spielleitung per
+  Klick, das Raum-Werkzeug deckt eingeschlossene Räume auf.
 - **Nebel des Krieges:** pinselbasiert oder rechteckig, dauerhaft gespeichert über Sessions hinweg
 - **Spieltisch-Kalibrierung:** Auflösung, Bildformat, Diagonale oder physische Maße – ein Rasterfeld ist auf dem TV immer exakt 1″ × 1″
 - **Encounter:** Gegner/NSCs vorab verdeckt platzieren und mit einem Tipp aufdecken

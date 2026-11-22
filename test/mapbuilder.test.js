@@ -382,3 +382,237 @@ test('Häuserviertel: Zeilen ohne Überlappung, Straßen bleiben frei, gleicher 
   assert.ok(scatterHouses({ ...fill, shape: { k: 'ellipse', cx: 500, cy: 400, rx: 400, ry: 300 } }).length > 10);
   assert.equal(scatterHouses({ ...fill, shape: { k: 'rect', x: 0, y: 0, w: 60, h: 40 } }).length, 0);
 });
+
+test('Häuserviertel an der Straße: beiderseits eine Häuserfront dicht an der Kante, zur Straße gedreht', async () => {
+  const { scatterHouses, TOWN_SHAPES, townVariant } = await import('../public/js/mb-geom.js');
+  const fill = { id: 'h', kind: 'houses', seed: 3, density: 1, angle: 0, shape: { k: 'rect', x: 0, y: 0, w: 1400, h: 700 } };
+  const street = { pts: [[0, 350], [1400, 350]], r: 28 };
+  // Die Straße selbst ist gesperrt (wie im Kartenbauer über das Gelände)
+  const onRoad = (x, y, r, t, foot) => foot.some(([, py]) => Math.abs(py - 350) < 27);
+  const a = scatterHouses(fill, onRoad, [street]);
+  const front = a.filter((o) => Math.abs(o.y - 350) < 28 + 3 + 50);
+  assert.ok(front.length >= 16, `${front.length} Häuser an der Straße`);
+  // dicht an der Kante: Abstand der Hauskante zur Straßenkante höchstens ein paar Pixel
+  for (const o of front) {
+    const { shape } = townVariant(o.v);
+    const turned = Math.round(o.rot / 90) % 2 === 1;
+    const depth = TOWN_SHAPES[shape][turned ? 0 : 1];
+    const gap = Math.abs(o.y - 350) - depth / 2 - 28;
+    assert.ok(gap > -1 && gap < 8, `Abstand zur Straße ${gap.toFixed(1)} px`);
+  }
+  // beide Seiten besetzt, und die Fronten zeigen zueinander (Drehung um 180° versetzt)
+  const north = front.filter((o) => o.y < 350);
+  const south = front.filter((o) => o.y > 350);
+  assert.ok(north.length >= 7 && south.length >= 7);
+  const facing = (o) => Math.round(((o.rot % 180) + 180) % 180 / 90) % 2 === 0 ? Math.round(o.rot / 180) % 2 : -1;
+  assert.notEqual(facing(north.find((o) => facing(o) >= 0)), facing(south.find((o) => facing(o) >= 0)));
+  assert.ok(a.length > front.length, 'dahinter stehen weitere Zeilen');
+});
+
+test('Mauerring: Außenseite je Strecke, unabhängig von Zeichenrichtung; offene Züge bleiben ohne', async () => {
+  const { ringOutsides } = await import('../public/js/mb-geom.js');
+  const sq = [[0, 0, 100, 0], [100, 100, 100, 0], [100, 100, 0, 100], [0, 100, 0, 0]].map(([x1, y1, x2, y2]) => ({ x1, y1, x2, y2 }));
+  const o = ringOutsides(sq);
+  assert.deepEqual([...o.values()].map(([x, y]) => [Math.round(x) + 0, Math.round(y) + 0]), [[0, -1], [1, 0], [0, 1], [-1, 0]]);
+  // offener Zug und ein Ring mit Abzweig
+  assert.equal(ringOutsides(sq.slice(0, 3)).size, 0);
+  assert.equal(ringOutsides([...sq, { x1: 100, y1: 0, x2: 200, y2: 0 }]).size, 0);
+  // zwei getrennte Ringe
+  const far = sq.map((w) => ({ x1: w.x1 + 500, y1: w.y1, x2: w.x2 + 500, y2: w.y2 }));
+  assert.equal(ringOutsides([...sq, ...far]).size, 8);
+});
+
+test('Universal-VTT: Wände, Türen, Lichter und Räume in Bild-Pixeln', async () => {
+  const { parseUvtt, isUvtt } = await import('../public/js/uvtt.js');
+  assert.equal(isUvtt('Keller.dd2vtt'), true);
+  assert.equal(isUvtt('karte.png'), false);
+  assert.throws(() => parseUvtt({ foo: 1 }));
+  // Zwei Räume 4×4 Felder nebeneinander, Tür in der Trennwand; ein Licht im linken Raum
+  const data = {
+    format: 0.3,
+    resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 10, y: 6 }, pixels_per_grid: 100 },
+    line_of_sight: [
+      [{ x: 1, y: 1 }, { x: 9, y: 1 }, { x: 9, y: 5 }, { x: 1, y: 5 }, { x: 1, y: 1 }],
+      [{ x: 5, y: 1 }, { x: 5, y: 2.5 }],
+      [{ x: 5, y: 3.5 }, { x: 5, y: 5 }],
+    ],
+    portals: [{ position: { x: 5, y: 3 }, bounds: [{ x: 5, y: 2.5 }, { x: 5, y: 3.5 }], rotation: 1.5708, closed: true, freestanding: false }],
+    lights: [{ position: { x: 3, y: 3 }, range: 6, intensity: 1, color: 'ffeccd8b', shadows: true }],
+    image: 'iVBORw0KGgo=',
+  };
+  const u = parseUvtt(data);
+  assert.deepEqual([u.width, u.height, u.grid.size, u.image.mime, u.image.ext], [1000, 600, 100, 'image/png', 'png']);
+  assert.equal(u.walls.length, 6);
+  assert.deepEqual(u.walls[0], [100, 100, 900, 100]);
+  const d = Object.values(u.doors)[0];
+  assert.deepEqual([d.x, d.y, d.w, d.open, d.plain], [500, 300, 100, false, true]);
+  const l = Object.values(u.lights)[0];
+  assert.deepEqual([l.x, l.y, l.bright, l.dim, l.color], [300, 300, 15, 15, '#cd8b' === l.color ? l.color : '#eccd8b']);
+  assert.equal(u.zones.length, 2, 'zwei Räume, durch die Tür getrennt');
+  // Licht bleibt bei geschlossener Tür im linken Raum
+  const { visibilityPolygon } = await import('../public/js/visibility.js');
+  const { wallsWithDoors } = await import('../public/js/doors.js');
+  const reach = (map) => Math.max(...visibilityPolygon(300, 300, 900, wallsWithDoors(map)).map(([x]) => x));
+  assert.ok(reach({ walls: u.walls, doors: u.doors }) <= 501);
+  d.open = true;
+  assert.ok(reach({ walls: u.walls, doors: u.doors }) > 850);
+});
+
+test('Raum einrichten: Wandstücke an der Wand, nichts vor Türen, nichts ineinander, gleiches Ergebnis bei gleichem Startwert', async () => {
+  const { furnish, THEMES } = await import('../public/js/mb-themes.js');
+  const { inRects } = await import('../public/js/mb-geom.js');
+  const room = { id: 'r', k: 'rect', x: 140, y: 140, w: 700, h: 490 };
+  const SIZE = { bar: [300, 70], fireplace: [160, 70], tableRound: [100, 100], stool: [30, 30], bench: [210, 22], wallTorch: [40, 34] };
+  const size = (t) => SIZE[t] || [60, 60];
+  const door = { id: 'd', k: 'door', x: 490, y: 630, a: 0, w: 70 };
+  const ctx = { size, openings: [door] };
+  const a = furnish(room, 'tavern', 5, ctx);
+  assert.deepEqual(a, furnish(room, 'tavern', 5, ctx));
+  assert.notDeepEqual(a, furnish(room, 'tavern', 6, ctx));
+  assert.equal(a.filter((o) => o.t === 'bar').length, 1);
+  assert.equal(a.filter((o) => o.t === 'fireplace').length, 1);
+  assert.ok(a.filter((o) => o.t === 'tableRound').length >= 1 && a.filter((o) => o.t === 'stool').length >= 2);
+  // der Tresen steht mit dem Rücken an einer Wand
+  const bar = a.find((o) => o.t === 'bar');
+  const gap = Math.min(bar.y - 140, 630 - bar.y, bar.x - 140, 840 - bar.x);
+  assert.ok(gap > 30 && gap < 55, `Tresen ${gap} px von der Wand`);
+  // alles im Raum, nichts vor der Tür, kein Stück mit der Mitte in einem anderen
+  const solid = a.filter((o) => o.t !== 'rugRound');
+  for (const o of solid) {
+    assert.ok(o.x > 140 && o.x < 840 && o.y > 140 && o.y < 630, `${o.t} liegt im Raum`);
+    assert.ok(Math.hypot(o.x - door.x, o.y - door.y) > 50, `${o.t} steht nicht vor der Tür`);
+    for (const q of solid) if (q !== o) assert.ok(!inRects([{ x: o.x, y: o.y, hw: size(o.t)[0] / 2 - 4, hh: size(o.t)[1] / 2 - 4, rot: o.rot }], q.x, q.y), `${q.t} steckt in ${o.t}`);
+  }
+  // jedes Thema liefert etwas; ohne Wände bleiben Wandstücke weg; Kreisraum geht auch
+  for (const k of Object.keys(THEMES)) assert.ok(furnish(room, k, 1, ctx).length >= 3, k);
+  assert.equal(furnish(room, 'tavern', 5, { ...ctx, isWall: () => false }).filter((o) => o.t === 'bar').length, 0);
+  assert.ok(furnish({ id: 'c', k: 'circle', cx: 500, cy: 500, r: 245 }, 'storage', 2, ctx).length >= 4);
+  assert.deepEqual(furnish(room, 'gibtsnicht', 1, ctx), []);
+});
+
+test('Graben um den Mauerring: geschlossene Linie in gleichem Abstand außen herum', async () => {
+  const { ringAround } = await import('../public/js/mb-geom.js');
+  const sq = [[0, 0, 400, 0], [400, 0, 400, 300], [400, 300, 0, 300], [0, 300, 0, 0]].map(([x1, y1, x2, y2]) => ({ x1, y1, x2, y2 }));
+  const ring = ringAround(sq, sq[2], 50);
+  assert.ok(ring && ring.length >= 12);
+  assert.deepEqual(ring[0], ring[ring.length - 1], 'die Linie schließt sich');
+  // alle Punkte liegen außerhalb, 50 px von der Mauer entfernt (an den Ecken etwas mehr)
+  for (const [x, y] of ring) {
+    const d = Math.max(-x, x - 400, -y, y - 300);
+    assert.ok(d >= 49 && d <= 51, `Abstand ${d}`);
+  }
+  assert.equal(ringAround(sq.slice(0, 3), sq[0], 50), null);
+});
+
+test('Raum einrichten: nichts steht quer durch eine Innenwand', async () => {
+  const { furnish, THEMES } = await import('../public/js/mb-themes.js');
+  const { inRects } = await import('../public/js/mb-geom.js');
+  const room = { id: 'r', k: 'rect', x: 0, y: 0, w: 700, h: 560 };
+  const size = () => [70, 50];
+  const wall = [350, 0, 350, 560, 4];
+  for (const theme of Object.keys(THEMES)) {
+    for (let seed = 1; seed <= 6; seed++) {
+      for (const o of furnish(room, theme, seed, { size, walls: [wall] })) {
+        const box = [{ x: o.x, y: o.y, hw: 35, hh: 25, rot: o.rot }];
+        for (let y = 0; y <= 560; y += 10) assert.ok(!inRects(box, 350, y), `${theme}: ${o.t} bei ${o.x}|${o.y} steht auf der Innenwand`);
+      }
+    }
+  }
+});
+
+test('Universal-VTT: Farbe mit Raute, kaputte Züge, Hindernisse bilden keine Räume, Base64 in Stücken', async () => {
+  const { parseUvtt, base64Bytes } = await import('../public/js/uvtt.js');
+  const base = { resolution: { map_origin: { x: 2, y: 1 }, map_size: { x: 8, y: 6 }, pixels_per_grid: 50 }, image: '/9j/4AAQ' };
+  const u = parseUvtt({ ...base,
+    line_of_sight: [[{ x: 3, y: 2 }, { x: 9, y: 2 }, { x: 9, y: 6 }, { x: 3, y: 6 }, { x: 3, y: 2 }], [null, { x: 1, y: 1 }]],
+    objects_line_of_sight: [[{ x: 5, y: 3 }, { x: 7, y: 3 }, { x: 7, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 3 }]],
+    lights: [{ position: { x: 4, y: 3 }, range: 4, color: '#ff8800' }] });
+  assert.equal(u.image.mime, 'image/jpeg');
+  assert.deepEqual(u.walls[0], [50, 50, 350, 50], 'Ursprung der Karte wird abgezogen');
+  assert.equal(u.walls.length, 8, 'vier Wände, vier Kanten der Säule; der kaputte Zug fehlt');
+  assert.equal(Object.values(u.lights)[0].color, '#ff8800');
+  assert.equal(u.zones.length, 1, 'die Säule ist kein eigener Raum');
+  assert.deepEqual([...base64Bytes('SGFsbG8gV2VsdA==')], [...Buffer.from('Hallo Welt')]);
+});
+
+test('Häuserviertel: die Zeilen hinter der Front übernehmen die Richtung ihrer Straße', async () => {
+  const { scatterHouses } = await import('../public/js/mb-geom.js');
+  const fill = { id: 'h', kind: 'houses', seed: 11, density: 1, angle: 0, shape: { k: 'rect', x: 0, y: 0, w: 1800, h: 1400 } };
+  // Straße schräg durch das Viertel (30°)
+  const a = (30 * Math.PI) / 180;
+  const street = { pts: [[100, 200], [100 + Math.cos(a) * 1700, 200 + Math.sin(a) * 1700]], r: 26 };
+  const dist = (o) => Math.abs(-Math.sin(a) * (o.x - 100) + Math.cos(a) * (o.y - 200));
+  const all = scatterHouses(fill, (x, y, r, t, foot) => foot.some(([px, py]) => dist({ x: px, y: py }) < 25), [street]);
+  const near = all.filter((o) => dist(o) < 330);
+  assert.ok(near.length > 30, `${near.length} Häuser nahe der Straße`);
+  // gleiche Richtung wie die Straße (Giebelhäuser stehen quer dazu), nicht die des Viertels (0°)
+  const off = (o) => Math.abs(((((o.rot - 30) % 90) + 135) % 90) - 45);
+  const aligned = near.filter((o) => off(o) <= 4);
+  assert.ok(aligned.length >= near.length * 0.97, `${aligned.length} von ${near.length} ausgerichtet`);
+  // mehr als nur die Front: auch eine zweite Zeile steht da
+  assert.ok(near.some((o) => dist(o) > 150));
+  assert.deepEqual(all, scatterHouses(fill, (x, y, r, t, foot) => foot.some(([px, py]) => dist({ x: px, y: py }) < 25), [street]));
+});
+
+test('Holzwände: nur die Außenwand eines Raums mit Holzwänden zählt, offene Räume nicht', async () => {
+  const { isTimberWall } = await import('../public/js/mb-geom.js');
+  const rooms = [
+    { id: 'a', k: 'rect', x: 0, y: 0, w: 280, h: 210, timber: true },
+    { id: 'b', k: 'rect', x: 280, y: 0, w: 210, h: 210 },
+    { id: 'c', k: 'circle', cx: 700, cy: 100, r: 105, timber: true },
+    { id: 'd', k: 'rect', x: 0, y: 400, w: 140, h: 140, timber: true, open: true },
+  ];
+  assert.equal(isTimberWall(rooms, 140, 0), true);
+  assert.equal(isTimberWall(rooms, 0, 100), true);
+  assert.equal(isTimberWall(rooms, 400, 0), false);
+  assert.equal(isTimberWall(rooms, 140, 100), false); // mitten im Raum
+  assert.equal(isTimberWall(rooms, 805, 100), true); // Rundbau
+  assert.equal(isTimberWall(rooms, 70, 400), false); // offener Raum hat keine Wand
+});
+
+test('Häuserviertel: handgemalte Straßen (ein Punkt alle paar Pixel) bremsen nicht, entartete stören nicht', async () => {
+  const { scatterHouses } = await import('../public/js/mb-geom.js');
+  const fill = { id: 'h', kind: 'houses', seed: 5, density: 1, angle: 0, shape: { k: 'rect', x: 0, y: 0, w: 2100, h: 1400 } };
+  // zehn gemalte Straßen mit leichtem Zittern, dazu eine weit entfernte und eine aus zwei gleichen Punkten
+  const streets = [];
+  for (let k = 0; k < 10; k++) {
+    const pts = [];
+    for (let x = -200; x <= 2300; x += 7) pts.push(k % 2 ? [150 + k * 200 + Math.sin(x / 90) * 6, x] : [x, 100 + k * 140 + Math.sin(x / 70) * 6]);
+    streets.push({ pts, r: 24 });
+  }
+  streets.push({ pts: [[9000, 9000], [9900, 9000]], r: 24 }, { pts: [[500, 500], [500, 500]], r: 24 });
+  const t0 = Date.now();
+  const a = scatterHouses(fill, () => false, streets);
+  const ms = Date.now() - t0;
+  assert.ok(a.length > 100, `${a.length} Häuser`);
+  assert.ok(ms < 2500, `${ms} ms`);
+});
+
+test('Radierte Straßenstücke zählen nicht mehr als Straße; in den Höfen eines Viertels wachsen Bäume', async () => {
+  const { cutStreets, scatterHouses } = await import('../public/js/mb-geom.js');
+  const road = { pts: [[0, 300], [1400, 300]], r: 26 };
+  // ohne Radierer bleibt die Straße ganz
+  assert.deepEqual(cutStreets([road]), [{ pts: road.pts, r: 26 }]);
+  // ein Radierstrich quer über die Mitte trennt sie in zwei Stücke; ein früherer Radierstrich zählt nicht
+  const cut = cutStreets([{ pts: [[100, 300], [200, 300]], r: 40, sub: true }, road, { pts: [[700, 200], [700, 400]], r: 60, sub: true }]);
+  assert.equal(cut.length, 2);
+  assert.ok(cut[0].pts.every(([x]) => x < 645) && cut[1].pts.every(([x]) => x > 755));
+  assert.ok(cut[0].pts[0][0] === 0 && cut[1].pts.at(-1)[0] > 1380);
+  // ganz wegradiert: nichts übrig
+  assert.deepEqual(cutStreets([road, { pts: [[0, 300], [1400, 300]], r: 30, sub: true }]), []);
+  // Bäume nur auf Wunsch, nie in einem Haus, und nur zwischen Häusern
+  const fill = { id: 'h', kind: 'houses', seed: 9, density: 1, angle: 0, shape: { k: 'rect', x: 0, y: 0, w: 1400, h: 900 } };
+  const plain = scatterHouses(fill, () => false, [road]);
+  assert.ok(plain.every((o) => o.t === 'townHouse'));
+  const green = scatterHouses(fill, () => false, [road], { tree: 0.4 });
+  const trees = green.filter((o) => o.t === 'tree' || o.t === 'bush');
+  const houses = green.filter((o) => o.t === 'townHouse');
+  assert.equal(trees.length + houses.length, green.length);
+  assert.deepEqual(houses.map((o) => [o.x, o.y, o.rot]), plain.map((o) => [o.x, o.y, o.rot]));
+  assert.ok(trees.length > 3, `${trees.length} Bäume`);
+  for (const t of trees) {
+    assert.ok(t.fill === 'h' && t.s > 0.15 && t.s < 0.6);
+    assert.ok(houses.some((o) => Math.hypot(o.x - t.x, o.y - t.y) < 150));
+    assert.ok(!houses.some((o) => Math.hypot(o.x - t.x, o.y - t.y) < 20), 'Baum steht in einem Haus');
+  }
+});

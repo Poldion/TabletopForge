@@ -22,7 +22,11 @@ export function thumb(campaignId, asset, { caption, badge, selected, live, oncli
 }
 
 /** Upload-Fläche mit Drag & Drop und Dateiauswahl. */
-export function dropzone(campaignId, { accept = 'image/*,application/pdf', onUploaded, label } = {}) {
+/**
+ * prepare(files) darf die Dateien vor dem Hochladen umformen (z. B. eine Kartendatei in ihr Bild zerlegen) und liefert
+ * die hochzuladenden Dateien; onUploaded bekommt die angelegten Einträge in derselben Reihenfolge.
+ */
+export function dropzone(campaignId, { accept = 'image/*,application/pdf', onUploaded, label, prepare } = {}) {
   const input = h('input', { type: 'file', multiple: true, accept, class: 'hidden' });
   const zone = h(
     'div.dropzone',
@@ -34,6 +38,7 @@ export function dropzone(campaignId, { accept = 'image/*,application/pdf', onUpl
     if (!files?.length) return;
     zone.classList.add('over');
     try {
+      if (prepare) files = await prepare([...files]);
       const created = await uploadFiles(campaignId, files);
       toast(tr('{length} Datei(en) hochgeladen', { length: created.length }));
       onUploaded?.(created);

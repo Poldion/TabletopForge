@@ -5,7 +5,7 @@ import { tr } from './i18n.js';
 import { dist } from './units-ui.js';
 import { spellEffect } from './spellfx.js';
 import { visibilityPolygon } from './visibility.js';
-import { wallsWithDoors, doorState, drawDoor } from './doors.js';
+import { wallsWithDoors, doorState, drawDoor, drawLabel } from './doors.js';
 
 // Wie viele Karten der Spieltisch mit ihren vorbereiteten Kacheln behält (je etwa ein bis zwei Bildschirme groß)
 const TILE_SETS = 3;
@@ -44,6 +44,8 @@ export function snapViewCenter(map, cx, cy, extW, extH) {
   const top = Math.round((cy - extH / 2 - g.offsetY) / g.sizeY) * g.sizeY + g.offsetY;
   return { cx: left + extW / 2, cy: top + extH / 2 };
 }
+
+const DAY_ROOM = 0.26; // Grundhelligkeit eines Raums mit Fenster ins Freie bei „nur innen dunkel“
 
 export const feetToPx = (map, feet) => {
   const g = gridOf(map);
@@ -481,7 +483,7 @@ export class MapRenderer {
     if (hit?.key === key) return hit.poly;
     const poly = visibilityPolygon(x, y, total, wallsWithDoors(map));
     this.areas.set(li.id, { key, poly });
-    if (this.areas.size > 200) this.areas.delete(this.areas.keys().next().value);
+    if (this.areas.size > 800) this.areas.delete(this.areas.keys().next().value);
     return poly;
   }
 
@@ -876,6 +878,7 @@ export class MapRenderer {
         const g = gridOf(map);
         if (g.show && g.size > 4) this.drawGrid(b, map, W, H);
         this.drawDrawings(b, map, 'below');
+        for (const l of Object.values(map.labels || {})) drawLabel(b, l, { dm: this.dmLook });
         for (const aoe of Object.values(map.aoes || {})) this.drawAoe(b, map, aoe);
         if (!animOn) this.drawTokens(b, map);
         this.lightDirty = true;
@@ -1271,24 +1274,50 @@ export class MapRenderer {
     let darkness = 1 - ambient;
     if (this.dmLook) darkness *= 0.5;
     l.fillStyle = `rgba(0,0,10,${darkness})`;
-    if (map.lighting.indoor && map.zones?.some((z) => !z.out)) {
+    if (map.lighting.indoor && map.zones?.length && !map.zones.some((z) => !z.out)) {
+      // Nur innen dunkel, aber alles liegt unter freiem Himmel (lauter Höfe): es bleibt hell
+      this.applyTransform(l, K);
+    } else if (map.lighting.indoor && map.zones?.some((z) => !z.out)) {
       // Nur innen dunkel: draußen ist Tag, in Häusern, Kellern und Höhlen braucht es Licht
       this.applyTransform(l, K);
-      l.beginPath();
-      for (const z of map.zones) {
-        if (z.out) continue; // Burghof, ummauerte Stadt: unter freiem Himmel
-        const p = z.in || z.pts;
-        l.moveTo(p[0], p[1]);
-        for (let i = 2; i < p.length; i += 2) l.lineTo(p[i], p[i + 1]);
-        l.closePath();
-      }
-      l.fill();
+      // Räume mit einem Fenster ins Freie sind am Tag nicht stockdunkel: dort gilt eine Grundhelligkeit
+      const lit = new Set((map.windows || []).map((w) => w[4]).filter(Boolean));
+      const soft = Math.min(darkness, (1 - Math.max(ambient, DAY_ROOM)) * (this.dmLook ? 0.5 : 1));
+      const trace = (only) => {
+        l.beginPath();
+        for (const z of map.zones) {
+          if (z.out) continue; // Burghof, ummauerte Stadt: unter freiem Himmel
+          if (only && lit.has(z.id)) continue;
+          const p = z.in || z.pts;
+          l.moveTo(p[0], p[1]);
+          for (let i = 2; i < p.length; i += 2) l.lineTo(p[i], p[i + 1]);
+          l.closePath();
+        }
+        l.fill();
+      };
+      if (lit.size && soft < darkness) {
+        // erst alles in der helleren Stufe, dann die fensterlosen Räume auf die volle Dunkelheit nachdunkeln
+        l.fillStyle = `rgba(0,0,10,${soft})`;
+        trace(false);
+        l.fillStyle = `rgba(0,0,10,${1 - (1 - darkness) / (1 - soft)})`;
+        trace(true);
+      } else trace(false);
     } else {
       l.fillRect(0, 0, lc.width, lc.height);
       this.applyTransform(l, K);
     }
     l.globalCompositeOperation = 'destination-out';
-    for (const li of lights) {
+    // Nur innen dunkel heißt: draußen ist Tag – dann fällt durch jedes Fenster ins Freie Tageslicht in den Raum
+    // – weich, weil es über die ganze Fensterbreite kommt: fünf schwache Lichter nebeneinander
+    const day = [];
+    if (map.lighting.indoor && map.windows?.length) {
+      // bei sehr vielen Fenstern (Stadthäuser auf einer großen Karte) je Fenster nur drei – das spart Rechenzeit
+      const [offs, step, part] = map.windows.length > 40 ? [[-1, 0, 1], 0.3, 0.45] : [[-2, -1, 0, 1, 2], 0.2, 0.3];
+      map.windows.forEach(([x, y, a = 0, w = 56], i) => {
+        for (const k of offs) day.push({ id: `win${i}.${k}`, x: x + Math.cos(a) * w * step * k, y: y + Math.sin(a) * w * step * k, bright: 6, dim: 12, part });
+      });
+    }
+    for (const li of day.length ? [...lights, ...day] : lights) {
       const { x, y } = lightPos(map, li);
       let flick = 1;
       if (li.flicker && !this.fxLayer) {
@@ -1312,6 +1341,7 @@ export class MapRenderer {
       // Sichtfläche mit der unverflackerten Reichweite: so bleibt sie im Zwischenspeicher
       this.clipToLight(l, map, li, x, y, feetToPx(map, (li.bright ?? 20) + (li.dim ?? 20)));
       l.fillStyle = grad;
+      if (li.part) l.globalAlpha = li.part;
       l.beginPath();
       l.arc(x, y, total, 0, Math.PI * 2);
       l.fill();
