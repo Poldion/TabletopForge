@@ -55,6 +55,7 @@ export function createKioskAdmin(sync, cid) {
         wifi: k.desired.wifi.map((w) => ({ ssid: w.ssid, psk: '', hasPsk: w.hasPsk })),
         engine: k.desired.browser?.engine || 'cog',
         gpu: k.desired.browser?.gpu || 'auto',
+        fps: String(k.desired.browser?.fps || 'auto'),
         ownMonitor: !!k.desired.monitor,
         monitor: sanitizeTable(k.desired.monitor || globalTable || {}, globalTable || undefined),
       });
@@ -103,6 +104,14 @@ export function createKioskAdmin(sync, cid) {
         sel.addEventListener('change', () => (d.gpu = sel.value));
         return h('div', h('label', tr('Grafikbeschleunigung im Browser (bei weißem oder flackerndem Bild ausschalten)')), sel);
       })(),
+      (() => {
+        const sel = h(
+          'select',
+          ...Object.entries({ auto: tr('Automatisch (Orange Pi: 30 Bilder pro Sekunde)'), 30: tr('30 Bilder pro Sekunde (kühler)'), 60: tr('60 Bilder pro Sekunde (flüssiger, wärmer)') }).map(([v, l]) => h('option', { value: v, selected: d.fps === v }, l)),
+        );
+        sel.addEventListener('change', () => (d.fps = sel.value));
+        return h('div', h('label', tr('Bildrate (wirkt auf Geräten, deren Browser im Wayland-Kiosk läuft – z.B. Orange Pi)')), sel);
+      })(),
       h('label', tr('WLAN-Netze (das Gerät verbindet sich mit dem ersten erreichbaren)')),
       wifiRows,
       h(
@@ -113,7 +122,7 @@ export function createKioskAdmin(sync, cid) {
         pending ? h('span.small', { style: { color: '#e0a030' } }, tr('Wird beim nächsten Kontakt übertragen …')) : k.desired.rev ? h('span.small', { style: { color: 'var(--ok)' } }, icon('check'), tr(' Auf dem Gerät gespeichert (Stand {reportedRev})', { reportedRev: k.reportedRev })) : null,
         h('button.primary.small', {
           onclick: async () => {
-            await put(k.id, { desired: { serverUrl: d.serverUrl, hostname: d.hostname, country: d.country, wifi: d.wifi.map((w) => ({ ssid: w.ssid, psk: w.psk })), monitor: d.ownMonitor ? sanitizeTable(d.monitor, globalTable || undefined) : null, browser: { engine: d.engine, gpu: d.gpu, flags: k.desired.browser?.flags || '' } } });
+            await put(k.id, { desired: { serverUrl: d.serverUrl, hostname: d.hostname, country: d.country, wifi: d.wifi.map((w) => ({ ssid: w.ssid, psk: w.psk })), monitor: d.ownMonitor ? sanitizeTable(d.monitor, globalTable || undefined) : null, browser: { engine: d.engine, gpu: d.gpu, fps: d.fps, flags: k.desired.browser?.flags || '' } } });
             drafts.delete(k.id);
             toast(tr('Gespeichert – das Gerät übernimmt die Einstellungen beim nächsten Kontakt.'));
           },
@@ -235,6 +244,16 @@ export function createKioskAdmin(sync, cid) {
           p.undervoltage
             ? tr('⚠ Unterspannung – die Stromversorgung reicht gerade nicht (stärkeres Netzteil bzw. anderen USB-Anschluss verwenden).')
             : tr('⚠ Seit dem Start kurzzeitig Unterspannung – die Stromversorgung ist knapp.'),
+        ),
+      );
+    }
+    // Hitzeschutz: Die Tischanzeige pausiert die Belebung, bis das Gerät abgekühlt ist; ab 90 °C drosselt es seinen Prozessor
+    if (k.hot || p?.throttle > 0) {
+      parts.push(
+        h(
+          'div.small',
+          { style: { color: '#e05050', margin: '4px 0' } },
+          tr('⚠ {t} °C – Hitzeschutz aktiv: Die belebte Karte pausiert{cpu}, bis das Gerät abgekühlt ist. Für Luft am Gerät sorgen oder die Auflösung senken.', { t: Math.round(p.temp), cpu: p.throttle > 0 ? tr(' und der Prozessor ist gedrosselt') : '' }),
         ),
       );
     }

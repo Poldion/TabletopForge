@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ota  # noqa: E402
 import setup_ap  # noqa: E402
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 BOOT = "/boot/firmware" if os.path.isdir("/boot/firmware") else "/boot"
 CONFIG = os.path.join(BOOT, "kiosk.json")
 BACKUP = CONFIG + ".bak"
@@ -54,7 +54,7 @@ DEFAULTS = {
     "wifi": [],
     "sshKeys": [],
     "monitor": None,
-    "browser": {"engine": "cog", "gpu": "auto", "flags": ""},
+    "browser": {"engine": "cog", "gpu": "auto", "fps": "auto", "flags": ""},
 }
 HOTSPOT_INFO = os.path.join(BOOT, "kiosk-hotspot.txt")
 # Anmeldung am Server: die lokale Startseite liest hieraus, ob und wie sich der Browser anmeldet
@@ -267,6 +267,64 @@ def system_version():
 _undervoltage_seen = False
 
 
+THERMAL_ZONES = "/sys/class/thermal/thermal_zone*/temp"
+CPUFREQ = "/sys/devices/system/cpu/cpufreq/policy*"
+# Hitzeschutz: Der Kernel drosselt auf manchen Geräten nicht von selbst (Orange Pi Zero 2W: Temperaturschwellen ohne
+# Zuordnung, was gedrosselt werden soll) und schaltet erst bei 100 °C hart ab. Stufen: ab dieser Temperatur gilt
+# höchstens dieser Anteil des vollen Prozessortakts; zurück geht es erst THERMAL_BACK Grad darunter.
+THERMAL_STEPS = [(90, 0.72), (94, 0.0)]
+THERMAL_BACK = 8
+_thermal_level = 0
+
+
+def max_temp():
+    """Höchste Temperatur aller Fühler in °C (Prozessor, Grafikchip, Speicher) – oder None."""
+    best = None
+    for path in glob.glob(THERMAL_ZONES):
+        try:
+            with open(path, encoding="ascii") as f:
+                t = int(f.read()) / 1000
+        except (OSError, ValueError):
+            continue
+        if best is None or t > best:
+            best = t
+    return None if best is None else round(best, 1)
+
+
+def thermal_level(temp, level):
+    """Drosselstufe (0 = frei) für eine Temperatur – mit Abstand beim Zurückschalten, damit es nicht pendelt."""
+    if temp is None:
+        return level
+    up = sum(1 for limit, _ in THERMAL_STEPS if temp >= limit)
+    if up > level:
+        return up
+    while level > 0 and temp <= THERMAL_STEPS[level - 1][0] - THERMAL_BACK:
+        level -= 1
+    return level
+
+
+def thermal_guard():
+    """Prozessortakt nach Temperatur begrenzen. Liefert die Stufe (0 = frei)."""
+    global _thermal_level
+    level = thermal_level(max_temp(), _thermal_level)
+    if level == _thermal_level:
+        return level
+    for pol in glob.glob(CPUFREQ):
+        try:
+            with open(os.path.join(pol, "cpuinfo_max_freq"), encoding="ascii") as f:
+                top = int(f.read())
+            with open(os.path.join(pol, "cpuinfo_min_freq"), encoding="ascii") as f:
+                low = int(f.read())
+            want = top if level == 0 else max(low, int(top * THERMAL_STEPS[level - 1][1]))
+            with open(os.path.join(pol, "scaling_max_freq"), "w", encoding="ascii") as f:
+                f.write(str(want))
+        except (OSError, ValueError):
+            continue
+    log(f"Hitzeschutz: Stufe {level} bei {max_temp()} °C" if level else "Hitzeschutz: Prozessor wieder frei")
+    _thermal_level = level
+    return level
+
+
 def power_state():
     """Unterspannung (jetzt / seit dem Start) und Temperatur – z.B. zu schwaches Netzteil am TV-USB-Anschluss."""
     global _undervoltage_seen
@@ -282,13 +340,8 @@ def power_state():
             continue
     if now:
         _undervoltage_seen = True
-    temp = None
-    try:
-        with open("/sys/class/thermal/thermal_zone0/temp", encoding="ascii") as f:
-            temp = round(int(f.read()) / 1000, 1)
-    except (OSError, ValueError):
-        pass
-    return {"undervoltage": now, "undervoltageSeen": _undervoltage_seen, "temp": temp}
+    # wärmster Fühler (auf dem Orange Pi ist das meist der Grafikchip, nicht der Prozessor)
+    return {"undervoltage": now, "undervoltageSeen": _undervoltage_seen, "temp": max_temp(), "throttle": _thermal_level}
 
 
 def uptime():
@@ -439,7 +492,14 @@ def browser_settings(cfg):
     flags = "".join(ch for ch in str(b.get("flags", "")) if ch.isalnum() or ch in " -_=,.:/")[:500]
     # Nur echte Schalter (--…) – alles andere würde Chromium als zusätzliche Adresse öffnen
     flags = " ".join(t for t in flags.split() if t.startswith("--"))
-    return engine, gpu, flags, display_mode(cfg)
+    return engine, gpu, flags, display_mode(cfg), browser_fps(cfg)
+
+
+def browser_fps(cfg):
+    """Obergrenze der Bildrate (30 oder 60) – leer heißt Vorgabe des Startskripts (30 auf Geräten, deren Browser
+    im Wayland-Kiosk läuft, z.B. Orange Pi; sonst unbegrenzt)."""
+    fps = str((cfg.get("browser") or {}).get("fps", ""))
+    return fps if fps in ("30", "60") else ""
 
 
 def display_mode(cfg):
@@ -453,11 +513,11 @@ def display_mode(cfg):
 
 
 def write_browser_env(cfg):
-    engine, gpu, flags, mode = browser_settings(cfg)
+    engine, gpu, flags, mode, fps = browser_settings(cfg)
     os.makedirs(RUN, exist_ok=True)
     with open(os.path.join(RUN, "browser.env"), "w", encoding="utf-8") as f:
-        f.write(f'KIOSK_ENGINE={engine}\nKIOSK_GPU={gpu}\nKIOSK_MODE="{mode}"\nKIOSK_EXTRA_FLAGS="{flags}"\n')
-    return f"{engine}, GPU {gpu}, Modus {mode or 'TV-Vorgabe'}"
+        f.write(f'KIOSK_ENGINE={engine}\nKIOSK_GPU={gpu}\nKIOSK_MODE="{mode}"\nKIOSK_FPS="{fps}"\nKIOSK_EXTRA_FLAGS="{flags}"\n')
+    return f"{engine}, GPU {gpu}, Modus {mode or 'TV-Vorgabe'}, Bildrate {fps or 'Vorgabe'}"
 
 
 def prepare():
@@ -718,6 +778,11 @@ def run():
     while True:
         cfg = load_config()
         now = time.time()
+        # Hitzeschutz läuft immer mit, auch ohne Netz
+        try:
+            thermal_guard()
+        except Exception as err:  # noqa: BLE001 – der Schutz darf den Agenten nie anhalten
+            log(f"Hitzeschutz: {err}")
 
         # 1. Netzwerk: ohne WLAN-Einträge bald, sonst nach einer Wartezeit in den Einrichtungsmodus
         if has_connection():

@@ -1,0 +1,89 @@
+cage: Bildrate begrenzen (CAGE_MAX_FPS)
+
+Solange sich auf der Seite etwas bewegt, setzt der Browser zu jedem Bild des
+Bildschirms (60-mal pro Sekunde) alles neu zusammen. Auf einem Einplatinen-
+rechner ist das die Arbeit, die den Grafikchip auslastet und heiß macht - eine
+belebte Karte braucht aber keine 60 Bilder. Mit CAGE_MAX_FPS=30 bekommt nur
+jedes zweite Bild des Bildschirms einen neuen Inhalt; die Anwendungen erhalten
+ihre Frame-Callbacks in diesem Takt und zeichnen entsprechend seltener.
+Gemessen am Orange Pi Zero 2W (Tischansicht in 720p): 30 statt 57 Bilder/s,
+etwa die halbe Last des Grafikchips, 80-81 statt 83-84 Grad.
+
+--- a/output.c
++++ b/output.c
+@@ -133,6 +133,15 @@
+ 	output_layout_remove(output);
+ }
+ 
++/* Kiosk: after a skipped refresh ask for the next frame */
++static int
++handle_frame_timer(void *data)
++{
++	struct cg_output *output = data;
++	wlr_output_schedule_frame(output->wlr_output);
++	return 0;
++}
++
+ static void
+ handle_output_frame(struct wl_listener *listener, void *data)
+ {
+@@ -142,6 +151,36 @@
+ 		return;
+ 	}
+ 
++	/* Kiosk: at most CAGE_MAX_FPS images per second - only every n-th refresh of the screen gets a new image.
++	 * The clients receive their frame callbacks at that pace and draw correspondingly fewer images: that halves
++	 * the work of a weak graphics chip (and its heat) while animations keep running. */
++	static int max_fps = -1;
++	if (max_fps < 0) {
++		const char *want = getenv("CAGE_MAX_FPS");
++		max_fps = want ? atoi(want) : 0;
++		if (max_fps < 5 || max_fps > 240) {
++			max_fps = 0;
++		}
++	}
++	if (max_fps) {
++		int refresh = output->wlr_output->refresh > 0 ? output->wlr_output->refresh : 60000;
++		int div = (refresh + max_fps * 500) / (max_fps * 1000);
++		if (!output->frame_timer && div > 1) {
++			wlr_log(WLR_INFO, "Showing every %d. refresh (CAGE_MAX_FPS=%d)", div, max_fps);
++			output->frame_timer = wl_event_loop_add_timer(wl_display_get_event_loop(output->server->wl_display),
++								      handle_frame_timer, output);
++		}
++		if (output->frame_timer && div > 1) {
++			if (output->frame_skip > 0) {
++				/* wait one refresh (a little longer, so that the next image starts after it) */
++				output->frame_skip--;
++				wl_event_source_timer_update(output->frame_timer, 1000000 / refresh + 1);
++				return;
++			}
++			output->frame_skip = div - 1;
++		}
++	}
++
+ 	wlr_scene_output_commit(output->scene_output, NULL);
+ 
+ 	struct timespec now = {0};
+@@ -211,6 +250,9 @@
+ 	wl_list_remove(&output->request_state.link);
+ 	wl_list_remove(&output->frame.link);
+ 	wl_list_remove(&output->link);
++	if (output->frame_timer) {
++		wl_event_source_remove(output->frame_timer);
++	}
+ 
+ 	output_layout_remove(output);
+ 
+--- a/output.h
++++ b/output.h
+@@ -17,6 +17,10 @@
+ 	struct wl_listener destroy;
+ 	struct wl_listener frame;
+ 
++	/* Kiosk: frame pacing (CAGE_MAX_FPS) */
++	struct wl_event_source *frame_timer;
++	int frame_skip;
++
+ 	struct wl_list link; // cg_server::outputs
+ };
+ 

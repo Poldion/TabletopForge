@@ -170,6 +170,11 @@ lying flat) and a player display, all from one browser.
     biggest influence on the frame rate: on the Orange Pi Zero 2W the table view with tokens and fog reaches about 27
     frames per second at 1080p, 38 at 1600 × 900 and 57 at 720p (display mode in the kiosk administration; effective
     from the kiosk image of this version).
+    On the Orange Pi the kiosk shows at most 30 frames per second (Kiosk devices → Settings → Frame rate, can be set
+    to 60): that halves the work of the graphics chip, and the device stays a few degrees cooler.
+    If a kiosk device gets too hot (from 85 °C), the animation pauses by itself until it has cooled down – the map
+    then stands still, everything else keeps running. The kiosk administration shows the temperature and the heat
+    protection.
 - **Importing maps with walls:** files in the Universal VTT format (`.dd2vtt`, `.uvtt`, `.df2vtt`), as exported by
   many map makers and map packs, can be uploaded under “New map” like an image. The map image is extracted; grid,
   walls, doors and light sources come along. The game master opens and closes doors with a click, and the Room tool

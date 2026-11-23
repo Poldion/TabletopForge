@@ -174,6 +174,16 @@ export class MapRenderer {
     this.resize();
   }
 
+  /**
+   * Schonbetrieb: Belebung der Karte pausieren (das Gerät meldet, dass es zu heiß ist). Ohne bewegte Elemente setzt
+   * der Browser kein neues Bild mehr zusammen, und der Grafikchip kühlt ab.
+   */
+  setCool(on) {
+    if (!!on === !!this.cool) return;
+    this.cool = !!on;
+    this.requestRender();
+  }
+
   /** Ebene zeigen oder ganz ausblenden (ausgeblendet belastet sie den Grafikchip nicht). */
   showLayer(el, on) {
     if (el && (el.style.display === 'none') === on) el.style.display = on ? '' : 'none';
@@ -839,7 +849,7 @@ export class MapRenderer {
     let clip = null;
     // Belebte Karte: nur auf starken Anzeigen und nur, wenn die Karte Daten dafür mitbringt
     let animOn = false;
-    if (this.animWanted && this.highPerf && map?.anim && img && !this.blackout) {
+    if (this.animWanted && this.highPerf && !this.cool && map?.anim && img && !this.blackout) {
       if (this.anim) animOn = true;
       else if (!this.animLoading) {
         this.animLoading = true;

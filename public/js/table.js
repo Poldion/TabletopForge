@@ -34,6 +34,8 @@ let kioskCalibration = null;
 // (vom Server), sonst – normaler Browser auf Laptop, TV o.ä. – flüssig.
 const urlPerformance = ['high', 'low'].includes(param('perf')) ? param('perf') : null;
 let devicePerformance = null;
+let deviceHot = false; // das Gerät meldet Hitze: Belebung pausieren, bis es abgekühlt ist
+let onDeviceHot = null;
 if (kioskId) {
   try {
     const res = await fetch(`/api/kiosks/${encodeURIComponent(kioskId)}/display`, { cache: 'no-store' });
@@ -41,10 +43,16 @@ if (kioskId) {
       const info = await res.json();
       kioskCalibration = info.calibration || null;
       devicePerformance = info.performance || null;
+      deviceHot = !!info.hot;
     }
   } catch {
     /* Server nicht erreichbar – globale Kalibrierung */
   }
+  // display.js fragt die Zuweisung alle paar Sekunden ab und reicht die Antwort weiter
+  window.addEventListener('kiosk-info', (e) => {
+    const hot = !!e.detail?.hot;
+    if (hot !== deviceHot) (deviceHot = hot), onDeviceHot?.(hot);
+  });
 }
 const tableSettings = (settings) => kioskCalibration || settings.table;
 // Kiosk-Geräte (Einplatinenrechner) haben einen schwachen Grafikchip: Belebung und Lichteffekte in schlanker Fassung.
@@ -75,6 +83,8 @@ async function runTable() {
   connectionBadge(sync);
   const renderer = new MapRenderer(canvas, { mode: 'table', campaignId, getState: () => sync.state, renderScale: Number(param('scale')) || 1, performance: performanceFor(sync.state.display?.table), lean: leanDisplay });
   if (param('maxfps')) renderer.maxFps = Number(param('maxfps'));
+  renderer.setCool(deviceHot);
+  onDeviceHot = (hot) => renderer.setCool(hot);
   // Ladebildschirm, solange die gewählte Karte noch lädt
   renderer.onLoading = (on) => loading.set(on, tr('Karte wird geladen …'));
   if (param('fps')) {

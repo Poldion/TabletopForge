@@ -38,6 +38,8 @@ Tisch die stärkere Wahl: Im Betrieb sind rund 700 MB Arbeitsspeicher frei für 
 | Grafik | (Buildroot) Grafiktreiber fest im Kernel, Grafikchip mit 400 statt 300 MHz (`config.txt`), Schriften-Cache schon im Image |
 | Watchdog | (Buildroot) hängt das System, startet der Pi nach 14 s von selbst neu |
 | Stromversorgung | der Agent meldet Unterspannung und Temperatur – Warnung im DM-System beim Gerät |
+| Bildrate | höchstens 30 Bilder pro Sekunde (`CAGE_MAX_FPS`, Patch in `buildroot/patches/cage`) – halbiert die Arbeit des Grafikchips; je Gerät auf 60 umstellbar |
+| Hitzeschutz | ab 85 °C (wärmster Fühler) pausiert die Tischanzeige die Belebung der Karte, bis das Gerät 10 Grad kühler ist – die Wärme kommt vor allem vom Grafikchip; ab 90 °C begrenzt der Agent zusätzlich den Prozessortakt, ab 94 °C auf das Minimum (der Kernel des Orange Pi Zero 2W drosselt nicht von selbst und schaltet erst bei 100 °C ab) |
 | Anmeldung | (ab Kiosk-Software 1.7) eigener geheimer Geräteschlüssel in `kiosk.json` (`deviceKey`); ist auf dem Server die Anmeldung eingerichtet, zeigt ein neues Gerät einmal einen QR-Code zum Freigeben. Danach holt der Agent nach jedem Start eine Einmal-Anmeldung für den Browser (`/run/kiosk/auth.json`, über die lokale Startseite) |
 
 Was das Gerät anzeigt (Kampagne, Spieltisch oder Spieler-Display), wird **nur auf dem Server**
@@ -129,10 +131,15 @@ zeichnet damit oft nur eine weiße Fläche. Darum ist die Grafikbeschleunigung i
 im DM-System (**Kiosk-Geräte → Einstellungen → Grafikbeschleunigung**) oder in `kiosk.json`:
 
 ```json
-"browser": { "engine": "cog", "gpu": "auto", "flags": "" }
+"browser": { "engine": "cog", "gpu": "auto", "fps": "auto", "flags": "" }
 ```
 
 `engine`: `cog` · `chromium`. `gpu`: `auto` · `on` · `off` (bei cog: beschleunigtes Canvas).
+`fps`: `auto` · `30` · `60` – Obergrenze der Bildrate auf Geräten, deren Browser im Wayland-Kiosk cage läuft
+(Orange Pi, Chromium). Solange sich etwas bewegt, setzt der Browser sonst 60-mal pro Sekunde das ganze Bild neu
+zusammen; mit 30 hat der Grafikchip die halbe Arbeit und bleibt kühler (Orange Pi Zero 2W, Tischansicht in 720p:
+80–81 statt 83–84 °C – die belebte Karte läuft durch, statt bei Hitze zu pausieren). `auto` heißt auf dem Orange Pi
+30, mit Chromium unbegrenzt (**Kiosk-Geräte → Einstellungen → Bildrate**).
 In `flags` können zusätzliche Schalter (`--…`) für den gewählten Browser stehen.
 
 ## Updates über das Netz (Buildroot)

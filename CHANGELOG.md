@@ -3,6 +3,22 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.60.0] – 2026-11-23
+
+### Added
+
+- **Heat protection for kiosk devices.** Some single-board computers (Orange Pi Zero 2W) do not throttle on their own
+  and only switch off hard at 100 °C. The heat comes mostly from the graphics chip drawing the animated map, so the
+  protection starts there: from 85 °C (two readings in a row) the table display pauses the animation of the map
+  until the device has cooled down by 10 degrees. As a last resort the device also limits its processor clock from
+  90 °C (kiosk image of this version). The kiosk administration shows the temperature and when the protection is
+  active; the reported temperature is now that of the warmest sensor.
+- **Frame rate limit for kiosk devices** (Kiosk devices → Settings → Frame rate; kiosk image of this version). As long
+  as something moves, the browser recomposes the whole picture 60 times per second – on a single-board computer that
+  is what keeps the graphics chip busy and hot. The Orange Pi now shows at most 30 frames per second unless set to
+  60: half the work for the graphics chip, and the animated map keeps running instead of pausing when hot (Orange Pi
+  Zero 2W, table view at 720p: 80–81 instead of 83–84 °C).
+
 ## [0.59.0] – 2026-11-23
 
 ### Added

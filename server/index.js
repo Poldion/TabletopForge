@@ -430,6 +430,8 @@ app.get('/api/kiosks/:id/display', (req, res) => {
     calibration: kiosks.calibrationFor(k),
     // Leistungsprofil der Tischanzeige (flüssiger Nebel nur auf Geräten, die es schaffen)
     performance: kiosks.performanceFor(k),
+    // Zu heiß: die Tischanzeige pausiert die Belebung der Karte, bis das Gerät abgekühlt ist
+    hot: kiosks.hotFor(k),
   });
 });
 

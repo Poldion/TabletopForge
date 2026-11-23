@@ -63,3 +63,48 @@ test('ungültige Plattform-Angaben werden verworfen', () => {
   assert.equal(p.os, '');
   assert.equal(p.updates, null);
 });
+
+test('Hitzeschutz: ab 85 °C zu heiß, erst 10 Grad kühler wieder frei', () => {
+  const id = 'pi-hot00001';
+  const beat = (temp, throttle) => kiosks.heartbeat(id, { power: { temp, throttle } });
+  beat(70);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), false);
+  beat(84.9);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), false);
+  beat(85, 0);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), false, 'ein einzelner Ausreißer des Fühlers zählt nicht');
+  beat(82);
+  beat(86);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), false);
+  beat(85.5);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), true, 'zwei Messungen in Folge');
+  assert.equal(kiosks.list().find((k) => k.id === id).hot, true, 'steht auch in der Geräteliste');
+  beat(80);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), true, 'bleibt, bis das Gerät deutlich abgekühlt ist');
+  beat(75);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), false);
+  // Drosselstufe des Geräts wird übernommen und begrenzt
+  beat(95, 2);
+  assert.equal(kiosks.get(id).info.power.throttle, 2);
+  beat(95, 99);
+  assert.equal(kiosks.get(id).info.power.throttle, 3);
+  beat(95, 'x');
+  assert.equal(kiosks.get(id).info.power.throttle, 0);
+  // Meldet sich das Gerät nicht mehr, gilt „zu heiß“ nicht ewig weiter
+  assert.equal(kiosks.hotFor(kiosks.get(id)), true);
+  assert.equal(kiosks.hotFor(kiosks.get(id), Date.now() + 5 * 60_000), false);
+  // ohne Temperatur (ältere Geräte) ändert sich nichts
+  kiosks.heartbeat('pi-hot00002', {});
+  assert.equal(kiosks.hotFor(kiosks.get('pi-hot00002')), false);
+  assert.equal(kiosks.hotFor(null), false);
+});
+
+test('Bildrate des Kiosk-Browsers: 30, 60 oder Vorgabe des Geräts', () => {
+  const id = 'pi-fps00001';
+  kiosks.heartbeat(id, {});
+  const set = (browser) => kiosks.update(id, { desired: { browser } }).desired.browser.fps;
+  assert.equal(set({ fps: 30 }), 30);
+  assert.equal(set({ fps: '60' }), 60);
+  assert.equal(set({ fps: 45 }), 'auto');
+  assert.equal(set({ engine: 'cog' }), 'auto');
+});

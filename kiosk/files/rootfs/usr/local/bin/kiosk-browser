@@ -17,9 +17,10 @@ for i in $(seq 50); do
 done
 
 # Einstellungen vom Kiosk-Agenten (aus kiosk.json → "browser"):
-#   KIOSK_ENGINE=cog|chromium, KIOSK_GPU=on|off, KIOSK_EXTRA_FLAGS="--…"
+#   KIOSK_ENGINE=cog|chromium, KIOSK_GPU=on|off, KIOSK_FPS=30|60 (leer = Vorgabe), KIOSK_EXTRA_FLAGS="--…"
 KIOSK_ENGINE=cog
 KIOSK_GPU=off
+KIOSK_FPS=""
 KIOSK_EXTRA_FLAGS=""
 [ -f /run/kiosk/browser.env ] && . /run/kiosk/browser.env
 command -v cog >/dev/null || KIOSK_ENGINE=chromium
@@ -102,6 +103,10 @@ if [ "$KIOSK_ENGINE" = "cog" ]; then
     # Wichtig für die Bildrate: die Tischansicht schafft auf dem Orange Pi Zero 2W in 720p gut doppelt so viele
     # Bilder pro Sekunde wie in 1080p.
     [ -n "${KIOSK_MODE:-}" ] && export CAGE_MODE="$KIOSK_MODE"
+    # Bildrate: höchstens 30 Bilder pro Sekunde, wenn nichts anderes eingestellt ist (Patch in buildroot/patches/cage).
+    # Der Grafikchip dieser Geräte ist mit 60 voll ausgelastet und wird heiß; mit 30 hat er die halbe Arbeit, und
+    # die belebte Karte läuft durch, statt bei Hitze zu pausieren (Orange Pi Zero 2W: 80–81 statt 83–84 °C).
+    export CAGE_MAX_FPS="${KIOSK_FPS:-30}"
     exec cage -d -- cog --platform=wl "$@"
   fi
   # renderer=gles: Bild per OpenGL ES auf den Bildschirm bringen. „modeset“ (ohne Kopie, ~15 % schneller)
@@ -124,6 +129,8 @@ if [ "$KIOSK_GPU" = "off" ]; then
   GPU_FLAGS="--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization"
 fi
 BROWSER=$(command -v chromium || command -v chromium-browser)
+# Bildrate nur begrenzen, wenn es eingestellt ist
+[ -n "${KIOSK_FPS:-}" ] && export CAGE_MAX_FPS="$KIOSK_FPS"
 # shellcheck disable=SC2086
 exec cage -d -- "$BROWSER" $WRAPPER_OPTS \
   --kiosk \

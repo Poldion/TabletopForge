@@ -28,6 +28,8 @@ function watchKiosk() {
       const res = await fetch(`/api/kiosks/${encodeURIComponent(kioskId)}/display`, { cache: 'no-store' });
       if (!res.ok) return;
       const info = await res.json();
+      // Für die Seite selbst (z.B. Hitzeschutz der Tischanzeige)
+      window.dispatchEvent(new CustomEvent('kiosk-info', { detail: info }));
       // Neu laden bei geänderter Zuweisung, Neuladen-Befehl oder geänderten Monitordaten
       const stamp = `${info.reloadToken}|${JSON.stringify(info.calibration)}`;
       if (token === null) token = stamp;

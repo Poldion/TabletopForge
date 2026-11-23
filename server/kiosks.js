@@ -52,6 +52,7 @@ export function publicView(k) {
     id: k.id,
     name: k.name,
     online: Date.now() - k.lastSeen < ONLINE_MS,
+    hot: hotFor(k),
     lastSeen: k.lastSeen,
     info: k.info,
     display: k.display,
@@ -71,6 +72,17 @@ export function setKeyHash(id, hash) {
   save();
 }
 export const get = (id) => kiosks[id] || null;
+
+// Hitzeschutz der Anzeige: Die Wärme eines Kiosk kommt vor allem vom Grafikchip, der die belebte Karte zeichnet –
+// den Prozessor zu drosseln ändert daran kaum etwas (gemessen am Orange Pi Zero 2W). Ab HOT_AT °C pausiert die
+// Tischanzeige deshalb die Belebung, bis das Gerät um HOT_BACK Grad abgekühlt ist. Nur im Arbeitsspeicher gemerkt.
+// Die Fühler springen einzeln um 2–3 Grad nach oben – erst zwei Messungen in Folge über der Schwelle zählen.
+export const HOT_AT = 85;
+export const HOT_BACK = 10;
+const hot = new Set();
+const hotSeen = new Map();
+/** Ist das Gerät gerade zu heiß für die belebte Karte? Meldet es sich nicht mehr, gilt die letzte Messung nicht weiter. */
+export const hotFor = (k, now = Date.now()) => !!k && hot.has(k.id) && now - k.lastSeen < 3 * 60_000;
 
 /** Heartbeat des Agenten: Gerät anlegen/aktualisieren, ausstehende Änderungen zurückgeben. */
 export function heartbeat(id, body = {}) {
@@ -99,9 +111,19 @@ export function heartbeat(id, body = {}) {
           undervoltage: body.power.undervoltage === true,
           undervoltageSeen: body.power.undervoltageSeen === true,
           temp: Number.isFinite(body.power.temp) ? body.power.temp : null,
+          // Hitzeschutz des Geräts: Stufe, auf die es seinen Prozessor gedrosselt hat (0 = frei)
+          throttle: Number.isInteger(body.power.throttle) ? Math.max(0, Math.min(3, body.power.throttle)) : 0,
         }
       : null,
   };
+  // Zu heiß? Dann pausiert die Tischanzeige ihre Belebung (siehe hotFor). Mit Abstand beim Zurückschalten.
+  const temp = k.info.power?.temp;
+  if (Number.isFinite(temp)) {
+    const seen = temp >= HOT_AT ? (hotSeen.get(id) || 0) + 1 : 0;
+    hotSeen.set(id, seen);
+    if (seen >= 2) hot.add(id);
+    else if (temp <= HOT_AT - HOT_BACK) hot.delete(id);
+  }
   if (Number.isInteger(body.rev)) k.reportedRev = body.rev;
   let ack = null;
   if (body.localChange && body.config) {
@@ -166,6 +188,8 @@ function sanitizeBrowser(b = {}) {
   return {
     engine: b?.engine === 'chromium' ? 'chromium' : 'cog',
     gpu: ['on', 'off'].includes(b?.gpu) ? b.gpu : 'auto',
+    // Obergrenze der Bildrate: 30 schont den Grafikchip (weniger Wärme), „auto“ = Vorgabe des Geräts
+    fps: [30, 60].includes(Number(b?.fps)) ? Number(b.fps) : 'auto',
     flags: String(b?.flags || '')
       .replace(/[^A-Za-z0-9 \-_=,.:/]/g, '')
       .slice(0, 500)

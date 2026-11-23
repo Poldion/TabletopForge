@@ -38,6 +38,8 @@ stronger choice for the table: about 700 MB of memory stay free for maps and eff
 | Graphics | (Buildroot) graphics driver built into the kernel, graphics chip at 400 instead of 300 MHz (`config.txt`), font cache already in the image |
 | Watchdog | (Buildroot) if the system hangs, the Pi restarts by itself after 14 s |
 | Power supply | the agent reports undervoltage and temperature – warning in the game master app at the device |
+| Frame rate | at most 30 frames per second (`CAGE_MAX_FPS`, patch in `buildroot/patches/cage`) – halves the work of the graphics chip; can be set to 60 per device |
+| Heat protection | from 85 °C (warmest sensor) the table display pauses the animation of the map until the device is 10 degrees cooler – the heat comes mostly from the graphics chip; from 90 °C the agent also limits the processor clock, from 94 °C to the minimum (the kernel of the Orange Pi Zero 2W does not throttle on its own and only switches off at 100 °C) |
 | Sign-in | (from kiosk software 1.7) own secret device key in `kiosk.json` (`deviceKey`); if sign-in is set up on the server, a new device shows a QR code for approval once. After that the agent fetches a one-time sign-in for the browser on every start (`/run/kiosk/auth.json`, via the local start page) |
 
 What the device shows (campaign, game table or player display) is stored **only on the server** – nothing has to be
@@ -125,10 +127,15 @@ rendering) and on for Pi 4/5. It can be changed in the game master app (**Kiosk 
 acceleration**) or in `kiosk.json`:
 
 ```json
-"browser": { "engine": "cog", "gpu": "auto", "flags": "" }
+"browser": { "engine": "cog", "gpu": "auto", "fps": "auto", "flags": "" }
 ```
 
 `engine`: `cog` · `chromium`. `gpu`: `auto` · `on` · `off` (with cog: accelerated canvas).
+`fps`: `auto` · `30` · `60` – upper limit of the frame rate on devices whose browser runs in the Wayland kiosk cage
+(Orange Pi, Chromium). As long as something moves, the browser otherwise recomposes the whole picture 60 times per
+second; with 30 the graphics chip has half the work and stays cooler (Orange Pi Zero 2W, table view at 720p: 80–81
+instead of 83–84 °C – the animated map keeps running instead of pausing when hot). `auto` means 30 on the Orange Pi
+and unlimited with Chromium (**Kiosk devices → Settings → Frame rate**).
 `flags` can hold additional switches (`--…`) for the chosen browser.
 
 ## Updates over the network (Buildroot)
