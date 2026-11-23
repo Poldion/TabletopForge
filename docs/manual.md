@@ -172,7 +172,7 @@ lying flat) and a player display, all from one browser.
     from the kiosk image of this version).
     On the Orange Pi the kiosk shows at most 30 frames per second (Kiosk devices → Settings → Frame rate, can be set
     to 60): that halves the work of the graphics chip, and the device stays a few degrees cooler.
-    If a kiosk device gets too hot (from 85 °C), the animation pauses by itself until it has cooled down – the map
+    If a kiosk device gets too hot (from 87 °C), the animation pauses by itself until it has cooled down – the map
     then stands still, everything else keeps running. The kiosk administration shows the temperature and the heat
     protection.
 - **Importing maps with walls:** files in the Universal VTT format (`.dd2vtt`, `.uvtt`, `.df2vtt`), as exported by

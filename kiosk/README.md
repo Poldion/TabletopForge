@@ -39,7 +39,7 @@ Tisch die stärkere Wahl: Im Betrieb sind rund 700 MB Arbeitsspeicher frei für 
 | Watchdog | (Buildroot) hängt das System, startet der Pi nach 14 s von selbst neu |
 | Stromversorgung | der Agent meldet Unterspannung und Temperatur – Warnung im DM-System beim Gerät |
 | Bildrate | höchstens 30 Bilder pro Sekunde (`CAGE_MAX_FPS`, Patch in `buildroot/patches/cage`) – halbiert die Arbeit des Grafikchips; je Gerät auf 60 umstellbar |
-| Hitzeschutz | ab 85 °C (wärmster Fühler) pausiert die Tischanzeige die Belebung der Karte, bis das Gerät 10 Grad kühler ist – die Wärme kommt vor allem vom Grafikchip; ab 90 °C begrenzt der Agent zusätzlich den Prozessortakt, ab 94 °C auf das Minimum (der Kernel des Orange Pi Zero 2W drosselt nicht von selbst und schaltet erst bei 100 °C ab) |
+| Hitzeschutz | ab 87 °C (wärmster Fühler, zwei Messungen in Folge) pausiert die Tischanzeige die Belebung der Karte, bis das Gerät auf 82 °C abgekühlt ist – die Wärme kommt vor allem vom Grafikchip; ab 90 °C begrenzt der Agent zusätzlich den Prozessortakt, ab 94 °C auf das Minimum (der Kernel des Orange Pi Zero 2W drosselt nicht von selbst und schaltet erst bei 100 °C ab) |
 | Anmeldung | (ab Kiosk-Software 1.7) eigener geheimer Geräteschlüssel in `kiosk.json` (`deviceKey`); ist auf dem Server die Anmeldung eingerichtet, zeigt ein neues Gerät einmal einen QR-Code zum Freigeben. Danach holt der Agent nach jedem Start eine Einmal-Anmeldung für den Browser (`/run/kiosk/auth.json`, über die lokale Startseite) |
 
 Was das Gerät anzeigt (Kampagne, Spieltisch oder Spieler-Display), wird **nur auf dem Server**

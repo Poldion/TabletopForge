@@ -3,6 +3,16 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.60.1] – 2026-11-23
+
+### Fixed
+
+- Heat protection for kiosk devices: once triggered, it never released on a device that is already warm when idle –
+  the animated map stayed paused for good. The animation only accounts for a few degrees (Orange Pi Zero 2W in a
+  case: 78–79 °C with the map at rest, 82–83 °C animated at 30 frames per second), so the thresholds now sit closer
+  together: pause from 87 °C, release at 82 °C (before: 85 and 75 °C). The warning in the kiosk administration names
+  the temperature at which the map resumes.
+
 ## [0.60.0] – 2026-11-23
 
 ### Added

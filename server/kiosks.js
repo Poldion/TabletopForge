@@ -53,6 +53,7 @@ export function publicView(k) {
     name: k.name,
     online: Date.now() - k.lastSeen < ONLINE_MS,
     hot: hotFor(k),
+    hotUntil: HOT_AT - HOT_BACK,
     lastSeen: k.lastSeen,
     info: k.info,
     display: k.display,
@@ -77,8 +78,11 @@ export const get = (id) => kiosks[id] || null;
 // den Prozessor zu drosseln ändert daran kaum etwas (gemessen am Orange Pi Zero 2W). Ab HOT_AT °C pausiert die
 // Tischanzeige deshalb die Belebung, bis das Gerät um HOT_BACK Grad abgekühlt ist. Nur im Arbeitsspeicher gemerkt.
 // Die Fühler springen einzeln um 2–3 Grad nach oben – erst zwei Messungen in Folge über der Schwelle zählen.
-export const HOT_AT = 85;
-export const HOT_BACK = 10;
+// Die Schwellen liegen eng beieinander, weil die Belebung nur wenige Grad ausmacht: Ein durchgewärmter Orange Pi
+// Zero 2W im Gehäuse steht mit ruhender Karte bei 78–79 °C, mit belebter (30 Bilder/s) bei 82–83 °C. Eine Freigabe
+// erst 10 Grad unter der Schwelle (wie zuerst) erreichte er nie – die Karte blieb dauerhaft stehen.
+export const HOT_AT = 87;
+export const HOT_BACK = 5;
 const hot = new Set();
 const hotSeen = new Map();
 /** Ist das Gerät gerade zu heiß für die belebte Karte? Meldet es sich nicht mehr, gilt die letzte Messung nicht weiter. */

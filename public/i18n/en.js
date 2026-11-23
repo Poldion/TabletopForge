@@ -2070,7 +2070,7 @@ export default {
   "Stockwerk der Figur – sie ist nur dort zu sehen": "The token's storey – it is only visible there",
   "{name} steht jetzt im Stockwerk „{floor}“": "{name} is now on storey “{floor}”",
   "{length} Figuren stehen jetzt im Stockwerk „{floor}“": "{length} tokens are now on storey “{floor}”",
-  "⚠ {t} °C – Hitzeschutz aktiv: Die belebte Karte pausiert{cpu}, bis das Gerät abgekühlt ist. Für Luft am Gerät sorgen oder die Auflösung senken.": "⚠ {t} °C – heat protection active: the animated map is paused{cpu} until the device has cooled down. Give the device some air or lower the resolution.",
+  "⚠ Hitzeschutz aktiv (jetzt {t} °C): Die belebte Karte pausiert{cpu}, bis das Gerät auf {to} °C abgekühlt ist. Für Luft am Gerät sorgen oder die Auflösung senken.": "⚠ Heat protection active (now {t} °C): the animated map is paused{cpu} until the device has cooled down to {to} °C. Give the device some air or lower the resolution.",
   " und der Prozessor ist gedrosselt": " and the processor is throttled",
   "Automatisch (Orange Pi: 30 Bilder pro Sekunde)": "Automatic (Orange Pi: 30 frames per second)",
   "30 Bilder pro Sekunde (kühler)": "30 frames per second (cooler)",

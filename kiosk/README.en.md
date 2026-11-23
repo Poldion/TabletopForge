@@ -39,7 +39,7 @@ stronger choice for the table: about 700 MB of memory stay free for maps and eff
 | Watchdog | (Buildroot) if the system hangs, the Pi restarts by itself after 14 s |
 | Power supply | the agent reports undervoltage and temperature – warning in the game master app at the device |
 | Frame rate | at most 30 frames per second (`CAGE_MAX_FPS`, patch in `buildroot/patches/cage`) – halves the work of the graphics chip; can be set to 60 per device |
-| Heat protection | from 85 °C (warmest sensor) the table display pauses the animation of the map until the device is 10 degrees cooler – the heat comes mostly from the graphics chip; from 90 °C the agent also limits the processor clock, from 94 °C to the minimum (the kernel of the Orange Pi Zero 2W does not throttle on its own and only switches off at 100 °C) |
+| Heat protection | from 87 °C (warmest sensor, two readings in a row) the table display pauses the animation of the map until the device has cooled down to 82 °C – the heat comes mostly from the graphics chip; from 90 °C the agent also limits the processor clock, from 94 °C to the minimum (the kernel of the Orange Pi Zero 2W does not throttle on its own and only switches off at 100 °C) |
 | Sign-in | (from kiosk software 1.7) own secret device key in `kiosk.json` (`deviceKey`); if sign-in is set up on the server, a new device shows a QR code for approval once. After that the agent fetches a one-time sign-in for the browser on every start (`/run/kiosk/auth.json`, via the local start page) |
 
 What the device shows (campaign, game table or player display) is stored **only on the server** – nothing has to be

@@ -171,7 +171,7 @@ einen digitalen Spieltisch (liegender TV) sowie ein Spieler-Display aus einem Br
     Kiosk-Verwaltung; wirksam ab dem Kiosk-Image mit dieser Version).
     Auf dem Orange Pi zeigt der Kiosk höchstens 30 Bilder pro Sekunde (Kiosk-Geräte → Einstellungen → Bildrate, auf
     60 umstellbar): Das halbiert die Arbeit des Grafikchips, und das Gerät bleibt einige Grad kühler.
-    Wird ein Kiosk-Gerät zu heiß (ab 85 °C), pausiert die Belebung von selbst, bis es abgekühlt ist – die Karte
+    Wird ein Kiosk-Gerät zu heiß (ab 87 °C), pausiert die Belebung von selbst, bis es abgekühlt ist – die Karte
     steht dann still, alles andere läuft weiter. Die Kiosk-Verwaltung zeigt die Temperatur und den Hitzeschutz an.
 - **Karten mit Wänden einlesen:** Dateien im Universal-VTT-Format (`.dd2vtt`, `.uvtt`, `.df2vtt`), wie sie viele
   Kartenzeichner und Kartenpakete mitbringen, lassen sich bei „Neue Karte“ wie ein Bild hochladen. Das Kartenbild wird

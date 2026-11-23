@@ -64,25 +64,27 @@ test('ungültige Plattform-Angaben werden verworfen', () => {
   assert.equal(p.updates, null);
 });
 
-test('Hitzeschutz: ab 85 °C zu heiß, erst 10 Grad kühler wieder frei', () => {
+test('Hitzeschutz: ab 87 °C zu heiß, 5 Grad kühler wieder frei', () => {
   const id = 'pi-hot00001';
   const beat = (temp, throttle) => kiosks.heartbeat(id, { power: { temp, throttle } });
   beat(70);
   assert.equal(kiosks.hotFor(kiosks.get(id)), false);
-  beat(84.9);
+  beat(86.9);
+  beat(86.9);
   assert.equal(kiosks.hotFor(kiosks.get(id)), false);
-  beat(85, 0);
+  beat(87, 0);
   assert.equal(kiosks.hotFor(kiosks.get(id)), false, 'ein einzelner Ausreißer des Fühlers zählt nicht');
-  beat(82);
-  beat(86);
+  beat(84);
+  beat(88);
   assert.equal(kiosks.hotFor(kiosks.get(id)), false);
-  beat(85.5);
+  beat(87.5);
   assert.equal(kiosks.hotFor(kiosks.get(id)), true, 'zwei Messungen in Folge');
   assert.equal(kiosks.list().find((k) => k.id === id).hot, true, 'steht auch in der Geräteliste');
-  beat(80);
-  assert.equal(kiosks.hotFor(kiosks.get(id)), true, 'bleibt, bis das Gerät deutlich abgekühlt ist');
-  beat(75);
-  assert.equal(kiosks.hotFor(kiosks.get(id)), false);
+  beat(83);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), true, 'bleibt, bis das Gerät abgekühlt ist');
+  assert.equal(kiosks.list().find((k) => k.id === id).hotUntil, 82);
+  beat(82);
+  assert.equal(kiosks.hotFor(kiosks.get(id)), false, 'mit ruhender Karte steht ein warmes Gerät bei 78–79 °C – das muss reichen');
   // Drosselstufe des Geräts wird übernommen und begrenzt
   beat(95, 2);
   assert.equal(kiosks.get(id).info.power.throttle, 2);

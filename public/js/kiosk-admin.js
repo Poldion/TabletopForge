@@ -253,7 +253,7 @@ export function createKioskAdmin(sync, cid) {
         h(
           'div.small',
           { style: { color: '#e05050', margin: '4px 0' } },
-          tr('⚠ {t} °C – Hitzeschutz aktiv: Die belebte Karte pausiert{cpu}, bis das Gerät abgekühlt ist. Für Luft am Gerät sorgen oder die Auflösung senken.', { t: Math.round(p.temp), cpu: p.throttle > 0 ? tr(' und der Prozessor ist gedrosselt') : '' }),
+          tr('⚠ Hitzeschutz aktiv (jetzt {t} °C): Die belebte Karte pausiert{cpu}, bis das Gerät auf {to} °C abgekühlt ist. Für Luft am Gerät sorgen oder die Auflösung senken.', { t: Math.round(p.temp), to: k.hotUntil, cpu: p.throttle > 0 ? tr(' und der Prozessor ist gedrosselt') : '' }),
         ),
       );
     }
