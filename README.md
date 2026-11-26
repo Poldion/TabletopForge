@@ -85,8 +85,8 @@ is not enabled there does not appear anywhere.
 
 - **[OllamaProxy](https://github.com/Poldion/OllamaProxy)** (or any OpenAI-compatible API): **AI** button on notes,
   lore and creatures, plus random encounters with scene, enemies, tactics and loot.
-- **[ImageGen](https://github.com/Poldion/ImageGen)**: tokens and portraits (including "token from image"), battle
-  maps, location maps, scene pictures and handouts – generated in the background and stored right in the campaign.
+- **[ImageGen](https://github.com/Poldion/ImageGen)**: tokens and portraits (including "token from image"), scene
+  pictures and handouts – generated in the background and stored right in the campaign.
 - **[BasaltNotes](https://github.com/Poldion/BasaltNotes)**: import player characters with background and pictures
   from one vault per campaign; session notes go back into the vault's inbox. A rulebook vault adds a **Rules** tab with
   search and AI answers from BasaltNotes' chat.

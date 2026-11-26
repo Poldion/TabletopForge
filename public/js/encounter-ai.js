@@ -1,6 +1,6 @@
 // Zufallsbegegnung mit KI: Das Sprachmodell entwirft Szene, Gegner (SRD), NSCs, Taktik und Beute; die Gegner
 // kommen aus der Kartei oder der Monster-Datenbank, ihre Anzahl wird nach den 5e-Regeln auf die Gruppe und die
-// gewünschte Schwierigkeit gebracht (encounter.js). Optional entstehen dazu ein Szenenbild und eine Battlemap.
+// gewünschte Schwierigkeit gebracht (encounter.js). Optional entsteht dazu ein Szenenbild.
 import { h, fill, uid, api, toast, markdown } from './util.js';
 import { icon } from './icons.js';
 import { tr, lang, LANGUAGES } from './i18n.js';
@@ -8,7 +8,6 @@ import { ai, generateImage } from './ai.js';
 import { DIFFICULTIES, balance, crRange, parseCr, crToXp } from './encounter.js';
 import { fromOpen5e, newCreature } from './statblock.js';
 import { germanName, crLabel } from './monster-names-de.js';
-import { newMap } from './components.js';
 import { scope } from './scope-ui.js';
 import { membershipOp } from '../../shared/scope.js';
 
@@ -108,8 +107,7 @@ async function draft(st, { place, type, target, levels, wishes }) {
     `"tactics": how the opponents behave and fight (${language}),`,
     `"twist": an optional complication (${language}),`,
     `"loot": treasure or reward fitting the party level (${language}),`,
-    '"scenePrompt": English prompt for a painted illustration of the scene, without text,',
-    '"mapPrompt": English description of a top-down battle map of the location (layout, terrain, furniture), without creatures.',
+    '"scenePrompt": English prompt for a painted illustration of the scene, without text.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -141,8 +139,7 @@ export function openRandomEncounter(sync, onCreated) {
     ? h('p.small.muted', tr('Gruppe: {n} Charaktere, Stufe {levels} – die Begegnung wird darauf ausgelegt.', { n: levels0.length, levels: [...new Set(levels0)].join('/') }))
     : h('div.row', h('span.small', tr('Gruppe:')), size, h('span.small', tr('Charaktere, Stufe')), level, h('span.small.muted', tr('(trag die Gruppe im Encounter-Planer ein, dann wird sie übernommen)')));
   const scene = h('input', { type: 'checkbox', checked: true });
-  const battlemap = h('input', { type: 'checkbox' });
-  const imageRow = ai.image ? h('div.row', h('label.inline', scene, tr('Szenenbild erzeugen')), h('label.inline', battlemap, tr('Battlemap erzeugen'))) : null;
+  const imageRow = ai.image ? h('div.row', h('label.inline', scene, tr('Szenenbild erzeugen'))) : null;
 
   const status = h('span.small.muted.grow');
   const roll = h('button.primary', { type: 'button' }, icon('d20'), tr(' Würfeln'));
@@ -263,7 +260,7 @@ export function openRandomEncounter(sync, onCreated) {
     dlg.close();
     onCreated?.(encId);
 
-    // Bilder im Hintergrund: Szenenbild zum Zeigen, Battlemap als neue Karte (beides in der aktiven Session)
+    // Szenenbild im Hintergrund erzeugen und in die aktive Session legen
     const cid = sync.campaignId;
     const addToSession = (key, id) => {
       const sid = S().display?.sessionId;
@@ -279,18 +276,6 @@ export function openRandomEncounter(sync, onCreated) {
           toast(tr('Szenenbild für „{name}“ ist fertig', { name }), 4000);
         })
         .catch((err) => toast(tr('Szenenbild: {message}', { message: err.message }), 5000));
-    }
-    if (ai.image && battlemap.checked && d.mapPrompt) {
-      toast(tr('Battlemap wird erzeugt …'), 3000);
-      generateImage({ cid, purpose: 'map', prompt: String(d.mapPrompt), name: tr('{name} – Karte', { name }) })
-        .then((a) => {
-          const m = { ...newMap(a, 'battle'), name };
-          sync.set(['maps', m.id], m);
-          if (S().encounters?.[encId]) sync.set(['encounters', encId, 'mapId'], m.id);
-          addToSession('mapIds', m.id);
-          toast(tr('Battlemap für „{name}“ ist fertig', { name }), 4000);
-        })
-        .catch((err) => toast(tr('Battlemap: {message}', { message: err.message }), 5000));
     }
   }
 

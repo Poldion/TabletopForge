@@ -4,6 +4,10 @@
 import { rng, inRoom, inRects } from './mb-geom.js';
 
 const WALL = 9; // halbe Wandstärke plus etwas Luft
+/** Wandstücke mit Platz dahinter (in Pixeln): hinter dem Tresen steht der Wirt. */
+const BEHIND = { bar: 70 };
+/** Niedrige Wandstücke, die auch unter einem Fenster stehen dürfen. */
+const LOW = new Set(['bar', 'bed', 'bench', 'chest', 'desk', 'bedroll', 'pew', 'sarcophagus', 'coffin', 'candles', 'logs', 'hay', 'armchair', 'bathtub', 'workbench', 'mineCart', 'cannon', 'bollard', 'lever', 'chains']);
 
 /**
  * Regeln: [Gegenstand, Stück je 10 Felder Raumfläche, { min, max, fix (genau eins), with: [Begleiter, Anzahl] }].
@@ -67,7 +71,32 @@ export const THEMES = {
   },
 };
 
-const count = (per10, o, area, density) => (o.fix ? o.fix : Math.max(o.min || 0, Math.min(o.max ?? 99, Math.round((per10 * area * density) / 10))));
+/**
+ * Wohin ein Gegenstand gehört – unabhängig davon, was ein Sprachmodell dazu meint. Erster Eintrag = Standard, die
+ * übrigen sind ebenfalls erlaubt ('seat' = nur als Sitz an einem Tisch). Was hier fehlt, darf frei gewählt werden.
+ */
+const P = (s, ids) => Object.fromEntries(ids.split(' ').map((t) => [t, s.split('|')]));
+export const PLACE = {
+  ...P('wall', 'bar fireplace stove shelf bookshelf bed wardrobe weaponRack workbench bunk chains cellBars wallTorch lever throne bench'),
+  ...P('wall|corner', 'barrelRack candelabra urns chest mineCart cannon bollard'),
+  ...P('wall|center', 'desk sarcophagus altar portal'),
+  ...P('wall|corner|center', 'crateStack statue'),
+  ...P('corner', 'barrel crate sack amphorae baskets clothBolts ropeCoil skulls web candles anchor'),
+  ...P('corner|wall', 'logs hay armchair bathtub bedroll'),
+  ...P('corner|center', 'rubble treasure crystal cage stalagmite pillarBroken'),
+  ...P('corner|rug', 'bones'),
+  ...P('center', 'tableRound tableBig longTable tableSquare kitchenTable mapTable pillar rack fountain pew anvil mast'),
+  ...P('center|wall', 'alchemyTable cauldron coffin'),
+  ...P('center|wall|corner', 'lectern'),
+  ...P('center|corner', 'torch lantern'),
+  ...P('rug', 'rug rugRound magicCircle glyph puddle trapdoor pit plate spiral crack spikes hatch'),
+  ...P('rug|corner', 'net'),
+  ...P('seat', 'stool chair'),
+};
+/** Sitze, die ein Tisch bekommt, wenn die KI keine nennt. */
+export const TABLE_SEATS = { tableRound: ['stool', 4], tableBig: ['chair', 5], tableSquare: ['chair', 2], longTable: ['bench', 2], desk: ['chair', 1] };
+
+const count = (per10, o, area, density) =>(o.fix ? o.fix : Math.max(o.min || 0, Math.min(o.max ?? 99, Math.round((per10 * area * density) / 10))));
 
 /**
  * Einrichtung eines Raums erzeugen. room: Rechteck { x, y, w, h } oder Kreis { cx, cy, r }; ctx:
@@ -91,6 +120,15 @@ export function furnish(room, themeKey, seed, ctx) {
   const cy = circle ? room.cy : room.y + room.h / 2;
   const out = [];
   const placed = [...(ctx.taken || [])];
+  // Eigene Listen (von der KI) nennen feste Stückzahlen ohne Blick auf die Raumgröße: höchstens etwa ein Stück je
+  // zwei Felder, sonst wird alles anteilig weniger (jedes genannte Stück bleibt mindestens einmal dabei)
+  let scale = 1;
+  if (theme.custom) {
+    const sum = ['wall', 'corner', 'center'].reduce((s, k) => s + (theme[k] || []).reduce((a, r) => a + (r[2]?.fix || 0), 0), 0);
+    const cap = Math.max(4, Math.round(area * 0.45));
+    if (sum > cap) scale = cap / sum;
+  }
+  const many = (per10, o) => (scale < 1 && o.fix ? Math.max(1, Math.round(o.fix * scale)) : count(per10, o, area, density));
   const corners = (x, y, w, h, rot) => {
     const a = (rot * Math.PI) / 180;
     return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([p, q]) => [x + ((p * w) / 2) * Math.cos(a) - ((q * h) / 2) * Math.sin(a), y + ((p * w) / 2) * Math.sin(a) + ((q * h) / 2) * Math.cos(a)]);
@@ -124,15 +162,28 @@ export function furnish(room, themeKey, seed, ctx) {
     if (solid) placed.push({ x, y, hw: w / 2 + 4, hh: h / 2 + 4, rot });
   };
   /** Begleiter (Hocker, Stühle, Bänke) um ein Stück herum. */
-  const around = (t, n, x, y, w, h, rot) => {
+  const around = (t, n, x, y, w, h, rot, parentT) => {
     if (!known(t)) return;
     const [cw, ch] = ctx.size(t);
     // Hocker rücken dicht an ihren Tisch: der zählt für sie nicht als Hindernis
     const parent = placed.pop();
     try {
-      seat(t, n, x, y, w, h, rot, cw, ch);
+      if (parentT === 'bar') row(t, n, x, y, w, h, rot, cw, ch);
+      else seat(t, n, x, y, w, h, rot, cw, ch);
     } finally {
       placed.push(parent);
+    }
+  };
+  /** Hocker in einer Reihe vor einem Stück (Tresen): vorn ist im Bild unten, also zum Raum hin. */
+  const row = (t, n, x, y, w, h, rot, cw, ch) => {
+    const a = (rot * Math.PI) / 180;
+    const k = Math.min(n, Math.max(1, Math.floor((w - 20) / (cw + 14))));
+    for (let i = 0; i < k; i++) {
+      const u = (i - (k - 1) / 2) * ((w - 20) / k);
+      const v = h / 2 + ch / 2 + 6;
+      const sx = x + u * Math.cos(a) - v * Math.sin(a);
+      const sy = y + u * Math.sin(a) + v * Math.cos(a);
+      if (fits(sx, sy, cw, ch, rot)) put(t, sx, sy, rot, cw, ch);
     }
   };
   const seat = (t, n, x, y, w, h, rot, cw, ch) => {
@@ -158,6 +209,7 @@ export function furnish(room, themeKey, seed, ctx) {
   };
 
   let rugAt = null; // der erste Tisch kommt mitten auf den Teppich
+  const rugs = []; // Teppichflächen: der Tresen steht nicht darauf
   // 1. Teppiche und Flaches: in die Mitte, zählt nicht als Hindernis
   for (const [t, per10, o = {}] of theme.rug || []) {
     if (!known(t)) continue;
@@ -168,17 +220,28 @@ export function furnish(room, themeKey, seed, ctx) {
       const rot = circle || room.w >= room.h ? 0 : 90;
       if (!fits(x, y, w, h, rot, false)) continue;
       put(t, x, y, rot, w, h, false);
-      rugAt = [x, y];
+      // auf Teppiche kommt ein Tisch, auf Treppen, Falltüren oder Glyphen nichts
+      if (/^rug/.test(t)) (rugAt = [x, y]), rugs.push({ x, y, hw: w / 2, hh: h / 2, rot });
     }
   }
 
-  // 2. Wandstücke: Rücken zur Wand, nur wo wirklich Wand steht; feste Stücke zuerst und bevorzugt an die längste Wand
-  const wallSpot = (w, h, prefer) => {
-    for (let tries = 0; tries < 60; tries++) {
+  // 2. Wandstücke: Rücken zur Wand, nur wo wirklich Wand steht; feste Stücke zuerst und bevorzugt an die längste Wand.
+  // Aus mehreren passenden Stellen gewinnt die, die am weitesten von allem steht, was schon da ist – so verteilen sich
+  // die Stücke über alle Wände, statt sich an einer zu drängen. Hohe Stücke (Regal, Schrank, Kamin) bleiben aus den
+  // Fenstern; niedrige (Bett, Bank, Truhe) dürfen darunter stehen.
+  const windows = (ctx.openings || []).filter((o) => o.k === 'window');
+  const spread = (x, y) => placed.reduce((m, q) => Math.min(m, Math.hypot(q.x - x, q.y - y) - Math.max(q.hw, q.hh)), 1e9);
+  const wallSpot = (t, w, h, prefer) => {
+    const gap = BEHIND[t] || 0;
+    // der Tresen steht auf der Seite zur Küche (ctx.toward), sonst bevorzugt an einer langen Wand
+    const toward = t === 'bar' ? ctx.toward : null;
+    const found = [];
+    for (let tries = 0; tries < (toward ? 160 : 90) && found.length < (toward ? 40 : 10); tries++) {
       let wx;
       let wy;
       let nx;
       let ny;
+      let side = -1;
       if (circle) {
         const a = rnd(0, 6.283);
         [nx, ny] = [-Math.cos(a), -Math.sin(a)];
@@ -186,29 +249,41 @@ export function furnish(room, themeKey, seed, ctx) {
       } else {
         // Seiten: 0 oben, 1 rechts, 2 unten, 3 links
         const long = room.w >= room.h ? [0, 2] : [1, 3];
-        const side = prefer && tries < 24 ? long[tries % 2] : Math.floor(R() * 4);
+        side = prefer && tries < 30 ? long[tries % 2] : Math.floor(R() * 4);
         const len = side % 2 ? room.h : room.w;
         if (len < w + 30) continue;
         const u = rnd(w / 2 + 14, len - w / 2 - 14);
         [wx, wy, nx, ny] = side === 0 ? [room.x + u, room.y, 0, 1] : side === 1 ? [room.x + room.w, room.y + u, -1, 0] : side === 2 ? [room.x + u, room.y + room.h, 0, -1] : [room.x, room.y + u, 1, 0];
       }
       if (!isWall(wx, wy)) continue;
-      const x = wx + nx * (WALL + h / 2);
-      const y = wy + ny * (WALL + h / 2);
+      if (!LOW.has(t) && windows.some((q) => Math.hypot(q.x - wx, q.y - wy) < w / 2 + (q.w || 56) / 2 + 6)) continue;
+      const x = wx + nx * (WALL + gap + h / 2);
+      const y = wy + ny * (WALL + gap + h / 2);
       const rot = (Math.atan2(nx, -ny) * 180) / Math.PI + 180;
-      if (fits(x, y, w, h, rot)) return [x, y, rot];
+      if (!fits(x, y, w, h, rot)) continue;
+      // der Gang dahinter muss frei sein (kein Stück, keine Tür)
+      if (gap && !fits(wx + nx * (WALL + gap / 2), wy + ny * (WALL + gap / 2), w, gap - 4, rot)) continue;
+      if (gap && rugs.length && [[x, y], ...corners(x, y, w, h, rot)].some(([px, py]) => inRects(rugs, px, py))) continue;
+      const long = !circle && (room.w >= room.h ? side % 2 === 0 : side % 2 === 1);
+      const near = toward ? 2000 - Math.min(2000, Math.hypot(toward[0] - wx, toward[1] - wy)) : 0;
+      found.push({ at: [x, y, rot, wx + nx * (WALL + gap / 2), wy + ny * (WALL + gap / 2), gap], score: Math.min(spread(x, y), 600) + (prefer && long && !toward ? 1000 : 0) + near * 2 });
     }
-    return null;
+    if (!found.length) return null;
+    return found.sort((a, b) => b.score - a.score)[0].at;
   };
-  const walls = [...(theme.wall || [])].sort((a, b) => (b[2]?.fix || 0) - (a[2]?.fix || 0));
+  // feste Stücke zuerst, unter ihnen die breitesten (Tresen vor Bänken) – sonst ist die lange Wand schon belegt
+  const fixed = (r) => (theme.custom ? 1 : r[2]?.fix ? 1 : 0);
+  const walls = [...(theme.wall || [])].sort((a, b) => fixed(b) - fixed(a) || (known(b[0]) ? ctx.size(b[0])[0] : 0) - (known(a[0]) ? ctx.size(a[0])[0] : 0));
   for (const [t, per10, o = {}] of walls) {
     if (!known(t)) continue;
     const [w, h] = ctx.size(t);
-    for (let i = 0, n = count(per10, o, area, density); i < n; i++) {
-      const spot = wallSpot(w, h, !!o.fix);
+    for (let i = 0, n = many(per10, o); i < n; i++) {
+      const spot = wallSpot(t, w, h, theme.custom ? w >= 150 : !!o.fix);
       if (!spot) break;
       put(t, spot[0], spot[1], spot[2], w, h);
-      if (o.with) around(o.with[0], o.with[1], spot[0], spot[1], w, h, spot[2]);
+      // den Gang dahinter freihalten
+      if (spot[5]) placed.push({ x: spot[3], y: spot[4], hw: w / 2 + 4, hh: spot[5] / 2, rot: spot[2] });
+      if (o.with) around(o.with[0], o.with[1], spot[0], spot[1], w, h, spot[2], t);
     }
   }
 
@@ -221,13 +296,13 @@ export function furnish(room, themeKey, seed, ctx) {
     // Spinnennetz: gehört genau in eine rechtwinklige Ecke – im Rundraum gibt es keine
     if (t === 'web') {
       if (circle) continue;
-      for (let i = 0, n = Math.min(2, count(per10, o, area, density)); i < n; i++) {
+      for (let i = 0, n = Math.min(2, many(per10, o)); i < n; i++) {
         const [sx, sy] = [[-1, -1], [1, -1], [1, 1], [-1, 1]][Math.floor(R() * 4)];
         put(t, cx + sx * (room.w / 2 - 5 - w / 2), cy + sy * (room.h / 2 - 5 - h / 2), sx < 0 ? (sy < 0 ? 0 : 270) : sy < 0 ? 90 : 180, w, h, false);
       }
       continue;
     }
-    for (let i = 0, n = count(per10, o, area, density); i < n; i++) {
+    for (let i = 0, n = many(per10, o); i < n; i++) {
       for (let tries = 0; tries < 30; tries++) {
         let x;
         let y;
@@ -249,28 +324,87 @@ export function furnish(room, themeKey, seed, ctx) {
     }
   }
 
-  // 4. Mitte: Tische mit Hockern, Truhen, Säulen – mit Abstand zur Wand
+  // 4. Mitte: Tische mit Hockern, Truhen, Säulen – mit Abstand zur Wand. Mehrere gleiche Stücke stehen in Reihen und
+  // Spalten mit Gängen dazwischen (Bankreihen, Tische einer Schankstube, Pritschen), ein einzelnes kommt in die Mitte
+  // oder auf den Teppich; erst was so keinen Platz findet, wird frei verteilt. Alle Stücke einer Art gleich ausgerichtet.
+  const along = circle || room.w >= room.h ? 0 : 90;
   for (const [t, per10, o = {}] of theme.center || []) {
     if (!known(t)) continue;
     const [w, h] = ctx.size(t);
-    for (let i = 0, n = count(per10, o, area, density); i < n; i++) {
-      for (let tries = 0; tries < 40; tries++) {
-        const m = 46 + Math.max(w, h) / 2;
-        let x = circle ? room.cx + rnd(-1, 1) * Math.max(0, room.r - m) * 0.7 : rnd(room.x + m, room.x + room.w - m);
-        let y = circle ? room.cy + rnd(-1, 1) * Math.max(0, room.r - m) * 0.7 : rnd(room.y + m, room.y + room.h - m);
-        if (rugAt && tries === 0) {
-          [x, y] = rugAt;
-          rugAt = null;
+    const n = many(per10, o);
+    const m = 46 + Math.max(w, h) / 2;
+    if (!circle && (room.w < 2 * m || room.h < 2 * m)) continue;
+    // lange Stücke liegen längs im Raum, Bankreihen quer dazu
+    const straight = t === 'pew' || w > h * 1.6;
+    const rot0 = t === 'pew' ? along + 90 : straight ? along : 0;
+    const turn = () => rot0 + (straight ? 0 : Math.round(rnd(-4, 4)));
+    let done = 0;
+    const at = (x, y) => {
+      const rot = turn();
+      if (!fits(x, y, w + 16, h + 16, rot)) return false;
+      put(t, x, y, rot, w, h);
+      if (o.with) around(o.with[0], o.with[1], x, y, w, h, rot);
+      done++;
+      return true;
+    };
+    if (n === 1) {
+      if (rugAt && at(...rugAt)) rugAt = null;
+      else at(cx, cy);
+    } else if (!circle && PLACE[t]?.[0] !== 'seat') {
+      const sw = rot0 % 180 ? h : w;
+      const sh = rot0 % 180 ? w : h;
+      // Platz für die Sitze: Hocker und Stühle rundherum, Bänke nur längs an den beiden langen Seiten
+      const seatSize = o.with && known(o.with[0]) ? ctx.size(o.with[0]) : null;
+      const bench = o.with?.[0] === 'bench';
+      const ext = seatSize ? (bench ? Math.min(...seatSize) : Math.max(...seatSize)) + 8 : 0;
+      const [ex, ey] = bench ? (rot0 % 180 ? [ext, 0] : [0, ext]) : [ext, ext];
+      const gx = sw + 2 * ex + (t === 'pew' ? 34 : 56);
+      const gy = sh + 2 * ey + (t === 'pew' ? 26 : 56);
+      // etwas weiter innen als nötig: an den Wänden stehen schon Tresen, Regale und Betten
+      const g = m + Math.min(40, Math.max(0, (Math.min(room.w, room.h) - 2 * m - sh) / 4));
+      const [x0, x1, y0, y1] = [room.x + g, room.x + room.w - g, room.y + g, room.y + room.h - g];
+      const maxC = Math.max(1, Math.floor((x1 - x0) / gx) + 1);
+      const maxR = Math.max(1, Math.floor((y1 - y0) / gy) + 1);
+      let cols;
+      let rows;
+      if (room.w >= room.h) (cols = Math.min(maxC, n)), (rows = Math.min(maxR, Math.ceil(n / cols)));
+      else (rows = Math.min(maxR, n)), (cols = Math.min(maxC, Math.ceil(n / rows)));
+      // nur ein Raster, in das alle passen – eine halbe Reihe plus Streuner sieht schlechter aus als gleichmäßig verteilt
+      if (cols * rows >= n) {
+        const sx = cols > 1 ? Math.min((x1 - x0) / (cols - 1), gx * 1.3) : 0;
+        const sy = rows > 1 ? Math.min((y1 - y0) / (rows - 1), gy * 1.3) : 0;
+        const spots = [];
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) spots.push([cx + (c - (cols - 1) / 2) * sx, cy + (r - (rows - 1) / 2) * sy]);
+        // bei einer unvollständigen letzten Reihe: die mittleren Plätze zuerst
+        spots.sort((p, q) => Math.abs(p[1] - cy) - Math.abs(q[1] - cy) || Math.abs(p[0] - cx) - Math.abs(q[0] - cx));
+        const mark = out.length;
+        const mk = placed.length;
+        for (const [x, y] of spots) if (done < n) at(x, y);
+        // ging das Raster nicht ganz auf (Tresen, Kamin im Weg), lieber alles gleichmäßig verteilen
+        if (done < n && done < Math.ceil(n * 0.75)) {
+          out.length = mark;
+          placed.length = mk;
+          done = 0;
         }
-        if (!circle && (room.w < 2 * m || room.h < 2 * m)) break;
-        // lange Stücke liegen längs im Raum, Bankreihen quer dazu
-        const along = circle || room.w >= room.h ? 0 : 90;
-        const rot = t === 'pew' ? along + 90 : w > h * 1.6 ? along + (R() < 0.15 ? 90 : 0) : Math.round(rnd(-10, 10));
-        if (!fits(x, y, w + 16, h + 16, rot)) continue;
-        put(t, x, y, rot, w, h);
-        if (o.with) around(o.with[0], o.with[1], x, y, w, h, rot);
-        break;
       }
+    }
+    // gleichmäßig verteilen: unter mehreren freien Stellen die, die am weitesten von allem anderen und von den Wänden
+    // entfernt ist; auf halbe Felder gerastet, damit es ruhig wirkt
+    // liegt ein Teppich, kommt das erste Stück mitten darauf
+    if (done < n && rugAt && at(...rugAt)) rugAt = null;
+    while (done < n) {
+      let best = null;
+      for (let tries = 0; tries < 70; tries++) {
+        let x = circle ? room.cx + rnd(-1, 1) * Math.max(0, room.r - m) * 0.75 : rnd(room.x + m, room.x + room.w - m);
+        let y = circle ? room.cy + rnd(-1, 1) * Math.max(0, room.r - m) * 0.75 : rnd(room.y + m, room.y + room.h - m);
+        if (!circle) (x = room.x + Math.round((x - room.x) / 35) * 35), (y = room.y + Math.round((y - room.y) / 35) * 35);
+        const rot = turn();
+        if (!fits(x, y, w + 16 + (o.with ? 60 : 0), h + 16 + (o.with ? 60 : 0), rot) && !fits(x, y, w + 16, h + 16, rot)) continue;
+        const edge = circle ? room.r - Math.hypot(x - room.cx, y - room.cy) : Math.min(x - room.x, room.x + room.w - x, y - room.y, room.y + room.h - y);
+        const score = Math.min(spread(x, y), edge * 1.6);
+        if (!best || score > best.score) best = { x, y, score };
+      }
+      if (!best || !at(best.x, best.y)) break;
     }
   }
   return out;

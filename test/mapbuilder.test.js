@@ -475,7 +475,15 @@ test('Raum einrichten: Wandstücke an der Wand, nichts vor Türen, nichts ineina
   // der Tresen steht mit dem Rücken an einer Wand
   const bar = a.find((o) => o.t === 'bar');
   const gap = Math.min(bar.y - 140, 630 - bar.y, bar.x - 140, 840 - bar.x);
-  assert.ok(gap > 30 && gap < 55, `Tresen ${gap} px von der Wand`);
+  assert.ok(gap > 100 && gap < 125, `Tresen ${gap} px von der Wand – dahinter ein Feld Platz für den Wirt`);
+  // hinter dem Tresen steht nichts
+  const behind = a.filter((o) => o !== bar && Math.abs(o.x - bar.x) < 150 && Math.hypot(o.x - bar.x, o.y - bar.y) < 130 && Math.min(o.y - 140, 630 - o.y, o.x - 140, 840 - o.x) < gap);
+  assert.deepEqual(behind.map((o) => o.t).filter((t) => t !== 'stool'), [], 'hinter dem Tresen ist frei');
+  // mit Küche rechts: der Tresen steht an der rechten Wand
+  for (const seed of [1, 2, 3]) {
+    const b2 = furnish(room, 'tavern', seed, { ...ctx, toward: [900, 385] }).find((o) => o.t === 'bar');
+    assert.ok(b2.x > 700, `Tresen zur Küche hin (x ${b2.x}, Startwert ${seed})`);
+  }
   // alles im Raum, nichts vor der Tür, kein Stück mit der Mitte in einem anderen
   const solid = a.filter((o) => o.t !== 'rugRound');
   for (const o of solid) {
@@ -713,12 +721,139 @@ test('Bauplan → Szene: Räume im Raster, Trennwand und Tür zwischen Nachbarn,
   assert.equal(scene.water.length, 1);
   assert.equal(scene.paths.length, 1);
   // Häuser nur auf Übersichtskarten
-  assert.deepEqual(scene.fills.map((f) => f.kind), ['trees']);
+  assert.deepEqual(scene.fills.filter((f) => !f.edge).map((f) => f.kind), ['trees']);
   assert.deepEqual(scene.objects.map((q) => q.t), ['well', 'tree']);
   assert.equal(scene.labels.length, 1);
   // Unsinn stört nicht
   assert.equal(planToScene(null, o).scene.rooms.length, 0);
   assert.equal(planToScene({ rooms: 'x', doors: [null, 3], cols: 'breit', biome: 'mond' }, o).scene.biome, 'meadow');
+});
+
+test('KI-Einrichtung: Stellplatz nach Gegenstand, Sitze an Tische, Menge nach Raumgröße', async () => {
+  const { themeFromPlan } = await import('../public/js/mb-plan.js');
+  const { furnish } = await import('../public/js/mb-themes.js');
+  const def = themeFromPlan([
+    { t: 'barrel', n: 3, at: 'center' }, // Fässer gehören in die Ecke, auch wenn die KI „Mitte“ sagt
+    { t: 'shelf', n: 2 }, // ohne Angabe: an die Wand
+    { t: 'chest', n: 1, at: 'wall' }, // passt beides – der Wunsch zählt
+    { t: 'rug', n: 1, at: 'center' },
+    { t: 'tableRound', n: 2 }, // bekommt die einzeln genannten Hocker
+    { t: 'stool', n: 6 },
+    { t: 'tableSquare', n: 1 }, // ohne Sitze: die üblichen Stühle
+    { t: 'barrel', n: 2, at: 'corner' }, // gleiche Stücke werden zusammengefasst
+  ]);
+  assert.equal(def.custom, true);
+  assert.deepEqual(def.corner, [['barrel', 0, { fix: 5 }]]);
+  assert.deepEqual(def.wall.map((e) => e[0]), ['shelf', 'chest']);
+  assert.deepEqual(def.rug.map((e) => e[0]), ['rug']);
+  assert.deepEqual(def.center.map((e) => [e[0], e[2].with]), [['tableRound', ['stool', 3]], ['tableSquare', ['chair', 2]]]);
+  // nur Hocker, kein Tisch: nichts Verwertbares
+  assert.equal(themeFromPlan([{ t: 'stool', n: 4 }]), null);
+  // zu viel für einen kleinen Raum (4×4 Felder): anteilig weniger, jedes Stück mindestens einmal
+  const room = { id: 'r', k: 'rect', x: 0, y: 0, w: 280, h: 280 };
+  const big = themeFromPlan([{ t: 'crate', n: 12 }, { t: 'sack', n: 12 }, { t: 'shelf', n: 6 }, { t: 'anvil', n: 1 }]);
+  const made = furnish(room, big, 3, { size: () => [40, 40] });
+  assert.ok(made.length <= 8, `${made.length} Stücke in 16 Feldern`);
+  assert.ok(made.some((o) => o.t === 'anvil'));
+});
+
+test('Raum einrichten: gleiche Stücke in der Mitte stehen in Reihen und gleich ausgerichtet', async () => {
+  const { furnish } = await import('../public/js/mb-themes.js');
+  const room = { id: 'r', k: 'rect', x: 0, y: 0, w: 840, h: 560 };
+  const SIZE = { pew: [150, 34], altar: [120, 60], lectern: [40, 40] };
+  for (let seed = 1; seed <= 5; seed++) {
+    const pews = furnish(room, 'chapel', seed, { size: (t) => SIZE[t] || [50, 50] }).filter((o) => o.t === 'pew');
+    assert.ok(pews.length >= 2);
+    assert.equal(new Set(pews.map((o) => o.rot)).size, 1, 'alle Bänke gleich gedreht');
+    // die Bänke teilen sich wenige Zeilen bzw. Spalten statt kreuz und quer zu liegen
+    assert.ok(new Set(pews.map((o) => o.y)).size <= Math.ceil(pews.length / 2) || new Set(pews.map((o) => o.x)).size <= Math.ceil(pews.length / 2), `Bänke ungeordnet (Startwert ${seed})`);
+  }
+});
+
+test('Bauplan: Gegenstände im Raum gehören zur Einrichtung, Möbel nicht ins Freie, Abstand zur Außenwand', async () => {
+  const { planToScene } = await import('../public/js/mb-plan.js');
+  let n = 0;
+  const o = { known: () => true, indoor: (t) => t !== 'well', floors: ['wood'], themes: ['tavern'], uid: () => `i${++n}`, seed: 1 };
+  const { scene, rooms } = planToScene({
+    cols: 24, rows: 16,
+    rooms: [{ id: 'a', x: 4, y: 4, w: 6, h: 5 }, { id: 'b', x: 14, y: 4, w: 6, h: 5, theme: 'tavern' }],
+    objects: [{ t: 'barrel', x: 6, y: 6 }, { t: 'well', x: 7, y: 7 }, { t: 'crate', x: 16, y: 6 }, { t: 'bed', x: 2, y: 13 }, { t: 'barrel', x: 10.3, y: 6 }],
+  }, o);
+  // Fass in Raum a wird Teil der Einrichtung (Ecke); der Brunnen im Raum fällt weg; Raum b behält sein Thema
+  assert.deepEqual(rooms.map((r) => [r.theme, r.def?.corner?.[0]?.[0] ?? null]), [[null, 'barrel'], ['tavern', null]]);
+  // draußen: kein Bett; das Fass dicht an der Ostwand von a rückt nach außen ab
+  assert.deepEqual(scene.objects.map((q) => q.t), ['barrel']);
+  assert.ok(scene.objects[0].x >= 700 + 40);
+});
+
+test('Bauplan: Räume ohne Überlappung, schmale Lücken geschlossen', async () => {
+  const { tidyRooms } = await import('../public/js/mb-plan.js');
+  const r = tidyRooms([{ id: 'a', x: 4, y: 8, w: 4, h: 4 }, { id: 'b', x: 9, y: 8, w: 4, h: 4 }, { id: 'c', x: 15, y: 1, w: 5, h: 4 }, { id: 'd', x: 16, y: 4, w: 5, h: 6 }], 30, 20);
+  const by = Object.fromEntries(r.map((q) => [q.id, q]));
+  assert.equal(by.a.x + by.a.w, by.b.x, 'Lücke von einem Feld geschlossen');
+  for (let i = 0; i < r.length; i++) {
+    for (let j = i + 1; j < r.length; j++) {
+      const [p, q] = [r[i], r[j]];
+      const ox = Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x);
+      const oy = Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y);
+      assert.ok(ox <= 0 || oy <= 0, `${p.id} und ${q.id} überlappen`);
+    }
+  }
+  assert.ok(by.d.h >= 4, 'die Gruft bleibt brauchbar groß');
+});
+
+test('Bauplan draußen: Fluss bis zum Rand, Brücke quer darüber mit Weg, lose Wege zum Rand, Steinkreis', async () => {
+  const { planToScene } = await import('../public/js/mb-plan.js');
+  let n = 0;
+  const o = { known: () => true, floors: ['wood'], themes: [], uid: () => `i${++n}`, seed: 3 };
+  const { scene } = planToScene({
+    cols: 40, rows: 30,
+    water: [{ points: [[20, 6], [21, 15], [20, 24]], width: 3 }],
+    paths: [{ points: [[30, 15], [26, 17]] }],
+    areas: [{ x: 0, y: 0, w: 6, h: 30, kind: 'trees' }],
+    objects: [{ t: 'bridge', x: 18, y: 12 }, ...[[32, 6], [38, 12], [33, 14], [36, 7], [31, 10]].map(([x, y]) => ({ t: 'runestone', x, y }))],
+  }, o);
+  const w = scene.water[0].pts;
+  assert.ok(Math.min(...w.map((q) => q[1])) < 0 && Math.max(...w.map((q) => q[1])) > 30 * 70, 'der Fluss läuft über beide Ränder');
+  const bridge = scene.objects.find((q) => q.t === 'bridge');
+  const onWater = Math.min(...w.map(([x, y]) => Math.hypot(x - bridge.x, y - bridge.y)));
+  assert.ok(onWater < 40, `Brücke liegt auf dem Wasser (${onWater} px daneben)`);
+  assert.ok(Math.abs(bridge.rot - 90) < 50, `Brücke quer zum Fluss (${bridge.rot})`);
+  // der Fluss schlängelt sich: quer zur Laufrichtung mindestens zwei Felder Spielraum
+  const xs0 = w.filter(([, y]) => y > 0 && y < 30 * 70).map(([x]) => x);
+  assert.ok(Math.max(...xs0) - Math.min(...xs0) > 140, 'Fluss mäandert');
+  assert.equal(scene.paths.length, 2, 'Weg über die Brücke kommt dazu');
+  // jeder Weg endet am Rand oder an einem anderen Weg
+  const across = scene.paths.find((q) => q.pts.some(([x, y]) => Math.hypot(x - bridge.x, y - bridge.y) < 40));
+  const xs = across.pts.map((q) => q[0]);
+  assert.ok(Math.min(...xs) <= 0 && Math.max(...xs) >= 40 * 70, `Weg über die Brücke von Rand zu Rand (${Math.min(...xs)}…${Math.max(...xs)})`);
+  // Steinkreis: alle gleich weit von der Mitte
+  const st = scene.objects.filter((q) => q.t === 'runestone');
+  const cx = st.reduce((a, q) => a + q.x, 0) / st.length;
+  const cy = st.reduce((a, q) => a + q.y, 0) / st.length;
+  const ds = st.map((q) => Math.hypot(q.x - cx, q.y - cy));
+  assert.ok(Math.max(...ds) - Math.min(...ds) < 4, 'Steine auf einem Kreis');
+  // Saum an den drei Rändern ohne Bäume
+  assert.equal(scene.fills.filter((f) => f.edge).length, 3);
+});
+
+test('Bauplan draußen: Bodenzonen, Füllbereiche bringen ihren Boden mit, Sumpf', async () => {
+  const { planToScene } = await import('../public/js/mb-plan.js');
+  let n = 0;
+  const o = { known: () => true, floors: ['wood'], themes: [], uid: () => `i${++n}`, seed: 2 };
+  const { scene } = planToScene({
+    cols: 30, rows: 20,
+    grounds: [{ kind: 'gravel', points: [[22, 2], [23, 18]], width: 8 }, { kind: 'gloom', points: [[25, 10]], width: 10 }, { kind: 'lava', points: [[1, 1]] }],
+    areas: [{ x: 20, y: 4, w: 8, h: 10, kind: 'ruins' }, { x: 2, y: 12, w: 6, h: 5, kind: 'swamp' }],
+  }, o);
+  const kinds = scene.grounds.filter((g) => !g.edge).map((g) => g.g);
+  assert.ok(kinds.includes('gravel') && kinds.includes('gloom'), 'genannte Bodenzonen');
+  assert.ok(!kinds.includes('lava'), 'Unbekanntes fällt weg');
+  assert.ok(kinds.includes('ruin'), 'die Ruine bringt ihren Plattenboden mit');
+  assert.ok(kinds.includes('mud'), 'der Sumpf bringt Morast mit');
+  assert.equal(kinds.filter((k) => k === 'gravel').length, 1, 'Geröll war schon da und kommt nicht doppelt');
+  assert.deepEqual(scene.fills.filter((f) => !f.edge && !f.cover).map((f) => f.kind), ['ruins', 'swamp']);
+  assert.equal(planToScene({ biome: 'swamp', cols: 20, rows: 14 }, o).scene.biome, 'swamp');
 });
 
 test('Bauplan unter der Erde: Gang nach draußen im Dungeon, Kavernen mit Gängen in der Höhle', async () => {

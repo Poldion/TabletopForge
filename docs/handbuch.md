@@ -315,8 +315,9 @@ nicht aktiv ist, erscheint nirgends in der Oberfläche.
   Dienst** mit OpenAI-kompatibler Schnittstelle (`/v1/images/generations`, für „Token aus Bild“ `/v1/images/edits`):
   Adresse (z.B. `https://api.openai.com`), Schlüssel und Modell eintragen. Dort kostet jedes Bild Geld, und die
   Beschreibungen gehen an diesen Dienst. Ergibt **KI-Bild** bei Kreaturen (Token/Porträt,
-  auch „Token aus Bild“ aus dem vorhandenen Porträt), **Karte mit KI erzeugen** bei den Karten und **Bild mit KI
-  erzeugen** bei den Handouts. Der passende Workflow ist vorgewählt (Token, Battlemap, Ortskarte, Illustration).
+  auch „Token aus Bild“ aus dem vorhandenen Porträt) und **Bild mit KI erzeugen** bei den Handouts. Der passende
+  Workflow ist vorgewählt (Token, Illustration). Karten entstehen nicht mehr über den Bildgenerator, sondern im
+  Kartenbauer („Karte selbst bauen“, dort auch mit dem Sprachmodell).
   Erzeugt wird im Hintergrund; fertige Bilder landen als Datei in der Kampagne (mit Workflow und Prompt), auch wenn
   der Dialog vorher geschlossen wird.
 
@@ -325,8 +326,7 @@ Schwierigkeit wählen – die KI entwirft Szene, Vorlesetext, Gegner aus dem SRD
 Taktik, Wendung und Beute. Die Gegner passen immer zur Gruppe: Herausforderungsgrade werden aus Stufe und Größe der
 Gruppe vorgegeben, danach wird die Anzahl nach den Regeln des Spielleiterhandbuchs auf die gewählte Schwierigkeit
 gebracht (bei Bedarf mit verwandten Gegnern, z.B. Hobgoblin zu Goblins; lieber etwas leichter als zu schwer). Mit
-Bildgenerator entstehen dazu im Hintergrund ein Szenenbild und eine Battlemap; beide hängen am Encounter und an der
-aktiven Session, „Auf Karte & in den Kampf“ legt dann die eigene Karte auf den Tisch.
+Bildgenerator entsteht dazu im Hintergrund ein Szenenbild; es hängt am Encounter und an der aktiven Session.
 
 Adressen und Schlüssel liegen in `data/ai.json` auf dem Server; die Oberfläche bekommt die Schlüssel nie zu sehen.
 

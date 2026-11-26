@@ -357,6 +357,305 @@ function drawGround(c, W, H, B, P, seed) {
   c.globalAlpha = 1;
 }
 
+// --- Bodenzonen --------------------------------------------------------------------------------------------------------
+/**
+ * Bodenarten, die sich als Zonen über die Grundfläche legen und weich in sie übergehen: base = Grundtöne (werden mit
+ * dem Boden der Umgebung leicht vermischt, damit es zusammenpasst), detail = was darauf liegt. „gloom“ malt keinen
+ * Boden, sondern dunkelt beim Zusammensetzen alles darin ab (auch Bäume und Gegenstände).
+ */
+export const GROUNDS = {
+  forest: { base: ['#3d5530', '#475f35', '#52683a'], mix: 0.18 },
+  gravel: { base: ['#8d8777', '#978f7e', '#a29a88'], mix: 0.12 },
+  ruin: { base: ['#7e7a6e', '#878274', '#918b7c'], mix: 0.08 },
+  mud: { base: ['#4e4330', '#584b35', '#61533a'], mix: 0.1 },
+  leaves: { base: ['#7d6236', '#8a6c3b', '#967642'], mix: 0.15 },
+  ash: { base: ['#45403b', '#4d4842', '#57514a'], mix: 0.06 },
+  snow: { base: ['#dde5ec', '#e5ecf2', '#edf2f6'], mix: 0.04 },
+  gloom: { overlay: true },
+};
+export const GROUND_KINDS = Object.keys(GROUNDS);
+
+/** Weiche, ausgefranste Maske der Striche einer Bodenart im Ausschnitt box (Kanal Alpha, 0…255). */
+function groundMask(shapes, box, soft = 0.45, smooth = false, blur = 0) {
+  const [bx, by, bw, bh] = box;
+  const mk = canvas(bw, bh);
+  const m = mk.getContext('2d', { willReadFrequently: true });
+  m.translate(-bx, -by);
+  const o = smooth ? { thr: 0.06, edge: soft, warp: 0.12, fine: 0.02 } : { thr: 0.24, edge: soft, warp: 0.6, fine: 0.12 };
+  paintMask(m, box, (q) => blurShapes(q, shapes, 0, blur || (smooth ? 170 : 100)), (v, x, y, out) => ((out[0] = out[1] = out[2] = 255), out), { ...o, ox: (bx * 7) % 400, oy: (by * 3) % 400 });
+  m.setTransform(1, 0, 0, 1, 0, 0);
+  const d = m.getImageData(0, 0, bw, bh).data;
+  const A = new Uint8Array(bw * bh);
+  for (let i = 0; i < A.length; i++) A[i] = d[i * 4 + 3];
+  return { mk, A, at: (x, y) => {
+    const ix = Math.round(x - bx);
+    const iy = Math.round(y - by);
+    return ix < 0 || iy < 0 || ix >= bw || iy >= bh ? 0 : A[iy * bw + ix] / 255;
+  } };
+}
+
+/** Bodenzonen auf das Gelände malen. strokes: scene.grounds ({ g: Art, pts, r } bzw. { sub } zum Radieren). */
+function drawGrounds(c, W, H, B, P, strokes) {
+  const ground = B.ground.map(hx);
+  for (const kind of GROUND_KINDS) {
+    const G = GROUNDS[kind];
+    if (G.overlay) continue;
+    const shapes = strokes.filter((s) => s.sub || s.g === kind);
+    if (!shapes.some((s) => !s.sub)) continue;
+    const box = shapesBox(shapes, 280, W, H);
+    if (!box) continue;
+    const [bx, by, bw, bh] = box;
+    const mask = groundMask(shapes, box, 0.6, false, 140);
+    const base = G.base.map((h) => mix3(hx(h), ground[1], G.mix, [0, 0, 0]));
+    // breiter, weicher Übergang: ein Hauch der Bodenfarbe läuft weit in die Umgebung aus, bevor die eigentliche
+    // Zone mit ihrem ausgefransten Rand beginnt
+    const halo = groundMask(shapes, box, 0.95, true, 300);
+    const haloAt = halo.at;
+    const hc = halo.mk.getContext('2d');
+    hc.globalCompositeOperation = 'source-in';
+    hc.fillStyle = css(mix3(base[1], ground[1], 0.25, [0, 0, 0]));
+    hc.fillRect(0, 0, bw, bh);
+    c.globalAlpha = 0.7;
+    c.drawImage(halo.mk, bx, by);
+    c.globalAlpha = 1;
+    halo.mk.width = halo.mk.height = 0;
+    // Grundfläche: ruhige Tonflecken, dann auf die Maske beschnitten (weicher Rand)
+    const tx = canvas(bw, bh);
+    const t = tx.getContext('2d');
+    t.fillStyle = css(base[1]);
+    t.fillRect(0, 0, bw, bh);
+    for (let i = 0, n = (bw * bh) / 9000; i < n; i++) soft(t, P.rnd(0, bw), P.rnd(0, bh), P.rnd(50, 140), base[P.R() < 0.5 ? 0 : 2].map(Math.round).join(','), P.rnd(0.35, 0.7));
+    t.globalCompositeOperation = 'destination-in';
+    t.drawImage(mask.mk, 0, 0);
+    c.drawImage(tx, bx, by);
+    tx.width = tx.height = mask.mk.width = mask.mk.height = 0;
+    // Was darauf liegt: dichter, wo die Zone voll ist, zum Rand hin verstreut
+    // Kleinteile werden zum Rand hin seltener und laufen verstreut bis in den Saum hinaus
+    const here = (x, y, pow = 1.4) => P.R() < Math.max(mask.at(x, y), haloAt(x, y) * 0.45) ** pow;
+    const spots = (perPx) => Math.round(bw * bh * perPx);
+    c.save();
+    c.lineCap = c.lineJoin = 'round';
+    if (kind === 'forest') {
+      // Moospolster, dunkle Laubreste, kleine Zweige
+      for (let i = 0, n = spots(1 / 2600); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (here(x, y)) soft(c, x, y, P.rnd(14, 34), P.R() < 0.5 ? '78,104,52' : '44,62,34', P.rnd(0.25, 0.5));
+      }
+      for (let i = 0, n = spots(1 / 700); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y)) continue;
+        if (P.R() < 0.3) {
+          const a = P.rnd(0, 6.283);
+          const l = P.rnd(7, 16);
+          c.strokeStyle = 'rgba(70,50,30,.55)';
+          c.lineWidth = P.rnd(1, 1.8);
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+          c.lineTo(x + Math.cos(a + 0.5) * l * 1.3, y + Math.sin(a + 0.5) * l * 1.3);
+          c.stroke();
+        } else {
+          c.fillStyle = P.pick(['rgba(96,82,44,.5)', 'rgba(40,58,30,.55)', 'rgba(120,104,58,.4)']);
+          c.beginPath();
+          c.ellipse(x, y, P.rnd(1.6, 3.2), P.rnd(1, 2), P.rnd(0, 3.14), 0, 7);
+          c.fill();
+        }
+      }
+    } else if (kind === 'gravel' || kind === 'ash') {
+      // Kiesel und Steine; größere mit Kontur und kleinem Schatten
+      const cols = kind === 'ash' ? ['#5b5650', '#3a3633', '#6a645d', '#2e2b29'] : [rk(B, 'top'), rk(B, 'side'), rk(B, 'cell'), '#7d776a'];
+      for (let i = 0, n = spots(kind === 'ash' ? 1 / 900 : 1 / 260); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y, 1.8)) continue;
+        const big = P.R() < 0.07;
+        const r = big ? P.rnd(6, 11) : P.rnd(1.6, 4.2);
+        const pts = Array.from({ length: 7 }, (_, k) => {
+          const a = (k / 7) * 6.283 + P.rnd(-0.3, 0.3);
+          const rr = r * P.rnd(0.7, 1.15);
+          return [x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.8];
+        });
+        if (big) {
+          c.fillStyle = 'rgba(40,36,30,.28)';
+          poly(c, pts.map(([px, py]) => [px + 2.5, py + 3]));
+          c.fill();
+        }
+        c.fillStyle = P.pick(cols);
+        poly(c, pts);
+        c.fill();
+        if (big || r > 3.2) {
+          c.strokeStyle = 'rgba(42,30,16,.75)';
+          c.lineWidth = big ? 1.4 : 0.9;
+          c.stroke();
+        }
+      }
+      if (kind === 'ash') {
+        // verkohlte Striche und helle Ascheflecken
+        for (let i = 0, n = spots(1 / 1500); i < n; i++) {
+          const x = bx + P.rnd(0, bw);
+          const y = by + P.rnd(0, bh);
+          if (!here(x, y)) continue;
+          if (P.R() < 0.4) soft(c, x, y, P.rnd(12, 30), '150,144,136', P.rnd(0.15, 0.3));
+          else {
+            const a = P.rnd(0, 6.283);
+            const l = P.rnd(10, 26);
+            c.strokeStyle = 'rgba(22,18,16,.6)';
+            c.lineWidth = P.rnd(2, 4);
+            c.beginPath();
+            c.moveTo(x, y);
+            c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+            c.stroke();
+          }
+        }
+      }
+    } else if (kind === 'ruin') {
+      // Zerbrochene Bodenplatten: ein verzogenes Gitter, je Platte eigener Ton und Tuschekontur. Ganze Gruppen fehlen
+      // (dort liegt Geröll), und zum Rand der Zone werden es immer weniger – der Boden darunter schaut durch.
+      const S = 42;
+      const gx0 = Math.floor(bx / S) - 1;
+      const gy0 = Math.floor(by / S) - 1;
+      const nx = Math.ceil(bw / S) + 3;
+      const ny = Math.ceil(bh / S) + 3;
+      const J = (i, j) => {
+        const h1 = (((gx0 + i) * 73856093) ^ ((gy0 + j) * 19349663)) >>> 0;
+        return [(gx0 + i) * S + ((h1 % 1000) / 1000 - 0.5) * S * 0.5, (gy0 + j) * S + (((h1 >>> 10) % 1000) / 1000 - 0.5) * S * 0.5];
+      };
+      const st = hx(rk(B, 'top'));
+      const sd = hx(rk(B, 'side'));
+      const tone = () => css(mix3(sd, st, P.rnd(0.25, 0.85), [0, 0, 0]));
+      // Geröll unter und zwischen den Platten
+      for (let i = 0, n = spots(1 / 500); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y, 1.3)) continue;
+        const r = P.rnd(1.6, 3.8);
+        c.fillStyle = tone();
+        c.beginPath();
+        c.ellipse(x, y, r, r * 0.8, P.rnd(0, 3), 0, 7);
+        c.fill();
+      }
+      for (let j = 0; j < ny - 1; j++) {
+        for (let i = 0; i < nx - 1; i++) {
+          const q = [J(i, j), J(i + 1, j), J(i + 1, j + 1), J(i, j + 1)];
+          const mx = (q[0][0] + q[2][0]) / 2;
+          const my = (q[0][1] + q[2][1]) / 2;
+          const a = mask.at(mx, my);
+          if (a < 0.08) continue;
+          // fehlende Gruppen (Rauschfeld) und ausgedünnter Rand
+          const hole = coarse(mx * 2.2, my * 2.2, 3.7);
+          if (hole < 0.36 || P.R() > a ** 1.6 * 1.1 - 0.12 || P.R() < 0.07) continue;
+          const ins = q.map(([px, py]) => [px + (mx - px) * 0.09, py + (my - py) * 0.09]);
+          // manche Platten nur als Bruchstück: eine Ecke fehlt
+          const piece = P.R() < 0.18 ? [ins[0], ins[1], [(ins[1][0] + ins[2][0]) / 2, (ins[1][1] + ins[2][1]) / 2], [mx, my], ins[3]] : ins;
+          c.fillStyle = 'rgba(30,26,20,.22)';
+          poly(c, piece.map(([px, py]) => [px + 1.5, py + 2]));
+          c.fill();
+          c.fillStyle = tone();
+          poly(c, piece);
+          c.fill();
+          c.strokeStyle = 'rgba(42,30,16,.72)';
+          c.lineWidth = 1.2;
+          c.stroke();
+          if (P.R() < 0.2) {
+            c.strokeStyle = 'rgba(42,30,16,.5)';
+            c.lineWidth = 0.9;
+            c.beginPath();
+            c.moveTo(...piece[0]);
+            c.lineTo(mx + P.rnd(-6, 6), my + P.rnd(-6, 6));
+            c.lineTo(...piece[2]);
+            c.stroke();
+          }
+          if (P.R() < 0.15) soft(c, mx + P.rnd(-10, 10), my + P.rnd(-10, 10), P.rnd(8, 16), '84,104,58', 0.4); // Moos
+        }
+      }
+      const tones = [css(st), css(mix3(sd, st, 0.5, [0, 0, 0]))];
+      // Bruchstücke dazwischen
+      for (let i = 0, n = spots(1 / 1400); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y, 1)) continue;
+        const r = P.rnd(3, 7);
+        const pts = Array.from({ length: 5 }, (_, k) => [x + Math.cos(k * 1.257 + P.rnd(-0.3, 0.3)) * r, y + Math.sin(k * 1.257) * r * 0.8]);
+        c.fillStyle = P.pick(tones);
+        poly(c, pts);
+        c.fill();
+        c.strokeStyle = 'rgba(42,30,16,.7)';
+        c.lineWidth = 1;
+        c.stroke();
+      }
+    } else if (kind === 'mud') {
+      // Nasse Pfützen mit hellem Rand und Glanzstrichen
+      for (let i = 0, n = spots(1 / 9000); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y, 2.2)) continue;
+        const rx = P.rnd(14, 40);
+        const ry = rx * P.rnd(0.45, 0.8);
+        const a = P.rnd(0, 3.14);
+        c.fillStyle = 'rgba(46,52,40,.75)';
+        c.beginPath();
+        c.ellipse(x, y, rx, ry, a, 0, 7);
+        c.fill();
+        c.strokeStyle = 'rgba(150,140,104,.45)';
+        c.lineWidth = 1.4;
+        c.stroke();
+        c.strokeStyle = 'rgba(200,210,190,.35)';
+        c.beginPath();
+        c.ellipse(x - rx * 0.2, y - ry * 0.25, rx * 0.45, ry * 0.3, a, 3.6, 5.2);
+        c.stroke();
+      }
+      for (let i = 0, n = spots(1 / 1200); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y)) continue;
+        c.strokeStyle = P.R() < 0.5 ? 'rgba(170,160,120,.22)' : 'rgba(30,26,18,.35)';
+        c.lineWidth = P.rnd(1.2, 2.4);
+        c.beginPath();
+        c.moveTo(x, y);
+        c.quadraticCurveTo(x + P.rnd(-8, 8), y + P.rnd(-4, 4), x + P.rnd(10, 22), y + P.rnd(-4, 4));
+        c.stroke();
+      }
+    } else if (kind === 'leaves') {
+      for (let i = 0, n = spots(1 / 120); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y)) continue;
+        c.fillStyle = P.pick(['rgba(181,117,47,.85)', 'rgba(201,154,62,.8)', 'rgba(143,90,42,.85)', 'rgba(160,102,44,.8)', 'rgba(110,80,40,.7)']);
+        c.beginPath();
+        c.ellipse(x, y, P.rnd(2.2, 4), P.rnd(1.2, 2), P.rnd(0, 3.14), 0, 7);
+        c.fill();
+      }
+    } else if (kind === 'snow') {
+      for (let i = 0, n = spots(1 / 1800); i < n; i++) {
+        const x = bx + P.rnd(0, bw);
+        const y = by + P.rnd(0, bh);
+        if (!here(x, y)) continue;
+        c.strokeStyle = 'rgba(150,170,190,.25)';
+        c.lineWidth = P.rnd(1.5, 3);
+        c.beginPath();
+        c.moveTo(x, y);
+        c.quadraticCurveTo(x + 10, y - 4, x + P.rnd(18, 34), y + P.rnd(-3, 3));
+        c.stroke();
+      }
+    }
+    c.restore();
+  }
+}
+const ROCK_FALLBACK = { top: '#b6b893', side: '#8b8a6c', cell: '#c6c8a8' };
+const rk = (B, k) => (B.rock || ROCK_FALLBACK)[k] || ROCK_FALLBACK[k];
+
+/** Maske der düsteren Bereiche (oder null). */
+function gloomMask(strokes, W, H) {
+  const shapes = strokes.filter((s) => s.sub || s.g === 'gloom');
+  if (!shapes.some((s) => !s.sub)) return null;
+  const box = shapesBox(shapes, 300, W, H);
+  if (!box) return null;
+  const m = groundMask(shapes, box, 0.95, true, 210);
+  return { img: m.mk, x: box[0], y: box[1] };
+}
+
 /** Festgetretene Erde: weich auslaufend, mit hellem, gelblichem Hof. */
 function drawDirt(c, W, H, B, shapes) {
   if (!shapes.length) return;
@@ -1326,7 +1625,7 @@ export class SceneRenderer {
 
   /** Gelände neu malen, falls sich daran etwas geändert hat. */
   renderTerrain(scene) {
-    const key = JSON.stringify([scene.cols, scene.rows, scene.biome, scene.seed, scene.scale, scene.water, scene.paths, scene.roads, scene.dirt, scene.high, scene.cave, (scene.fills || []).filter((f) => f.kind === 'houses').map((f) => f.shape)]);
+    const key = JSON.stringify([scene.cols, scene.rows, scene.biome, scene.seed, scene.scale, scene.water, scene.paths, scene.roads, scene.dirt, scene.grounds, scene.high, scene.cave, (scene.fills || []).filter((f) => f.kind === 'houses').map((f) => f.shape)]);
     if (this.keys.terrain === key) return;
     this.keys.terrain = key;
     const { W, H } = sceneSize(scene);
@@ -1347,6 +1646,7 @@ export class SceneRenderer {
     const cf = shapeField(scene.cave || [], W, H);
     let caveLoops = contours(cf);
     if (caveLoops.length) caveLoops = drawCave(c, W, H, B, P, cf, caveLoops, shadow);
+    drawGrounds(c, W, H, B, rng((scene.seed | 0) + 21), scene.grounds || []);
     drawYards(c, W, H, B, (scene.fills || []).filter((f) => f.kind === 'houses').map((f) => f.shape));
     drawDirt(c, W, H, B, scene.dirt || []);
     drawPaths(c, W, H, B, P, scene.paths || [], scene.scale === 'overview');
@@ -1507,7 +1807,7 @@ export class SceneRenderer {
       }
     }
     if (keep) keep.width = keep.height = 0;
-    this.terrain = { ground, water, shadow, wf, loops, levels, cf, caveLoops, rf, pf };
+    this.terrain = { ground, water, shadow, wf, loops, levels, cf, caveLoops, rf, pf, gloom: gloomMask(scene.grounds || [], W, H) };
   }
 
   isWater(x, y) {
@@ -1536,7 +1836,12 @@ export class SceneRenderer {
     for (let i = 0; i < 9; i++) {
       const px = foot ? foot[i][0] : i ? x + Math.cos(i * 0.785) * r * k : x;
       const py = foot ? foot[i][1] : i ? y + Math.sin(i * 0.785) * r * k : y;
-      if (this.isWater(px, py) && t !== 'rock') return true;
+      // Seerosen nur aufs Wasser, Schilf darf ins Flachwasser, Felsen ragen heraus – alles andere bleibt an Land
+      if (t === 'lilypads') {
+        if (!this.isWater(px, py)) return true;
+        continue;
+      }
+      if (this.isWater(px, py) && t !== 'rock' && t !== 'reeds') return true;
       // In Dungeon und Höhle ist nur der Höhlenboden frei – der Rest ist massiver Fels
       if (solid && fieldAt(this.terrain.cf, px, py) < 0.5) return true;
       if (fieldAt(this.terrain.pf, px, py) > 0.3 || fieldAt(this.terrain.rf, px, py) > road) return true;
@@ -2092,6 +2397,27 @@ export class SceneRenderer {
       c.save();
       draw(c, o, sp);
       c.restore();
+    }
+    // Düstere Bereiche: alles darin dunkler, kühler und blasser – Boden, Bäume und Gegenstände gleichermaßen
+    const gl = !under && this.terrain.gloom;
+    if (gl) {
+      const t = (this.gloomWork ||= canvas(1, 1));
+      t.width = gl.img.width;
+      t.height = gl.img.height;
+      const g = t.getContext('2d');
+      for (const [op, col, a] of [['multiply', '#6c6874', 0.8], ['saturation', '#808080', 0.4]]) {
+        g.globalCompositeOperation = 'source-over';
+        g.clearRect(0, 0, t.width, t.height);
+        g.drawImage(gl.img, 0, 0);
+        g.globalCompositeOperation = 'source-in';
+        g.fillStyle = col;
+        g.fillRect(0, 0, t.width, t.height);
+        c.globalCompositeOperation = op;
+        c.globalAlpha = a;
+        c.drawImage(t, gl.x, gl.y);
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.globalAlpha = 1;
     }
     return this.out;
   }

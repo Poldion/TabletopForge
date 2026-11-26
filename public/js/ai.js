@@ -97,8 +97,6 @@ export const mergeText = (old, text, mode) => (mode === 'append' && String(old |
 // Welcher Workflow passt zu welchem Zweck (Bild-App: D&D-Arten als „variant“)
 const PURPOSE = {
   token: [/^token$/i, /token/i],
-  map: [/battlemap/i, /karte|map/i],
-  town: [/ortskarte/i, /karte|map/i],
   picture: [/^illustration$/i, /^ort$/i, /d&d|dnd/i],
 };
 
@@ -153,7 +151,7 @@ export async function generateImage({ cid, purpose = 'picture', prompt, name, us
 
 /**
  * Dialog: Bild erzeugen lassen. Das Ergebnis landet als Datei in der Kampagne (Handouts); onDone(asset) bei „Übernehmen“.
- * purpose: 'token' | 'map' | 'town' | 'picture' (wählt den passenden Workflow vor), sourceAssetId: Ausgangsbild für
+ * purpose: 'token' | 'picture' (wählt den passenden Workflow vor), sourceAssetId: Ausgangsbild für
  * Bearbeiten-Workflows (z.B. Token aus vorhandenem Porträt).
  */
 export async function openAiImage({ sync, cid, purpose = 'picture', prompt = '', name = '', sourceAssetId = null, onDone }) {

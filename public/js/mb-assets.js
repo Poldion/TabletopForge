@@ -5,6 +5,7 @@ import { moreAssets } from './mb-assets2.js';
 import { drawnAssets } from './mb-assets3.js';
 import { extraAssets } from './mb-assets4.js';
 import { cityAssets } from './mb-assets5.js';
+import { outdoorAssets } from './mb-assets6.js';
 import { tr } from './i18n.js';
 
 export const INK = '#2a1e10';
@@ -60,6 +61,14 @@ export const BIOMES = {
     rock: { top: '#b0ae96', side: '#84826e', line: '#444236', plateau: '#a6a48c', cell: '#bcbaa2' },
     water: ['#1f5660', '#27686f', '#337c82', '#479498'], foam: '#a8cccc', shoreLine: '#1f3438', shadow: '#a7a49e',
     trees: [['#1f3a1c', '#36522e', '#4a7040', '#5a8a4c'], ['#2e3a1c', '#485731', '#667a3e', '#81934b']],
+  },
+  swamp: {
+    label: tr('Sumpf'), zones: 1.3, strokeAlpha: [0.07, 0.1],
+    ground: ['#4a5f33', '#536839', '#5c6f3d', '#687845'], strokes: ['175,190,120', '28,40,22'], dots: ['#c2be86', '#98a468', '#d6cf9e'],
+    road: '#9a9478', path: '#8a7b56', pathEdge: '#7a6c4c', dirt: '#6a5c3e', sand: '#837d5c', sandShade: '#686448',
+    rock: { top: '#9c9b82', side: '#72705a', line: '#363424', plateau: '#93927a', cell: '#aaa98e' },
+    water: ['#28382a', '#314430', '#3c5034', '#4b603e'], foam: '#8e9a74', shoreLine: '#232616', shadow: '#a3a39b',
+    trees: [['#1c2814', '#354428', '#485a32', '#5a6a3e'], ['#24281a', '#42472c', '#575d38', '#6b7044'], ['#1a2820', '#324638', '#445a48', '#566c58']],
   },
   dungeon: {
     label: tr('Dungeon'), solid: true, tree: 'shroom', strokeDir: 'any', strokeAlpha: [0.07, 0.1], strokeLen: [4, 8], cracks: 0.3, blades: false,
@@ -533,7 +542,7 @@ export const CATALOG = {
 };
 {
   const tools = { svg, svgF, O, T, WD, disc, planks, grain, smoothPath, f1, INK, LIGHT, mulberry };
-  Object.assign(CATALOG, moreAssets(tools), drawnAssets(tools), extraAssets(tools), cityAssets(tools));
+  Object.assign(CATALOG, moreAssets(tools), drawnAssets(tools), extraAssets(tools), cityAssets(tools), outdoorAssets(tools));
 }
 export const CATEGORIES = { furniture: tr('Möbel'), goods: tr('Vorräte'), dungeon: tr('Dungeon'), building: tr('Gebäude'), outdoor: tr('Draußen'), nature: tr('Natur'), ship: tr('Schiff & Hafen') };
 

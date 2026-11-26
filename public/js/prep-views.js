@@ -509,22 +509,6 @@ export function createPrepViews({ sync, cid, go, play, adventure = () => null, s
             icon('pen'),
             tr(' Karte selbst bauen'),
           ),
-          ai.image
-            ? h(
-                'div',
-                { style: { marginTop: '8px' } },
-                aiImageButton(
-                  () => ({
-                    sync,
-                    cid,
-                    purpose: kindSel.value === 'battle' ? 'map' : 'town',
-                    name: tr('KI-Karte'),
-                    onDone: (a) => go(`maps/${createFromAsset(a).id}`),
-                  }),
-                  tr(' Karte mit KI erzeugen'),
-                ),
-              )
-            : null,
           h('div.section-title', tr('Karten')),
           addFromCampaign(sync, 'maps', { label: tr('+ Karte aus der Kampagne hinzufügen …'), onAdded: (id) => go(`maps/${id}`) }),
         ].filter(Boolean));

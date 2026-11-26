@@ -3,6 +3,57 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.61.0] – 2026-11-26
+
+### Added
+
+- **Ground zones in the map builder.** The new terrain brush “Ground” lays forest floor, gravel, ruined paving
+  (broken slabs with gaps and rubble), mud, leaves, ash or snow over the map; each blends into its surroundings with a
+  ragged, soft edge. “Gloomy” darkens and desaturates everything inside, trees and objects included – for cursed or
+  eerie parts of a map.
+- **Swamp.** New environment with murky water and olive ground, and a fill area “Swamp” with gnarled and dead trees,
+  reeds, puddles and lily pads on the water.
+- **Things for outdoor maps:** ruined wall, ruined wall corner, ruined archway, stairs down, toppled statue, roots,
+  deadwood, leaf pile, moss and pebbles; fill areas “Ruin”, “Deadwood” and “Graves”.
+- **The AI builds outdoor battle maps.** Drafts can contain ground zones and the new fill areas; the instructions
+  explain zones with soft transitions, a point of interest, cover every few squares and open ground. Fill areas bring
+  their ground along (a ruin lies on gravel and old paving, a swamp on mud), tree borders get dark forest floor, and
+  paths swing gently instead of running ruler-straight. A gloomy zone the model places on empty ground moves over the
+  eerie point of interest (ruin, graves, stairs down), ruined rooms hold no intact furniture (only stone pieces,
+  rubble and moss), and large stretches of open ground without any cover get small groups of bushes, rocks or deadwood.
+  Ground zones fade out over several squares, with pebbles, leaves and moss scattered into the transition.
+
+### Removed
+
+- **Maps from the image generator.** The button “Generate map with AI” on the maps page and the option “Generate battle
+  map” in the random encounter are gone: the pictures did not work as maps (no grid alignment, no walls, unusable
+  layouts). Maps are made in the map builder, which can also draft them with the language model. Scene pictures,
+  tokens and handouts still come from the image generator.
+
+### Changed
+
+- **Building with AI places furniture more sensibly.** The language model now only chooses what stands in a room and
+  how many pieces; where each piece goes follows fixed rules per item: shelves, beds, bars and fireplaces against a
+  wall, barrels, sacks and crates in the corners, rugs on the floor. Stools and chairs listed on their own move to a
+  table, and tables without seats get the usual ones. Several equal pieces in the middle of a room (tables, pews,
+  crates) stand in rows with aisles and share one orientation; a single piece goes to the middle or onto the rug. The
+  number of pieces is capped by the room size. Objects the model places inside a room become part of that room's
+  furnishing, beds or shelves out in the open are dropped, and loose objects keep some distance from outer walls.
+  Outdoor things (wells, carts) are no longer offered for rooms. Wall pieces spread over all walls instead of
+  crowding one, tall ones (shelves, wardrobes, fireplaces) keep windows free, and the widest go first so a bar still
+  finds its wall. A theme named together with a few extra pieces keeps the theme and adds the pieces.
+- **AI map drafts are tidied before they are built.** Overlapping rooms are trimmed, gaps of one square between rooms
+  are closed so they share a wall, rivers run on to the map edge instead of ending as ponds, bridges snap across the
+  water with a path leading over them, paths end at a door, another path, an object or the map edge (a path that hits
+  an outer wall gets a door there), four or more standing stones form a circle, and map edges without vegetation get
+  a loose border of trees (rocks in the desert). Rivers meander in wide, smooth bends instead of running almost
+  straight; bends never get tighter than the river is wide, and paths ending at the water stop at the bank. A forest the model spreads over the whole map becomes a ring
+  around a clearing, bridges without water nearby are dropped, nothing blocks the space in front of an outer door,
+  and objects placed in the solid rock of a dungeon move into the nearest room.
+- **The bar leaves room for the innkeeper.** It stands one square away from the wall, on the side towards the
+  kitchen where possible, with nothing placed behind it and its bar stools in a row in front. Tables no longer go on
+  top of a staircase, trapdoor or glyph – only onto rugs.
+
 ## [0.60.1] – 2026-11-23
 
 ### Fixed

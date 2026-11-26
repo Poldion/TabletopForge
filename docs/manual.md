@@ -325,8 +325,9 @@ is not active there appears nowhere in the interface.
   `https://api.openai.com`), key and model; each image costs money there and your descriptions are sent to that service.
   Or your own image app (ComfyUI) via its API (`/api/v1/workflows`, `/api/v1/generate`, `/api/v1/jobs`)
   with a key created there (`ig_…`). Adds **AI image** to creatures (token/portrait, also “token from image” from the
-  existing portrait), **create map with AI** to the maps and **create image with AI** to the handouts. The matching
-  workflow is preselected (token, battle map, location map, illustration). Generation runs in the background; finished
+  existing portrait) and **create image with AI** to the handouts. The matching workflow is preselected (token,
+  illustration). Maps are no longer made with the image generator but in the map builder (“Build your own map”, which
+  can also use the language model). Generation runs in the background; finished
   images end up as a file in the campaign (with workflow and prompt), even if the dialog was closed before.
 
 **Random encounter** (Creatures → Encounters, needs the language model): choose location, type (combat, NPCs,
@@ -334,8 +335,7 @@ obstacle) and difficulty – the AI drafts the scene, read-aloud text, enemies f
 index), NPCs, tactics, twist and loot. The enemies always fit the party: challenge ratings are derived from the level
 and size of the party, then the number is brought to the chosen difficulty following the rules of the Dungeon Master's
 Guide (with related enemies if needed, e.g. a hobgoblin to goblins; rather a little easier than too hard). With the
-image generator a scene image and a battle map are created in the background; both are attached to the encounter and
-the active session, and “To the map & into combat” then puts its own map on the table.
+image generator a scene image is created in the background; it is attached to the encounter and the active session.
 
 Addresses and keys are stored in `data/ai.json` on the server; the interface never sees the keys.
 

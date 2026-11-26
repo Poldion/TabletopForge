@@ -85,8 +85,8 @@ ist, erscheint nirgends.
 
 - **[OllamaProxy](https://github.com/Poldion/OllamaProxy)** (oder jede OpenAI-kompatible API): Knopf **KI** an
   Notizen, Lore und Kreaturen sowie Zufallsbegegnungen mit Szene, Gegnern, Taktik und Beute.
-- **[ImageGen](https://github.com/Poldion/ImageGen)**: Tokens und Porträts (auch „Token aus Bild“), Battlemaps,
-  Ortskarten, Szenenbilder und Handouts – im Hintergrund erzeugt und direkt in der Kampagne abgelegt.
+- **[ImageGen](https://github.com/Poldion/ImageGen)**: Tokens und Porträts (auch „Token aus Bild“),
+  Szenenbilder und Handouts – im Hintergrund erzeugt und direkt in der Kampagne abgelegt.
 - **[BasaltNotes](https://github.com/Poldion/BasaltNotes)**: Spielercharaktere mit Hintergrund und Bildern aus einem
   Vault je Kampagne übernehmen; Session-Notizen gehen zurück in den Eingang des Vaults. Ein Regelwerk-Vault bringt einen
   Tab **Regeln** mit Suche und KI-Antworten aus dem Chat von BasaltNotes.

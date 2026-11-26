@@ -45,9 +45,9 @@ export async function aiFurniture(description, size) {
     'Choose fitting pieces from this catalogue (use the identifier before the bracket, nothing else):',
     indoor(),
     '',
-    'Answer with a JSON object: {"furniture": [{"t": identifier, "n": how many (1-8), "at": "wall" | "corner" | "center" | "floor", "seats": optional identifier of seats placed around it (stool, chair or bench), "seatCount": number of seats}]}',
-    'Rules: "wall" = stands with its back to a wall (shelves, beds, fireplaces, wall torches); "corner" = loose things gathered in corners (barrels, sacks, crates); "center" = free-standing (tables, altars, pillars); "floor" = flat on the floor under other things (rugs, magic circles, puddles).',
-    'Keep it believable for the room size: about one piece per two squares of floor at most, 4 to 12 entries. Include at least one light source if it fits.',
+    'Answer with a JSON object: {"furniture": [{"t": identifier, "n": how many (1-8), "seats": optional identifier of seats placed around a table (stool, chair or bench), "seatCount": seats per table}]}',
+    'You only choose WHAT stands in the room and HOW MANY. Where it stands is decided automatically (shelves and beds against walls, barrels and sacks in corners, tables in the middle with their seats around them) – do not list stools or chairs on their own, give them as "seats" of a table.',
+    `Keep it believable for the room size: at most ${Math.max(4, Math.round(size[0] * size[1] * 0.45))} pieces in total (not counting seats), 3 to 8 entries. Prefer a few pieces that clearly tell what the room is used for over many random ones; leave open floor for miniatures. Include one light source if it fits.`,
   ].join('\n');
   const r = await api('POST', '/api/ai/text', { json: true, system: SYSTEM, messages: [{ role: 'user', content: user }] });
   const list = parseJson(r.text).furniture;
@@ -65,7 +65,7 @@ export async function aiPlan(description, hint = {}) {
     '',
     'JSON keys:',
     `"name": short title (${language}),`,
-    `"biome": one of ${PLAN_BIOMES.join(', ')} (meadow = grassland and ordinary forest – the default above ground; shire = lush green hills; desert; tundra = snow; magic = glowing enchanted forest, only if the description is explicitly magical; town = paved city ground; dungeon = built rooms in solid rock; cave = natural caverns in rock),`,
+    `"biome": one of ${PLAN_BIOMES.join(', ')} (meadow = grassland and ordinary forest – the default above ground; shire = lush green hills; desert; tundra = snow; magic = glowing enchanted forest, only if the description is explicitly magical; swamp = marsh and bog with murky water; town = paved city ground; dungeon = built rooms in solid rock; cave = natural caverns in rock),`,
     '"scale": "battle" (rooms with furniture, the default) or "overview" (a village or town seen from far above: no rooms, only whole buildings as objects, streets and house areas),',
     '"cols", "rows": map size,',
     `"rooms": [{"id": short unique name, "x", "y", "w", "h", "floor": wood | woodDark | woodLight | stone | cobble | earth, "theme": one of ${Object.keys(THEMES).join(', ')} or null, "furniture": own list instead of a theme – only for rooms no theme fits, "round": true for a round tower room, "timber": true for wooden outer walls, "ruin": true for crumbling walls}],`,
@@ -74,11 +74,12 @@ export async function aiPlan(description, hint = {}) {
     '"links": [[idA, idB]] – only for biome cave: tunnels between caverns,',
     '"water": [{"points": [[x, y], ...], "width": squares}] – a river is a line across the map, a pond is one point with a large width,',
     '"paths": [{"points": [[x, y], ...], "kind": "path" | "road"}],',
-    '"areas": [{"x", "y", "w", "h", "kind": trees | bushes | rocks | mixed | houses}] – filled automatically (houses only with scale overview),',
-    '"objects": [{"t": identifier, "x", "y", "rot": degrees}] – single things outdoors,',
+    '"grounds": [{"kind": forest | gravel | ruin | mud | leaves | ash | snow | gloom, "points": [[x, y], ...], "width": squares}] – zones of different ground painted as a broad soft brush along the points (one point = a round patch); they blend softly into the ground around them. forest = dark forest floor under trees, gravel = stony rubble ground, ruin = broken old paving, mud = wet bog, leaves = fallen leaves, ash = burnt ground, snow, gloom = darkens everything inside (an eerie, cursed or shadowy part of the map),',
+    '"areas": [{"x", "y", "w", "h", "kind": trees | bushes | rocks | mixed | swamp | ruins | deadwood | graves | houses}] – filled automatically (swamp = gnarled and dead trees, reeds, puddles; ruins = broken wall pieces, column stumps and rubble; deadwood = dead trees, logs, stumps, roots; graves = gravestones; houses only with scale overview),',
+    '"objects": [{"t": identifier, "x", "y", "rot": degrees}] – single things OUTDOORS only, never inside a room (things inside rooms go into that room\'s "furniture" or come from its "theme"),',
     `"labels": [{"text": name of a place (${language}), "x", "y"}] – at most 4.`,
     '',
-    'Furniture entries look like {"t": identifier, "n": count, "at": "wall" | "corner" | "center" | "floor", "seats": stool | chair | bench, "seatCount": n}. Indoor identifiers:',
+    'Furniture entries look like {"t": identifier, "n": count, "seats": stool | chair | bench, "seatCount": seats per table}. Where a piece stands inside its room is decided automatically – only choose what and how many (about one piece per two squares of floor at most). Indoor identifiers:',
     indoor(),
     '',
     'Identifiers for "objects" outdoors:',
@@ -90,12 +91,15 @@ export async function aiPlan(description, hint = {}) {
     '- Rooms are rectangles at least 3x3 squares, at least 1 square away from the map edge. Rooms of one building must touch along a full edge (no gaps, no overlaps); a wall and a door between them are added where you list a door. Separate buildings keep at least 2 squares distance.',
     '- Every room needs a door. A building needs at least one door to the outside.',
     '- Underground (dungeon): corridors are rooms too, 2 squares wide, touching the rooms they connect. For cave: "rooms" are caverns (no doors, no furniture themes), connect them with "links" and put things in "objects".',
-    '- Water, paths and tree areas stay outside the buildings: keep at least 2 squares between a river and any room. Leave open ground for miniatures.',
+    '- Water, paths and tree areas stay outside the buildings: keep at least 2 squares between a river and any room. Leave open ground for miniatures: tree areas frame the map or form groves, they never cover the whole map.',
+    '- "rooms" are only for buildings with walls. Tents, carts, wells, campfires and market stalls are "objects", not rooms.',
+    '- Outdoor battle maps: build 2 or 3 zones that blend into each other with "grounds" (for example meadow, forest floor along the tree line, gravel and ruin paving around a ruin, gloom laid right over the eerie point of interest itself, never over empty ground). Give the map one or two points of interest (a ruin, a camp, a shrine, a grave site) with fitting objects around them. Spread cover every 3 to 4 squares (trees, rocks, wall pieces, logs, bushes) but keep open ground for fighting. Paths lead from a map edge to the points of interest.',
+    '- An outdoor ruin is ground "ruin" (and "gravel" around it) with objects ruinWall, ruinCorner, ruinArch, pillarBroken, stairsDown, fallenStatue, rubble, or an area "ruins". Use rooms with "ruin": true only for a building whose walls still stand; a ruined room holds no intact furniture (no pews, beds, tables or shelves).',
     '- Prefer a "theme" for ordinary rooms; it keeps the answer short.',
     'Answer with the JSON object only.',
   ].join('\n');
   const r = await api('POST', '/api/ai/text', { json: true, long: true, system: SYSTEM, messages: [{ role: 'user', content: user }] });
   const plan = parseJson(r.text);
-  if (!Array.isArray(plan.rooms) && !Array.isArray(plan.objects) && !Array.isArray(plan.areas)) throw new Error(tr('Die KI hat keine verwertbare Antwort geliefert – bitte noch einmal versuchen.'));
+  if (!Array.isArray(plan.rooms) && !Array.isArray(plan.objects) && !Array.isArray(plan.areas) && !Array.isArray(plan.grounds)) throw new Error(tr('Die KI hat keine verwertbare Antwort geliefert – bitte noch einmal versuchen.'));
   return plan;
 }

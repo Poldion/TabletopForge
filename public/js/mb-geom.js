@@ -5,7 +5,7 @@ export const CELL = 70;
 
 /** Leere Szene: Größe in Feldern, Umgebung, Startwert für alles Zufällige (Wiese, Streuung). */
 export function newScene(cols = 30, rows = 20, biome = 'meadow') {
-  return { v: 1, cols, rows, biome, seed: Math.floor(Math.random() * 1e9), water: [], paths: [], roads: [], dirt: [], high: [], cave: [], rooms: [], walls: [], openings: [], objects: [], fills: [], labels: [] };
+  return { v: 1, cols, rows, biome, seed: Math.floor(Math.random() * 1e9), water: [], paths: [], roads: [], dirt: [], grounds: [], high: [], cave: [], rooms: [], walls: [], openings: [], objects: [], fills: [], labels: [] };
 }
 
 export function mulberry(a) {
@@ -735,7 +735,7 @@ export function zonesFromSegments(segs, W, H, g = 10, cell = CELL, minCells = 0.
 
 // --- Szenen aus Vorlagen und Dateien ------------------------------------------------------------------------------------
 
-const LISTS = ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels'];
+const LISTS = ['water', 'paths', 'roads', 'dirt', 'grounds', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels'];
 /** Was ein Obergeschoss (Eintrag in scene.uppers) enthält – Gelände, Größe und Umgebung gehören dem Erdgeschoss. */
 export const UPPER_LISTS = ['rooms', 'walls', 'openings', 'objects', 'labels'];
 /** Ein Untergeschoss (Eintrag in scene.lowers) liegt im Fels: dazu kommt Höhlenboden für Gänge und Kavernen. */
@@ -839,6 +839,14 @@ export const FILL_KINDS = {
   bushes: [['bush', 90, [0.8, 1.2], 0.55, 1]],
   rocks: [['rock', 90, [0.5, 1.25], 0.9, 1]],
   mixed: [['tree', 200, [0.75, 1.35], 0.36, 1], ['bush', 90, [0.8, 1.2], 0.55, 0.45], ['rock', 90, [0.5, 1.1], 0.9, 0.2]],
+  // Ruine: Mauerreste, Ecken, Säulenstümpfe, Geröll und Steine
+  ruins: [['ruinWall', 210, [0.85, 1.1], 1.1, 0.45], ['ruinCorner', 170, [0.85, 1.05], 1.2, 0.22], ['pillarBroken', 110, [0.9, 1.1], 1.1, 0.25], ['rubble', 100, [0.8, 1.2], 0.9, 0.3], ['pebbles', 70, [0.8, 1.2], 0.8, 0.45]],
+  // Totholz: kahle Bäume, Stämme, Stümpfe, Äste, Wurzeln, Farn
+  deadwood: [['deadTree', 200, [0.6, 1], 0.8, 0.2], ['fallenLog', 170, [0.8, 1.2], 1, 0.3], ['stump', 150, [0.8, 1.3], 1, 0.3], ['deadwood', 180, [0.8, 1.1], 1, 0.3], ['roots', 200, [0.7, 1], 1, 0.25], ['fern', 120, [0.8, 1.3], 0.8, 0.5], ['leafPile', 170, [0.8, 1.2], 1, 0.2]],
+  // Gräber: Grabsteine in lockeren Reihen, dazu Steine und Moos
+  graves: [['gravestone', 90, [0.9, 1.1], 1.1, 1.4], ['pebbles', 70, [0.8, 1.1], 0.8, 0.3], ['mossPatch', 100, [0.7, 1.1], 0.9, 0.25]],
+  // Sumpf: knorrige Bäume, kahle Bäume, Schilf, Pfützen, Seerosen auf dem Wasser
+  swamp: [['tree', 200, [0.6, 1.05], 0.7, 0.16], ['deadTree', 200, [0.6, 0.95], 0.8, 0.12], ['bush', 90, [0.7, 1.1], 0.8, 0.18], ['reeds', 90, [0.7, 1.2], 0.6, 0.7], ['puddle', 130, [0.6, 1.2], 0.9, 0.5], ['lilypads', 110, [0.7, 1.1], 0.8, 0.6]],
 };
 
 /**
@@ -1264,7 +1272,7 @@ export function scatter(fill, cell, blocked = () => false) {
       if (edge < fade && R() > 0.25 + (0.75 * edge) / fade) continue;
       if (blocked(x, y, d * 0.42, t)) continue;
       if (out.some((o) => Math.hypot(o.x - x, o.y - y) < (o.d + d) * (o.t === t ? gap : 0.3))) continue;
-      out.push({ t, x: Math.round(x), y: Math.round(y), s: Math.round(s * 100) / 100, v: Math.floor(R() * 1e6), rot: t === 'rock' ? Math.round(rnd(0, 360)) : 0, d });
+      out.push({ t, x: Math.round(x), y: Math.round(y), s: Math.round(s * 100) / 100, v: Math.floor(R() * 1e6), rot: t === 'tree' || t === 'bush' ? 0 : t === 'gravestone' ? Math.round(rnd(-6, 6) + 360) % 360 : Math.round(rnd(0, 360)), d });
       placed++;
     }
   }

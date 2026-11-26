@@ -13,7 +13,7 @@ import { takeTemplate, takeWish, askWish, downloadScene, uploadScene } from './m
 import { planToScene, themeFromPlan } from './mb-plan.js';
 import { ai } from './ai.js';
 import { floorLabel } from './floors.js';
-import { THEMES, furnish } from './mb-themes.js';
+import { THEMES, PLACE, furnish } from './mb-themes.js';
 
 const HALF = CELL / 2;
 const snap = (v) => Math.round(v / HALF) * HALF;
@@ -22,6 +22,7 @@ const TERRAIN = {
   path: { label: tr('Weg'), color: '197,169,103', r: 18, key: 'paths' },
   road: { label: tr('Straße'), color: '200,190,160', r: 28, key: 'roads' },
   dirt: { label: tr('Erde'), color: '150,118,78', r: 50, key: 'dirt' },
+  ground: { label: tr('Untergrund'), color: '120,120,100', r: 130, key: 'grounds' },
   high: { label: tr('Erhöhung'), color: '182,184,147', r: 70, key: 'high' },
   cave: { label: tr('Höhle'), color: '133,122,98', r: 80, key: 'cave' },
 };
@@ -29,7 +30,9 @@ const TERRAIN = {
 const SCALES = { battle: 1, overview: 0.32 };
 const FLOOR_LABEL = { wood: tr('Dielen'), woodDark: tr('Dielen dunkel'), woodLight: tr('Dielen hell'), stone: tr('Steinplatten'), cobble: tr('Kopfstein'), earth: tr('Erde') };
 const THEME_LABEL = { tavern: tr('Schankraum'), kitchen: tr('Küche'), bedroom: tr('Schlafkammer'), storage: tr('Lager'), smithy: tr('Schmiede'), library: tr('Bibliothek'), chapel: tr('Kapelle'), barracks: tr('Wachstube'), crypt: tr('Gruft'), cell: tr('Kerkerzelle') };
-const FILL_LABEL = { trees: tr('Bäume'), bushes: tr('Büsche'), rocks: tr('Felsen'), mixed: tr('Gemischt'), houses: tr('Häuser') };
+/** Bodenarten des Pinsels „Untergrund“. */
+const GROUND_LABEL = { forest: tr('Waldboden'), gravel: tr('Geröll'), ruin: tr('Ruinenboden'), mud: tr('Morast'), leaves: tr('Laub'), ash: tr('Asche'), snow: tr('Schnee'), gloom: tr('Düster') };
+const FILL_LABEL = { trees: tr('Bäume'), bushes: tr('Büsche'), rocks: tr('Felsen'), mixed: tr('Gemischt'), swamp: tr('Sumpf'), ruins: tr('Ruine'), deadwood: tr('Totholz'), graves: tr('Gräber'), houses: tr('Häuser') };
 const TOOLS = [
   ['select', 'cursor', tr('Auswählen')],
   ['terrain', 'pen', tr('Gelände')],
@@ -228,7 +231,7 @@ export function createBuilderView({ sync, cid, go, play }) {
      * Untergeschoss liegt immer im Fels (Umgebung „Dungeon“, Kampfmaßstab, unbewegt).
      */
     function link() {
-      for (const k of ['water', 'paths', 'roads', 'dirt', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels']) root[k] ||= [];
+      for (const k of ['water', 'paths', 'roads', 'dirt', 'grounds', 'high', 'cave', 'rooms', 'walls', 'openings', 'objects', 'fills', 'labels']) root[k] ||= [];
       // ein einzelnes „upper“ aus einem früheren Stand zählt als erstes Obergeschoss
       if (root.upper && typeof root.upper === 'object') root.uppers = [root.upper, ...(Array.isArray(root.uppers) ? root.uppers : [])];
       delete root.upper;
@@ -250,7 +253,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         fromRoot(low, 'scale', () => undefined);
         fromRoot(low, 'still', () => true);
         fromRoot(low, 'seed', () => ((root.seed | 0) + 7919 * (i + 1)) | 0);
-        for (const k of ['fills', 'water', 'paths', 'roads', 'dirt', 'high']) fixed(low, k, []);
+        for (const k of ['fills', 'water', 'paths', 'roads', 'dirt', 'grounds', 'high']) fixed(low, k, []);
       });
       floor = Math.max(-(root.lowers?.length || 0), Math.min(root.uppers?.length || 0, floor));
       scene = floor > 0 ? root.uppers[floor - 1] : floor < 0 ? root.lowers[-floor - 1] : root;
@@ -323,7 +326,7 @@ export function createBuilderView({ sync, cid, go, play }) {
     }
     /** Verschiebt den gesamten Inhalt der Karte. */
     function shiftScene(dx, dy) {
-      for (const key of ['water', 'paths', 'roads', 'dirt', 'high', 'cave']) for (const st of root[key]) if (st.pts) st.pts = st.pts.map(([x, y]) => [x + dx, y + dy]);
+      for (const key of ['water', 'paths', 'roads', 'dirt', 'grounds', 'high', 'cave']) for (const st of root[key]) if (st.pts) st.pts = st.pts.map(([x, y]) => [x + dx, y + dy]);
       for (const low of root.lowers || []) for (const st of low.cave) if (st.pts) st.pts = st.pts.map(([x, y]) => [x + dx, y + dy]);
       for (const sc of [root, ...(root.uppers || []), ...(root.lowers || [])]) {
         for (const r of sc.rooms) {
@@ -857,7 +860,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       if (tool === 'select') return startSelect(x, y, e);
       if (tool === 'terrain') {
         const def = TERRAIN[opt.terrain];
-        const stroke = { k: 'brush', pts: [[x, y]], r: opt.r, ...(opt.erase || e.altKey ? { sub: true } : {}), ...(opt.terrain === 'high' ? { lvl: opt.lvl } : {}) };
+        const stroke = { k: 'brush', pts: [[x, y]], r: opt.r, ...(opt.erase || e.altKey ? { sub: true } : {}), ...(opt.terrain === 'high' ? { lvl: opt.lvl } : {}), ...(opt.terrain === 'ground' && !(opt.erase || e.altKey) ? { g: opt.ground || 'forest' } : {}) };
         return {
           move: (mx, my) => stroke.pts.push([mx, my]),
           preview: (c) => {
@@ -1226,6 +1229,14 @@ export function createBuilderView({ sync, cid, go, play }) {
      * Raum einrichten. theme: Name eines Themas, 'custom' (eigene Regeltabelle in room.themeDef, z. B. von der KI) oder
      * leer (Einrichtung entfernen). quiet: ohne Meldung und ohne eigenen Schritt im Verlauf.
      */
+    /** Mitte der nächsten Küche im Stockwerk (dorthin rückt der Tresen) oder null. */
+    function kitchenNear(room) {
+      const isKitchen = (r) => r !== room && (r.theme === 'kitchen' || (r.theme === 'custom' && ['wall', 'center'].some((k) => (r.themeDef?.[k] || []).some((e) => e[0] === 'stove'))));
+      const mid = (r) => (r.k === 'circle' ? [r.cx, r.cy] : [r.x + r.w / 2, r.y + r.h / 2]);
+      const [cx, cy] = mid(room);
+      const k = scene.rooms.filter(isKitchen).map(mid).sort((p, q) => Math.hypot(p[0] - cx, p[1] - cy) - Math.hypot(q[0] - cx, q[1] - cy))[0];
+      return k || null;
+    }
     function furnishRoom(room, theme, reroll = true, quiet = false) {
       scene.objects = scene.objects.filter((o) => o.theme !== room.id);
       room.theme = theme || undefined;
@@ -1249,6 +1260,7 @@ export function createBuilderView({ sync, cid, go, play }) {
         walls: scene.walls.map((w) => [w.x1, w.y1, w.x2, w.y2, w.kind === 'rampart' ? 15 : w.kind === 'stone' ? 7 : w.kind === 'palisade' ? 8 : 4]),
         isWall: (x, y) => (nearestWall(outline, scene.walls, x, y)?.d ?? 99) < 6,
         taken,
+        toward: kitchenNear(room),
       });
       for (const o of made) scene.objects.push({ id: uid(), s: 1, ...o, theme: room.id });
       if (quiet) return made.length;
@@ -1258,6 +1270,8 @@ export function createBuilderView({ sync, cid, go, play }) {
     }
 
     // --- Sprachmodell: Räume einrichten, ganze Karten entwerfen ---------------------------------------------------------
+    /** Was die KI in einen Raum stellen darf: Möbel, Waren, Dungeon- und Schiffsteile (kein Brunnen, kein Karren). */
+    const indoorItem = (t) => !!CATALOG[t] && !CATALOG[t].size && (['furniture', 'goods', 'dungeon', 'ship'].includes(CATALOG[t].cat) || !!PLACE[t]);
     let aiBusy = false;
     /** Führt eine Anfrage an das Sprachmodell aus; währenddessen steht in der Statuszeile, was geschieht. */
     async function withAi(label, run) {
@@ -1282,7 +1296,7 @@ export function createBuilderView({ sync, cid, go, play }) {
       if (!wish) return;
       await withAi(tr('Die KI richtet den Raum ein …'), async ({ aiFurniture }) => {
         const size = room.k === 'circle' ? [Math.round((2 * room.r) / CELL), Math.round((2 * room.r) / CELL)] : [Math.round(room.w / CELL), Math.round(room.h / CELL)];
-        const def = themeFromPlan(await aiFurniture(wish, size), (t) => !!CATALOG[t] && !CATALOG[t].size);
+        const def = themeFromPlan(await aiFurniture(wish, size), indoorItem);
         if (!def) throw new Error(tr('Die KI hat nichts Passendes aus dem Katalog gewählt – bitte noch einmal versuchen.'));
         // der Raum kann inzwischen gelöscht oder das Stockwerk gewechselt sein
         if (!scene.rooms.includes(room)) return;
@@ -1294,7 +1308,7 @@ export function createBuilderView({ sync, cid, go, play }) {
     }
     /** Bauplan der KI als Szene übernehmen: Räume und Gelände anlegen, Füllbereiche füllen, Räume einrichten. */
     function applyPlan(plan) {
-      const made = planToScene(plan, { known: (t) => !!CATALOG[t], sized: (t) => !!CATALOG[t]?.size, floors: FLOORS, themes: Object.keys(THEMES), uid, seed: Math.floor(Math.random() * 1e9), natureScale: plan.scale === 'overview' ? SCALES.overview : 1 });
+      const made = planToScene(plan, { known: (t) => !!CATALOG[t], sized: (t) => !!CATALOG[t]?.size, indoor: indoorItem, floors: FLOORS, themes: Object.keys(THEMES), uid, seed: Math.floor(Math.random() * 1e9), natureScale: plan.scale === 'overview' ? SCALES.overview : 1 });
       root = made.scene;
       floor = 0;
       link();
@@ -1303,12 +1317,16 @@ export function createBuilderView({ sync, cid, go, play }) {
       chain = null;
       syncTop();
       for (const f of root.fills) refill(f, true);
+      // erst alle Themen setzen (der Tresen sucht die Küche), dann einrichten
+      const todo = [];
       for (const t of made.rooms) {
         const room = root.rooms.find((r) => r.id === t.id);
         if (!room) continue;
         if (t.def) (room.themeDef = t.def), (room.themeName = t.name || tr('KI-Entwurf'));
-        furnishRoom(room, t.def ? 'custom' : t.theme, true, true);
+        room.theme = t.def ? 'custom' : t.theme;
+        todo.push(room);
       }
+      for (const room of todo) furnishRoom(room, room.theme, true, true);
       commit();
       fit();
       renderSide();
@@ -1745,10 +1763,11 @@ export function createBuilderView({ sync, cid, go, play }) {
           title(tr('Gelände malen')),
           choice(Object.entries(TERRAIN).filter(([k]) => floor >= 0 || k === 'cave').map(([k, t]) => [k, t.label]), () => opt.terrain, (v) => ((opt.terrain = v), (opt.r = TERRAIN[v].r))),
           opt.terrain === 'high' ? h('div', h('label.small.muted', tr('Höhenstufe')), choice([[1, '1'], [2, '2'], [3, '3']], () => opt.lvl, (v) => (opt.lvl = v))) : null,
+          opt.terrain === 'ground' ? h('div', h('label.small.muted', tr('Bodenart')), choice(Object.entries(GROUND_LABEL), () => opt.ground || 'forest', (v) => (opt.ground = v))) : null,
           h('label.small.muted', tr('Pinselgröße')),
           size,
           choice([[false, tr('Malen')], [true, tr('Radieren')]], () => opt.erase, (v) => (opt.erase = v)),
-          hint(opt.terrain === 'cave' ? tr('Höhlenboden: In den Umgebungen „Dungeon“ und „Höhle“ ist die Karte massiver Fels – hiermit malst du Gänge und Kavernen hinein. Die Felswand hält Licht auf. Anderswo entsteht eine Senke.') : opt.terrain === 'high' ? tr('Erhöhungen werden zu Felsplateaus mit Kante und Schatten. Stufe 2 und 3 legen Terrassen darauf.') : opt.terrain === 'road' ? tr('Straßen und Plätze sind gepflastert, mit sauberem Rand – für Städte und Burghöfe. Mit großem Pinsel entsteht ein Platz. Häuser aus dem Füllbereich halten Abstand.') : opt.terrain === 'path' ? tr('Wege sind schmale Trampelpfade mit ausgefranstem Rand; „Erde“ ergibt weiche, festgetretene Flächen.') : tr('Mit gedrückter Maustaste malen. Alt radiert.')),
+          hint(opt.terrain === 'ground' ? tr('Untergrund legt eine andere Bodenart über die Fläche, die weich in die Umgebung übergeht: Waldboden, Geröll, zerbrochene Bodenplatten einer Ruine, Morast, Laub, Asche oder Schnee. „Düster“ dunkelt alles darin ab, auch Bäume und Gegenstände. Radieren nimmt jede Bodenart weg.') : opt.terrain === 'cave' ? tr('Höhlenboden: In den Umgebungen „Dungeon“ und „Höhle“ ist die Karte massiver Fels – hiermit malst du Gänge und Kavernen hinein. Die Felswand hält Licht auf. Anderswo entsteht eine Senke.') : opt.terrain === 'high' ? tr('Erhöhungen werden zu Felsplateaus mit Kante und Schatten. Stufe 2 und 3 legen Terrassen darauf.') : opt.terrain === 'road' ? tr('Straßen und Plätze sind gepflastert, mit sauberem Rand – für Städte und Burghöfe. Mit großem Pinsel entsteht ein Platz. Häuser aus dem Füllbereich halten Abstand.') : opt.terrain === 'path' ? tr('Wege sind schmale Trampelpfade mit ausgefranstem Rand; „Erde“ ergibt weiche, festgetretene Flächen.') : tr('Mit gedrückter Maustaste malen. Alt radiert.')),
           scene[def.key].length ? h('button.small', { onclick: () => confirm(tr('Alles von „{label}“ entfernen?', { label: def.label })) && ((scene[def.key] = []), commit(), renderSide()) }, icon('trash'), tr(' {label} leeren', { label: def.label })) : null,
         );
       } else if (tool === 'room') {
