@@ -18,6 +18,7 @@ import { useCampaignUnits } from './units-ui.js';
 import { loadAi } from './ai.js';
 import { loadBasalt } from './basalt.js';
 import { rules, loadRules, createRulesView } from './rules.js';
+import { bindRulesChip } from './rules-access.js';
 import { createPartyView } from './party-view.js';
 import { createLibraryView } from './library-view.js';
 import { createBuilderView } from './mb-editor.js';
@@ -616,6 +617,7 @@ function refreshHeader() {
 }
 $('#tableChip').addEventListener('click', () => go('screens'));
 $('#playerChip').addEventListener('click', () => go('screens'));
+bindRulesChip($('#rulesChip'));
 
 sync.onStatus((s) => {
   fill($('#serverState'), h('span.status-dot', { class: s.connected ? 'on' : '' }), h('span.chip-label', s.connected ? tr('verbunden') : tr('offline')));

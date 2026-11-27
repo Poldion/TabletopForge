@@ -85,13 +85,16 @@ export function loginBlocked(key) {
   const f = failures.get(key);
   return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0;
 }
-function loginFailed(key) {
+/** Fehlversuch zählen (auch für den Gastcode der Regelseite). */
+export function loginFailed(key) {
   const f = failures.get(key) || { count: 0, until: 0 };
   f.count += 1;
   // Ab dem 5. Fehlversuch zunehmend länger sperren (1, 2, 4 … bis 15 Minuten)
   if (f.count >= 5) f.until = Date.now() + Math.min(15 * 60, 60 * 2 ** (f.count - 5)) * 1000;
   failures.set(key, f);
 }
+
+export const loginOk = (key) => failures.delete(key);
 
 // --- Konten ----------------------------------------------------------------------------
 

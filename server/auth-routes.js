@@ -3,17 +3,19 @@
 //  – Seiten der Spielleitung und alle übrigen Schnittstellen: nur angemeldete Personen
 //  – Anzeigeseiten (Spieltisch, Spieler-Display, Kiosk): Personen oder gekoppelte Geräte, sonst Kopplungsseite
 //  – Geräte dürfen nur lesen, was eine Anzeige braucht (Einstellungen, Bilder, Kiosk-Zuweisung)
+//  – Regelseite für Spieler (/regeln): offen; ihre Schnittstellen prüfen selbst den Gastcode (guest.js)
 //  – Benutzerverwaltung: nur Admins
 import qrcode from 'qrcode-generator';
 import * as auth from './auth.js';
 
 const DISPLAY_PAGES = new Set(['table', 'player', 'kiosk']);
-const PUBLIC_PAGES = new Set(['login', 'pair']);
+const PUBLIC_PAGES = new Set(['login', 'pair', 'regeln']);
 const USER_PAGES = new Set(['index', 'dm', 'prep', 'settings', 'users', 'approve', 'ai']);
 
 // Schnittstellen ohne Anmeldung (eigene Prüfung im Handler, z.B. Geräteschlüssel des Kiosk-Agenten)
 const isPublicApi = (req) =>
   req.path.startsWith('/api/auth/') ||
+  req.path.startsWith('/api/guest/') || // Regelseite für Spieler: eigene Prüfung per Gastcode
   req.path === '/api/version' ||
   (req.method === 'POST' && req.path === '/api/kiosks/heartbeat') ||
   (req.method === 'GET' && /^\/api\/kiosk-updates\/[^/]+\/download$/.test(req.path)) ||

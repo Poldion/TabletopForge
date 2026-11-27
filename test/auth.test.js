@@ -303,3 +303,48 @@ test('Daten: Passwörter und Sitzungen nur als Hash gespeichert', async () => {
   assert.ok(!raw.includes('geheim123'));
   assert.ok(!raw.includes(admin.split('=')[1]));
 });
+
+test('Regelseite für Spieler: nur mit dem Code der Spielleitung, neuer Code sperrt alle aus, Raten wird gebremst', async () => {
+  // Seite ist offen, die Verwaltung nicht
+  assert.equal((await req('GET', '/regeln')).status, 200);
+  assert.equal((await req('GET', '/api/rules-access')).status, 401);
+  const cfg = (await req('GET', '/api/rules-access', { cookie: admin })).json;
+  assert.match(cfg.code, /^\d{4}$/);
+  assert.equal(cfg.enabled, true);
+  assert.equal(cfg.rotation, 'daily');
+  assert.ok(cfg.expiresAt > Date.now());
+  // ohne Code: kein Zugriff aufs Regelwerk
+  assert.equal((await req('GET', '/api/guest/state')).json.ok, false);
+  assert.equal((await req('GET', '/api/guest/rules/search?q=feuer')).status, 401);
+  // falscher Code, richtiger Code
+  const wrongCode = String((Number(cfg.code) + 1) % 10000).padStart(4, '0');
+  assert.equal((await req('POST', '/api/guest/login', { body: { code: wrongCode }, headers: { 'x-forwarded-for': '10.9.9.1' } })).status, 401);
+  const ok = await req('POST', '/api/guest/login', { body: { code: cfg.code } });
+  assert.equal(ok.status, 200);
+  const g = ok.cookie;
+  assert.ok(g.startsWith('tf_guest='));
+  assert.equal((await req('GET', '/api/guest/state', { cookie: g })).json.ok, true);
+  // ohne eingerichtetes Regelwerk: Wächter lässt durch, das Regelwerk fehlt (404 statt 401)
+  assert.equal((await req('GET', '/api/guest/rules/search?q=feuer', { cookie: g })).status, 404);
+  // der Gast-Cookie öffnet sonst nichts
+  assert.equal((await req('GET', '/api/campaigns', { cookie: g })).status, 401);
+  assert.equal((await req('GET', '/dm.html', { cookie: g })).status, 302);
+  // neuer Code: der alte Zugang gilt nicht mehr
+  const next = (await req('POST', '/api/rules-access/new', { cookie: admin })).json;
+  assert.notEqual(next.code, cfg.code);
+  assert.equal((await req('GET', '/api/guest/state', { cookie: g })).json.ok, false);
+  assert.equal((await req('GET', '/api/guest/rules/search?q=feuer', { cookie: g })).status, 401);
+  // ausgeschaltet: auch mit richtigem Code nicht
+  await req('PUT', '/api/rules-access', { cookie: admin, body: { enabled: false } });
+  assert.equal((await req('POST', '/api/guest/login', { body: { code: next.code } })).status, 403);
+  const on = (await req('PUT', '/api/rules-access', { cookie: admin, body: { enabled: true, rotation: 'manual' } })).json;
+  assert.equal(on.rotation, 'manual');
+  assert.equal(on.expiresAt, null);
+  assert.notEqual(on.code, next.code, 'Wieder einschalten gibt einen neuen Code');
+  // Durchprobieren: nach fünf Fehlversuchen wird gesperrt
+  const bad = String((Number(on.code) + 5000) % 10000).padStart(4, '0');
+  let last;
+  for (let i = 0; i < 6; i++) last = await req('POST', '/api/guest/login', { body: { code: bad } });
+  assert.equal(last.status, 429);
+  assert.equal((await req('POST', '/api/guest/login', { body: { code: on.code } })).status, 429, 'auch der richtige Code wartet die Sperre ab');
+});

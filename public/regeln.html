@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#14120e" />
+    <title>Regeln – Tabletop Forge</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      /* Regelseite für Spieler: fürs Handy gebaut – oben der Titel, darunter Suche und KI-Frage über die volle Breite */
+      body {
+        min-height: 100dvh;
+      }
+      .guest {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 14px 14px 28px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .guest-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .guest-head h1 {
+        margin: 0;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+      .guest-code {
+        display: grid;
+        gap: 12px;
+        justify-items: center;
+        text-align: center;
+        padding: 26px 16px;
+      }
+      .guest-code input {
+        width: 7.2ch;
+        font-size: 40px;
+        letter-spacing: 0.32em;
+        text-align: center;
+        padding: 8px 0 8px 0.32em;
+        font-variant-numeric: tabular-nums;
+      }
+      .guest-code .auth-error {
+        color: var(--danger);
+        min-height: 1.3em;
+      }
+      .guest .rules-chat {
+        max-height: none;
+      }
+      .guest .rules-ask {
+        position: sticky;
+        bottom: 0;
+        background: var(--bg);
+        padding-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="guest" id="guest">
+      <div class="guest-head">
+        <h1>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7" /><polygon points="12 7 16.5 15 7.5 15" /><line x1="12" y1="2" x2="12" y2="7" /><line x1="3" y1="17" x2="7.5" y2="15" /><line x1="21" y1="17" x2="16.5" y2="15" /><line x1="3" y1="7" x2="7.5" y2="15" /><line x1="21" y1="7" x2="16.5" y2="15" /></svg>
+          <span data-t>Regeln</span>
+        </h1>
+        <span id="lang"></span>
+      </div>
+      <div id="content"><p class="muted small" data-t>Lädt …</p></div>
+    </main>
+    <script type="module" src="/js/regeln.js"></script>
+  </body>
+</html>

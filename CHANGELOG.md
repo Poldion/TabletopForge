@@ -3,6 +3,17 @@
 All notable changes to this project are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.62.0] – 2026-11-28
+
+### Added
+
+- **Rules page for players.** Players open `/regeln` on their phone, enter a four-digit code the game master hands
+  out, and can then search the rulebook, read rules and ask the AI rules questions – nothing else in the app. The code
+  is shown in the game master's header bar (“Rules: 1234”); a click opens the QR code, the address, “New code”, how
+  often the code changes (daily at 5 am, weekly on Mondays at 5 am, or only manually) and an on/off switch. Every new
+  code logs all guests out, so nobody keeps access after leaving the table. Wrong codes are throttled like passwords,
+  and each guest can ask at most 20 questions per 10 minutes. Needs the rulebook vault in BasaltNotes.
+
 ## [0.61.0] – 2026-11-26
 
 ### Added

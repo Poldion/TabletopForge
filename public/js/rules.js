@@ -50,9 +50,12 @@ async function readEvents(res, onEvent) {
 }
 
 /**
- * Regeltab: { el, refresh }. Läuft als Panel im Spiel und als Seite der Kampagne.
+ * Regeltab: { el, refresh }. Läuft als Panel im Spiel, als Seite der Kampagne und auf der Regelseite für Spieler.
+ * base: Adresse der Schnittstelle (Gäste: /api/guest/rules), vault: Name des Regel-Vaults (für Verweise zwischen
+ * Regeln), external: Knopf „In BasaltNotes öffnen“ zeigen (Gäste erreichen BasaltNotes nicht).
  */
-export function createRulesView({ page = false } = {}) {
+export function createRulesView({ page = false, base = '/api/basalt/rules', vault = null, external = true } = {}) {
+  const rulesVault = () => vault ?? basalt.rulesVault;
   const body = h('div.rules-body');
   const tabs = h('div.rules-modes');
   const view = h('div.rules-view', { class: page ? 'page' : '' }, tabs, body);
@@ -91,7 +94,7 @@ export function createRulesView({ page = false } = {}) {
       const n = ++seq;
       fill(list, h('p.small.muted', tr('Sucht …')));
       try {
-        const r = await api('GET', `/api/basalt/rules/search?q=${encodeURIComponent(q)}`);
+        const r = await api('GET', `${base}/search?q=${encodeURIComponent(q)}`);
         if (n !== seq) return;
         memo.results = r;
       } catch (err) {
@@ -149,7 +152,7 @@ export function createRulesView({ page = false } = {}) {
     fill(body, h('div.row', back), box);
     let n;
     try {
-      n = await api('GET', `/api/basalt/rules/notes/${encodeURIComponent(id)}`);
+      n = await api('GET', `${base}/notes/${encodeURIComponent(id)}`);
     } catch (err) {
       return fill(box, h('p', err.message));
     }
@@ -158,17 +161,20 @@ export function createRulesView({ page = false } = {}) {
     // Verweise auf andere Regeln bleiben im Tab, alles andere öffnet BasaltNotes
     for (const a of html.querySelectorAll('a[href]')) {
       const m = /\/([^/]+)\/note\/([^/?#]+)/.exec(a.getAttribute('href'));
-      if (m && decodeURIComponent(m[1]) === basalt.rulesVault) {
+      if (m && decodeURIComponent(m[1]) === rulesVault()) {
         a.removeAttribute('target');
         a.addEventListener('click', (e) => {
           e.preventDefault();
           openNote(decodeURIComponent(m[2]));
         });
+      } else if (!external && m) {
+        // Gäste erreichen BasaltNotes nicht: Verweis in andere Vaults nur als Text
+        a.replaceWith(...a.childNodes);
       }
     }
     // Die meisten Notizen beginnen mit ihrem Titel als Überschrift – dann nicht doppelt
     const title = html.querySelector('h1') ? h('span.grow') : h('h3.grow', n.title);
-    fill(box, h('div.row', title, h('a.btn.small', { href: n.url, target: '_blank', rel: 'noopener', title: tr('In BasaltNotes öffnen') }, icon('external'))), html);
+    fill(box, h('div.row', title, external && n.url ? h('a.btn.small', { href: n.url, target: '_blank', rel: 'noopener', title: tr('In BasaltNotes öffnen') }, icon('external')) : null), html);
   }
 
   // --- KI fragen --------------------------------------------------------------------------
@@ -223,7 +229,7 @@ export function createRulesView({ page = false } = {}) {
     renderLog();
     const ctrl = (memo.ctrl = new AbortController());
     try {
-      const res = await fetch('/api/basalt/rules/chat', {
+      const res = await fetch(`${base}/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-lang': lang },
         body: JSON.stringify({ question: q, history, previous: memo.previous }),

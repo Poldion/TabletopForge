@@ -223,7 +223,8 @@ export async function api(method, url, body) {
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(url, opts);
-  if (res.status === 401 && !url.startsWith('/api/auth/')) goToLogin();
+  // Die Regelseite für Spieler zeigt bei 401 ihr Code-Feld selbst – dort nicht zur Anmeldung springen
+  if (res.status === 401 && !url.startsWith('/api/auth/') && !url.startsWith('/api/guest/')) goToLogin();
   if (!res.ok) {
     let msg = res.statusText;
     try {

@@ -358,6 +358,15 @@ und als Panel beim Spielen:
 
 Ohne Regelwerk-Vault erscheint der Tab nicht. Das Token braucht nur Leserecht auf diesen Vault.
 
+**Regelseite für Spieler:** Spieler öffnen auf dem Handy die Adresse `…/regeln` und geben einen vierstelligen Code ein.
+Danach können sie im Regelwerk suchen, Regeln lesen und der KI Regelfragen stellen – sonst nichts in der App. Den Code
+zeigt die Kopfzeile der Spielleitung („Regeln: 1234“); ein Klick darauf öffnet QR-Code, Adresse, **Neuer Code**, den
+Wechsel des Codes (täglich um 5 Uhr, wöchentlich montags um 5 Uhr oder nur von Hand) und den Schalter
+„Regelseite freigegeben“. Mit jedem neuen Code müssen alle den Code neu eingeben – wer nicht mehr am Tisch sitzt,
+kommt so nicht dauerhaft hinein. Falsche Codes werden wie Passwörter gebremst, und jeder Gast kann höchstens 20 Fragen
+in 10 Minuten stellen. Wer als Spielleitung angemeldet ist, braucht auf der Seite keinen Code. Die Uhrzeit des
+Wechsels richtet sich nach der Zeitzone des Servers (`TZ`).
+
 ## Kiosk-Gerät für den Spieltisch (Raspberry Pi)
 
 Unter [`kiosk/`](../kiosk/README.md) liegt ein schreibgeschütztes Raspberry-Pi-Image (z.B. Pi Zero 2 W), das direkt die

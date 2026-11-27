@@ -367,6 +367,14 @@ panel while playing:
 
 Without a rulebook vault the tab does not appear. The token only needs read access to this vault.
 
+**Rules page for players:** players open `…/regeln` on their phone and enter a four-digit code. They can then search
+the rulebook, read rules and ask the AI rules questions – nothing else in the app. The game master's header bar shows
+the code (“Rules: 1234”); a click opens the QR code, the address, **New code**, how often the code changes (daily at
+5 am, weekly on Mondays at 5 am, or only manually) and the switch “Rules page open”. With every new code everyone has
+to enter it again, so nobody who has left the table keeps access. Wrong codes are throttled like passwords, and each
+guest can ask at most 20 questions per 10 minutes. Signed-in game masters need no code on the page. The time of the
+change follows the server's time zone (`TZ`).
+
 ## Kiosk device for the game table (Raspberry Pi)
 
 [`kiosk/`](../kiosk/README.en.md) contains a read-only Raspberry Pi image (e.g. Pi Zero 2 W) that starts the game table

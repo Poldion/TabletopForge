@@ -11,6 +11,8 @@ import * as kioskUpdates from './kiosk-updates.js';
 import * as wled from './wled.js';
 import * as ai from './ai.js';
 import * as basalt from './basalt.js';
+import * as guest from './guest.js';
+import qrcode from 'qrcode-generator';
 import * as auth from './auth.js';
 import { installAuth, socketAuth } from './auth-routes.js';
 import * as i18n from './i18n.js';
@@ -719,7 +721,8 @@ app.get('/api/basalt/rules', async (req, res) => {
   res.json({ enabled: true, chat: await basalt.chatEnabled() });
 });
 
-app.get('/api/basalt/rules/search', async (req, res) => {
+// Suche, Regeltext und KI-Frage – für die Spielleitung und (über /api/guest/rules/…) für Gäste mit Code
+async function rulesSearch(req, res) {
   if (!basalt.rulesOn()) return noRules(res);
   const q = String(req.query.q || '').trim();
   if (!q) return res.json([]);
@@ -728,19 +731,17 @@ app.get('/api/basalt/rules/search', async (req, res) => {
   } catch (err) {
     basaltError(res, err);
   }
-});
-
-app.get('/api/basalt/rules/notes/:id', async (req, res) => {
+}
+async function rulesNote(req, res) {
   if (!basalt.rulesOn()) return noRules(res);
   try {
     res.json(await basalt.note(req.params.id, basalt.status().rulesVault));
   } catch (err) {
     basaltError(res, err);
   }
-});
-
+}
 // Antwort kommt als Server-Sent Events von BasaltNotes und wird unverändert durchgereicht
-app.post('/api/basalt/rules/chat', async (req, res) => {
+async function rulesChat(req, res) {
   if (!basalt.rulesOn()) return noRules(res);
   if (!String(req.body?.question || '').trim()) return res.status(400).json({ error: 'Frage fehlt' });
   const ctrl = new AbortController();
@@ -759,7 +760,72 @@ app.post('/api/basalt/rules/chat', async (req, res) => {
   } finally {
     res.end();
   }
+}
+app.get('/api/basalt/rules/search', rulesSearch);
+app.get('/api/basalt/rules/notes/:id', rulesNote);
+app.post('/api/basalt/rules/chat', rulesChat);
+
+// --- Regelseite für Spieler (/regeln): Zugang per vierstelligem Code, den die Spielleitung herausgibt ---------------
+// Verwaltung (angemeldete Personen): Code ansehen, neu würfeln, Wechselrhythmus, Zugang an/aus, QR-Code der Seite
+const rulesPageUrl = (req) => `${process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/\/+$/, '') : `${req.protocol}://${req.get('host')}`}/regeln`;
+app.get('/api/rules-access', (req, res) => res.json({ ...guest.config(), url: rulesPageUrl(req), rules: basalt.rulesOn() }));
+app.put('/api/rules-access', (req, res) => {
+  res.json({ ...guest.setConfig(req.body || {}), url: rulesPageUrl(req), rules: basalt.rulesOn() });
 });
+app.post('/api/rules-access/new', (req, res) => res.json({ ...guest.rotate(), url: rulesPageUrl(req), rules: basalt.rulesOn() }));
+app.get('/api/rules-access/qr.svg', (req, res) => {
+  const qr = qrcode(0, 'M');
+  qr.addData(rulesPageUrl(req));
+  qr.make();
+  res.type('image/svg+xml').set('Cache-Control', 'no-store').send(qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true }));
+});
+
+// Gäste: Wer als Person angemeldet ist, darf immer; sonst gilt der Gast-Cookie – auch ohne eingerichtete Anmeldung,
+// damit die Seite überall gleich funktioniert (Code von der Spielleitung)
+const isGuest = (req) => req.auth?.kind === 'user' || guest.valid(guest.fromCookie(req.headers.cookie));
+const guestKey = (req) => `guest|${req.ip}`;
+const setGuestCookie = (req, res, value, ms) => {
+  const parts = [`${guest.COOKIE}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${Math.floor(ms / 1000)}`];
+  if (req.secure) parts.push('Secure');
+  res.append('Set-Cookie', parts.join('; '));
+};
+app.get('/api/guest/state', async (req, res) => {
+  const c = guest.config();
+  const ok = c.enabled && isGuest(req);
+  res.json({ enabled: c.enabled, ok, rules: ok && basalt.rulesOn(), chat: ok && basalt.rulesOn() ? await basalt.chatEnabled() : false, vault: ok ? basalt.status().rulesVault || '' : '' });
+});
+app.post('/api/guest/login', (req, res) => {
+  const key = guestKey(req);
+  const wait = auth.loginBlocked(key);
+  if (wait) return res.status(429).json({ error: `Zu viele Fehlversuche – bitte in ${wait} s erneut versuchen.` });
+  if (!guest.config().enabled) return res.status(403).json({ error: 'Die Regelseite ist gerade nicht freigegeben.' });
+  if (!guest.check(req.body?.code)) {
+    auth.loginFailed(key);
+    return res.status(401).json({ error: 'Der Code stimmt nicht.' });
+  }
+  auth.loginOk(key);
+  setGuestCookie(req, res, guest.token(), guest.cookieMs());
+  res.json({ ok: true });
+});
+app.post('/api/guest/logout', (req, res) => {
+  setGuestCookie(req, res, '', 0);
+  res.json({ ok: true });
+});
+const guestOnly = (req, res, next) => (guest.config().enabled && isGuest(req) ? next() : res.status(401).json({ error: 'Bitte den Code eingeben.' }));
+app.get('/api/guest/rules/search', guestOnly, rulesSearch);
+app.get('/api/guest/rules/notes/:id', guestOnly, rulesNote);
+app.post(
+  '/api/guest/rules/chat',
+  guestOnly,
+  (req, res, next) => {
+    // Gäste: höchstens 20 Fragen in 10 Minuten je Gerät – die KI rechnet auf dem eigenen Rechner
+    if (req.auth?.kind === 'user') return next();
+    const wait = guest.askAllowed(guestKey(req));
+    if (wait) return res.status(429).json({ error: `Gerade zu viele Fragen – bitte in ${wait} s noch einmal.` });
+    next();
+  },
+  rulesChat,
+);
 
 // Nachbereitung einer Session als Session-Notiz an BasaltNotes (Recap, Szenen, Stichworte)
 app.post('/api/campaigns/:id/basalt/session', async (req, res) => {
